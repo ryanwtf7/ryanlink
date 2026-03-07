@@ -161,6 +161,15 @@ export class VoiceManager implements Partial<Map<string, VoiceState>> {
             }
             currentRequest.reject(new Error("Connection request was replaced"));
         }
+
+        const state = this.#cache.get(guildId);
+        if (state?.connected && state.channel_id === voiceId) {
+            const voice = this.player.queues.get(guildId)?.voice;
+            if (voice && voice.connected) {
+                return voice;
+            }
+        }
+
         this.#joins.delete(guildId);
 
         let resolve!: (value: VoiceState | PromiseLike<VoiceState>) => void;
@@ -405,7 +414,6 @@ export class VoiceManager implements Partial<Map<string, VoiceState>> {
             return;
         }
 
-        // Check if we have all required data
         if (!state.channel_id || !state.session_id || !state.token || !state.endpoint) {
             return;
         }
@@ -413,7 +421,6 @@ export class VoiceManager implements Partial<Map<string, VoiceState>> {
         this.#joins.delete(guildId);
 
         try {
-            // Select node
             const nodeName =
                 request.node ??
                 (state.region_id && this.regions.get(state.region_id)?.getRelevantNode()?.name) ??
@@ -423,7 +430,6 @@ export class VoiceManager implements Partial<Map<string, VoiceState>> {
                 throw new Error("No nodes available");
             }
 
-            // Create queue if needed
             let queue = this.player.queues.get(guildId);
             if (!queue) {
                 queue = await this.player.queues.create({
@@ -435,12 +441,13 @@ export class VoiceManager implements Partial<Map<string, VoiceState>> {
                 });
             }
 
-            // Create voice state
             const voice = new VoiceState(this.player, nodeName, guildId);
             this.#voices.set(guildId, voice);
 
             state.connected = true;
             state.node_session_id = voice.node.sessionId ?? "";
+
+            await queue.sync("remote").catch(noop);
 
             this.player.emit("voiceConnect", voice);
             request.resolve(voice);
