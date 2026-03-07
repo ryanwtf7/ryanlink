@@ -1,5 +1,5 @@
 import { Routes } from "../config/endpoints";
-import { CLIENT_NAME, CLIENT_VERSION } from "../metadata";
+import { CLIENT_NAME, CLIENT_VERSION, CLIENT_REPOSITORY } from "../metadata";
 import type {
     RESTOptions,
     LoadResult,
@@ -47,7 +47,7 @@ export class REST {
             throw new Error("Password cannot contain newline characters");
         }
 
-        const userAgent = options.userAgent ?? `${CLIENT_NAME}/${CLIENT_VERSION}`;
+        const userAgent = options.userAgent ?? `${CLIENT_NAME}/${CLIENT_VERSION} (${CLIENT_REPOSITORY})`;
         if (userAgent.includes("\n") || userAgent.includes("\r")) {
             throw new Error("User agent cannot contain newline characters");
         }
