@@ -9,7 +9,7 @@ export default defineConfig({
     },
     test: {
         globals: true,
-        reporters: process.env.GITHUB_ACTIONS ? ["tree", "github-actions"] : ["tree"],
+        reporters: process.env.GITHUB_ACTIONS ? ["default", "github-actions"] : ["default"],
         environment: "node",
         coverage: {
             enabled: false,
