@@ -1,0 +1,13 @@
+# Bun configuration for Ryanlink
+
+[install]
+# Bun-specific install configuration
+registry = "https://registry.npmjs.org/"
+
+[test]
+# Test configuration
+# preload = []
+
+[run]
+# Runtime configuration
+# bun = "latest"

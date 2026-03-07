@@ -1,0 +1,57 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["./src/index.ts"],
+  "out": "./docs",
+  "plugin": [],
+  "name": "Ryanlink",
+  "includeVersion": true,
+  "readme": "./README.md",
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ],
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeInternal": false,
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Core",
+    "Lavalink",
+    "Audio",
+    "Voice",
+    "Extensions",
+    "Configuration",
+    "Utilities",
+    "Types",
+    "*"
+  ],
+  "sort": ["source-order"],
+  "kindSortOrder": [
+    "Class",
+    "Interface",
+    "TypeAlias",
+    "Enum",
+    "Function",
+    "Variable"
+  ],
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true
+  },
+  "visibilityFilters": {
+    "protected": true,
+    "private": false,
+    "inherited": true,
+    "external": false
+  },
+  "searchInComments": true,
+  "cleanOutputDir": true,
+  "githubPages": true,
+  "hideGenerator": false,
+  "customCss": "./assets/index.css",
+  "theme": "default",
+  "lightHighlightTheme": "light-plus",
+  "darkHighlightTheme": "dark-plus"
+}

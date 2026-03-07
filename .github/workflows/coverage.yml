@@ -1,0 +1,35 @@
+name: Coverage
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          cache: npm
+          node-version: 22.22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Upload results to Codecov
+        uses: codecov/codecov-action@v5
