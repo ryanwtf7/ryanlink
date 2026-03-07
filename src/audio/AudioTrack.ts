@@ -160,7 +160,7 @@ export class Track<UserData extends JsonObject = CommonUserData, PluginInfo exte
 
         // Set duration
         if (this.isLive) {
-            this.duration = 0;
+            this.duration = Number.POSITIVE_INFINITY;
             this.formattedDuration = "Live";
         } else if (isNumber(data.info.length, "whole")) {
             this.duration = data.info.length;

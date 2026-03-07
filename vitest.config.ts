@@ -5,7 +5,7 @@ export default defineConfig({
     define: {
         $clientName: `"${name}"`,
         $clientVersion: `"${version}"`,
-        $clientRepository: `"${repository.url}"`,
+        $clientRepository: `"${repository.url.replace(/\.git$/, "")}"`,
     },
     test: {
         globals: true,
