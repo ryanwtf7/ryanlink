@@ -40,15 +40,15 @@ Ryanlink supports audio from 20+ streaming platforms through LavaSrc integration
 
 <div align="center">
 
-| Platform | Support | Platform | Support | Platform | Support |
-|----------|---------|----------|---------|----------|---------|
-| YouTube | ✓ | Spotify | ✓ | Apple Music | ✓ |
-| SoundCloud | ✓ | Deezer | ✓ | Tidal | ✓ |
-| Bandcamp | ✓ | Twitch | ✓ | Amazon Music | ✓ |
-| Yandex Music | ✓ | JioSaavn | ✓ | Pandora | ✓ |
-| Qobuz | ✓ | Audiomack | ✓ | Mixcloud | ✓ |
-| Anghami | ✓ | Audius | ✓ | Gaana | ✓ |
-| Instagram | ✓ | Shazam | ✓ | Direct URLs | ✓ |
+| Platform     | Support | Platform  | Support | Platform     | Support |
+| ------------ | ------- | --------- | ------- | ------------ | ------- |
+| YouTube      | ✓       | Spotify   | ✓       | Apple Music  | ✓       |
+| SoundCloud   | ✓       | Deezer    | ✓       | Tidal        | ✓       |
+| Bandcamp     | ✓       | Twitch    | ✓       | Amazon Music | ✓       |
+| Yandex Music | ✓       | JioSaavn  | ✓       | Pandora      | ✓       |
+| Qobuz        | ✓       | Audiomack | ✓       | Mixcloud     | ✓       |
+| Anghami      | ✓       | Audius    | ✓       | Gaana        | ✓       |
+| Instagram    | ✓       | Shazam    | ✓       | Direct URLs  | ✓       |
 
 </div>
 
@@ -150,7 +150,7 @@ await queue.setVolume(0.5); // 50%
 // Repeat modes
 await queue.setRepeatMode("track"); // Repeat current track
 await queue.setRepeatMode("queue"); // Repeat entire queue
-await queue.setRepeatMode("off");   // No repeat
+await queue.setRepeatMode("off"); // No repeat
 
 // Shuffle
 await queue.shuffle();
