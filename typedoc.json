@@ -53,5 +53,11 @@
   "customCss": "./assets/index.css",
   "theme": "default",
   "lightHighlightTheme": "light-plus",
-  "darkHighlightTheme": "dark-plus"
+  "darkHighlightTheme": "dark-plus",
+  "favicon": "./assets/ryanlink.jpeg",
+  "titleLink": "https://github.com/ryanwtf7/ryanlink",
+  "navigationLinks": {
+    "GitHub": "https://github.com/ryanwtf7/ryanlink",
+    "NPM": "https://www.npmjs.com/package/ryanlink"
+  }
 }
