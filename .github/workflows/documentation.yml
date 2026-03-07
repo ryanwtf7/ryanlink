@@ -42,12 +42,10 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: ./docs
-        if: false
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
