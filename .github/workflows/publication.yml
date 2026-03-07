@@ -4,9 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 1.0.0, 1.0.1, 1.1.0)'
+        description: 'Version to publish (e.g., 1.0.0, 1.0.1, 1.1.0) or bump type (patch, minor, major)'
         required: true
         type: string
+        default: 'patch'
 
 jobs:
   publish:
@@ -37,16 +38,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Update version
-        run: npm version ${{ inputs.version }} --no-git-tag-version
+      - name: Bump version
+        id: version
+        run: |
+          if [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            npm version ${{ inputs.version }} --no-git-tag-version
+            echo "new_version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            NEW_VERSION=$(npm version ${{ inputs.version }} --no-git-tag-version | sed 's/v//')
+            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Build v${{ inputs.version }}
+      - name: Build v${{ steps.version.outputs.new_version }}
         run: npm run build
 
       - name: Run tests
         run: npm test
 
-      - name: Publish v${{ inputs.version }} to npm
+      - name: Publish v${{ steps.version.outputs.new_version }} to npm
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -54,21 +63,27 @@ jobs:
       - name: Commit and tag
         run: |
           git add package.json package-lock.json
-          git commit -m "chore: release v${{ inputs.version }}"
-          git tag "v${{ inputs.version }}"
+          git commit -m "chore: release v${{ steps.version.outputs.new_version }}"
+          git tag "v${{ steps.version.outputs.new_version }}"
           git push origin master
-          git push origin "v${{ inputs.version }}"
+          git push origin "v${{ steps.version.outputs.new_version }}"
 
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v${{ inputs.version }}
-          release_name: Release v${{ inputs.version }}
+          tag_name: v${{ steps.version.outputs.new_version }}
+          release_name: Release v${{ steps.version.outputs.new_version }}
           body: |
-            Release v${{ inputs.version }}
+            Release v${{ steps.version.outputs.new_version }}
             
-            See [CHANGELOG](https://github.com/ryanwtf7/ryanlink/blob/master/CHANGELOG.md) for details.
+            ## Installation
+            
+            ```bash
+            npm install ryanlink@${{ steps.version.outputs.new_version }}
+            ```
+            
+            See [README](https://github.com/ryanwtf7/ryanlink#readme) for documentation.
           draft: false
           prerelease: false
