@@ -10,7 +10,8 @@ export default defineConfig({
   site: 'https://ryanwtf7.github.io/',
   base: 'ryanlink',
   redirects: {
-    '/ryanlink/api/lavamanager/classes/lavalinkmanager': '/ryanlink/api/ryanlinkmanager/classes/ryanlinkmanager',
+    '/ryanlink/api/lavamanager/classes/lavalinkmanager': '/ryanlink/api/core/manager/classes/ryanlinkmanager',
+    '/ryanlink/api/ryanlinkmanager/classes/ryanlinkmanager': '/ryanlink/api/core/manager/classes/ryanlinkmanager',
     '/ryanlink/home/setup-lavalink': '/ryanlink/home/setup-ryanlink',
   },
   integrations: [
@@ -88,7 +89,7 @@ export default defineConfig({
             },
             {
               label: 'Checkout Docs (Manager-Class)',
-              link: '/api/ryanlinkmanager/classes/ryanlinkmanager',
+              link: '/api/core/manager/classes/ryanlinkmanager',
             },
           ],
         },

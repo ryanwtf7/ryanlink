@@ -12,7 +12,7 @@
   [![Node Version](https://img.shields.io/node/v/ryanlink)](https://nodejs.org)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.4+-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
   
-  [Documentation](https://github.com/ryanwtf7/ryanlink) • [NPM Package](https://www.npmjs.com/package/ryanlink) • [GitHub](https://github.com/ryanwtf7/ryanlink)
+  [Documentation](https://ryanwtf7.github.io/ryanlink/) • [NPM Package](https://www.npmjs.com/package/ryanlink) • [GitHub](https://github.com/ryanwtf7/ryanlink)
 
 </div>
 
