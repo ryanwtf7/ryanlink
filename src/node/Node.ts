@@ -471,7 +471,7 @@ export class RyanlinkNode {
       this.sessionId = this.options.sessionId || sessionId
     }
 
-    this.socket = new WebSocket(`ws${this.options.secure ? 's' : ''}://${this.options.host}:${this.options.port}`, { headers })
+    this.socket = new WebSocket(`ws${this.options.secure ? 's' : ''}://${this.options.host}:${this.options.port}/${this.version}/websocket`, { headers })
     this.socket.on('open', this.open.bind(this))
     this.socket.on('close', (code, reason) => this.close(code, reason?.toString()))
     this.socket.on('message', this.message.bind(this))
