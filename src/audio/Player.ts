@@ -952,12 +952,12 @@ export class Autoplay {
 
     if (config.enabled === false) return
 
-    if (this.adding.has(player.guildId)) return
-    this.adding.add(player.guildId)
+    if (Autoplay.adding.has(player.guildId)) return
+    Autoplay.adding.add(player.guildId)
 
     try {
-      const playedData = this.buildPlayedData(player)
-      const relatedTracks = await this.fetchRelatedTracks(player, lastTrack, config, playedData)
+      const playedData = Autoplay.buildPlayedData(player)
+      const relatedTracks = await Autoplay.fetchRelatedTracks(player, lastTrack, config, playedData)
 
       if (relatedTracks.length > 0) {
         for (const track of relatedTracks) {
@@ -976,7 +976,7 @@ export class Autoplay {
         functionLayer: 'Autoplay > defaultAutoplay()',
       })
     } finally {
-      this.adding.delete(player.guildId)
+      Autoplay.adding.delete(player.guildId)
     }
   }
 
