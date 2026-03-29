@@ -1,0 +1,94 @@
+---
+import NPM from '../content/docs/home/installings/npm.mdx';
+import BUN from '../content/docs/home/installings/bun.mdx';
+import PNPM from '../content/docs/home/installings/pnpm.mdx';
+import YARN from '../content/docs/home/installings/yarn.mdx';
+
+---
+
+
+<style>
+  .package-manager-selector {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .package-manager-selector button {
+    padding: 10px 15px;
+    border: 1px solid #ccc;
+    height:
+    background-color: #3e3e3e;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background-color 0.3s, color 0.3s;
+  }
+
+  .package-manager-selector button:hover {
+    background-color: #aa4d3e;
+  }
+
+  .package-manager-selector button.active {
+    background-color: #ff3c00;
+    color: white;
+    border-color: #ff3c00;
+  }
+
+  .install-content {
+    display: none;
+  }
+</style>
+
+<div class="package-manager-selector">
+  <button id="btn-test" style="display: none">THERE IS A STYLING BUG, THIS EMPTY BUTTON FIXES IT!</button>
+  <button id="btn-npm" class="active">npm</button>
+  <button id="btn-bun">bun</button>
+  <button id="btn-yarn">yarn</button>
+  <button id="btn-pnpm">pnpm</button>
+</div>
+
+<div id="content-npm" class="install-content" style="display: block;">
+<NPM />
+</div>
+
+<div id="content-bun" class="install-content">
+<BUN />
+</div>
+
+<div id="content-yarn" class="install-content">
+<YARN />
+</div>
+
+<div id="content-pnpm" class="install-content">
+<PNPM />
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // We explicitly type the NodeList to provide better type safety
+    const buttons = document.querySelectorAll<HTMLButtonElement>('.package-manager-selector button');
+    const contents = document.querySelectorAll<HTMLElement>('.install-content');
+
+    buttons.forEach(button => {
+      button.addEventListener('click', (event) => {
+        // Use event.currentTarget, which is correctly typed as a button, or cast event.target
+        const targetButton = event.currentTarget as HTMLButtonElement;
+
+        // Remove active class from all buttons and hide all content
+        buttons.forEach(btn => btn.classList.remove('active'));
+        contents.forEach(content => content.style.display = 'none');
+
+        // Add active class to the clicked button
+        targetButton.classList.add('active');
+
+        // Show the corresponding content block
+        const manager = targetButton.id.replace('btn-', '');
+        const contentBlock = document.getElementById(`content-${manager}`);
+        if (contentBlock) {
+          (contentBlock as HTMLElement).style.display = 'block';
+        }
+      });
+    });
+  });
+</script>

@@ -1,0 +1,162 @@
+---
+editUrl: false
+next: true
+prev: true
+title: Manager Events
+description: 'All Events of the Ryanlink Manager.'
+---
+
+## Player Related Logs
+
+> _Monitor player activities and changes:_
+
+- **`playerCreate`** ➡️ `(player) => {}`
+  _Triggered when a player is created._
+
+- **`playerDestroy`** ➡️ `(player, reason) => {}`
+  _Triggered when a player is destroyed. Reason for destruction provided._
+
+- **`playerDisconnect`** ➡️ `(player, voiceChannelId) => {}`
+  _Triggered when a player disconnects from a voice channel._
+
+- **`playerMove`** ➡️ `(player, oldChannelId, newChannelId) => {}`
+  _Triggered when a player moves from one channel to another._
+  _Updating the voice channel is handled automatically by the client._
+
+- **`playerSocketClosed`** ➡️ `(player, payload) => {}`
+  _Triggered when the player’s socket is closed._
+
+- **`playerUpdate`** ➡️ `(player) => {}`
+  _Triggered when the player is updated._
+
+- **`playerMuteChange`\*\*** ➡️ \**`(player, selfMuted, serverMuted) => {}`
+  *Triggered when the player's voice state related to muting changed\*
+
+- **`playerDeafChange`** ➡️ `(player, selfDeafed, serverDeafed) => {}`
+  _Triggered when the player's voice state related to deafing changed_
+
+- **`playerSuppressChange`** ➡️ `(player, suppress) => {}`
+  _Triggered when the player's voice state related to suppressing changed_
+
+- **`playerQueueEmptyStart`** ➡️ `(player, timeoutMs) => {}`
+  _Triggered when the queue empty handler started (the timeout)_
+
+- **`playerQueueEmptyEnd`** ➡️ `(player) => {}`
+  _Triggered when the queue empty handler finished (successfully) and thus destroyed the player_
+
+- **`playerQueueEmptyCancel`** ➡️ `(player) => {}`
+  _Triggered when the queue empty handler cancelled (e.g. because a new track got added)_
+
+- **`playerVoiceJoin`** ➡️ `(player, userId) => {}`~~
+  _Added instead of the playerVoiceEmpty handler, emitted when a user joins the player-vc while there is a player_
+  _Allows you to inmplement a custom playerVoiceEmpty handler_
+
+- **`playerVoiceLeave`** ➡️ `(player, userId) => {}`~~
+  _Added instead of the playerVoiceEmpty handler, emitted when a user leaves (or. switches away) the player-vc while there is a player_
+  _Allows you to inmplement a custom playerVoiceEmpty handler_
+
+## Track / Manager Related Logs
+
+> _Handle track events and manage playback:_
+
+- **`trackStart`** ➡️ `(player, track, payload) => {}`
+  _Triggered when a track starts playing._
+
+- **`trackStuck`** ➡️ `(player, track, payload) => {}`
+  _Triggered when a track gets stuck (e.g., playback halts)._
+
+- **`trackError`** ➡️ `(player, track, payload) => {}`
+  _Triggered when an error occurs during track playback._
+
+- **`trackEnd`** ➡️ `(player, track, payload) => {}`
+  _Triggered when a track finishes playing._
+
+- **`queueEnd`** ➡️ `(player, track, payload) => {}`
+  _Triggered when the queue ends._
+
+## SponsorBlock Plugin Logs
+
+> _Events from the SponsorBlock plugin:_
+> _Only triggered when used with the Sponsorblock plugin_
+
+- **`SegmentsLoaded`** ➡️ `(player, track, payload) => {}`
+  _Triggered when segments are loaded for a track._
+
+- **`SegmentSkipped`** ➡️ `(player, track, payload) => {}`
+  _Triggered when a specific segment is skipped._
+
+- **`ChapterStarted`** ➡️ `(player, track, payload) => {}`
+  _Triggered when a specific chapter starts playing._
+
+- **`ChaptersLoaded`** ➡️ `(player, track, payload) => {}`
+  _Triggered when chapters are loaded for a track._
+
+## Lyrics Plugin Logs
+
+> _Events from the LavaLyrics plugin:_
+> _Only triggered when used with the latest snapshot of the lava-lyrics plugin_
+
+- **`LyricsLine`** ➡️ `(player, track, payload) => {}`
+  _Triggered when a new lyrics line is received._
+
+- **`LyricsFound`** ➡️ `(player, track, payload) => {}`
+  _Triggered when lyrics for a track are found._
+
+- **`LyricsNotFound`** ➡️ `(player, track, payload) => {}`
+  _Triggered when lyrics for a track are not found._
+
+## Debug Logs
+
+> _Internal debugging events from the Ryanlink client:_
+> \*Only triggered when the **`RyanConfiguration#advancedOptions.enableDebugEvents`** is set to **`true`\***
+
+- **`debug`** ➡️ `(eventKey, eventData) => {}`
+  _Triggered for various debug logs and errors._
+
+## Examples
+
+```js
+import { DebugEvents } from 'ryanlink'
+
+client.ryanlink.on('create', (node, payload) => {
+  console.log(`The Lavalink Node #${node.id} connected`)
+})
+
+// For all node-based errors:
+client.ryanlink.on('error', (node, error, payload) => {
+  console.error(`The Lavalink Node #${node.id} errored: `, error)
+  console.error(`Error Payload: `, payload)
+})
+
+// YOU NEED TO HAVE THE debug EVENT ENABLED
+/*
+
+client.ryanlink = new RyanlinkManager<myCustomPlayer>({
+    ....
+    advancedOptions: {
+        enableDebugEvents: true, // enable the DEBUG EVENT LISTENER
+        debugOptions: {
+            noAudio: true, // if set to true, you will get additional logs related to not hearing audio while playing on the first setup
+            playerDestroy: {
+                dontThrowError: false,
+                debugLog: false, // if set to true, you will see additional debug logs related to destroying players
+            },
+            logCustomSearches: false, // if set to true, you will see logs related to custom search plugins.
+        }
+    }
+});
+
+*/
+client.ryanlink.on('debug', (eventKey, eventData) => {
+  // skip specific log
+  if (eventKey === DebugEvents.NoAudioDebug && eventData.message === 'Manager is not initated yet') return
+  // skip specific event log of a log-level-state "log"
+  if (eventKey === DebugEvents.PlayerUpdateSuccess && eventData.state === 'log') return
+  console.group('ryanlink-Debug:')
+  console.log('-'.repeat(20))
+  console.debug(`[${eventKey}]`)
+  console.debug(eventData)
+  console.log('-'.repeat(20))
+  console.groupEnd()
+})
+```

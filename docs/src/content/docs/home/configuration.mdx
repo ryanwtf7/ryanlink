@@ -1,0 +1,168 @@
+---
+editUrl: false
+next: true
+prev: true
+title: Configuration
+description: Learn how to use the ryanlink@v4 Client.
+---
+
+```ts
+import { RyanlinkManager, QueueChangesWatcher, QueueStoreManager } from 'ryanlink'
+import { RedisClientType } from 'redis' // example for custom queue store
+import { Client, GatewayIntentBits } from 'discord.js' // example for a discord bot
+
+// you might want to extend the types of the client, to bind ryanlink to it.
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+})
+
+const previouslyUsedSessions = new Map<string, string>() //nodeManager.on("connect", node => previouslyUsedSessions.set(node.id, node.sessionId))
+
+client.ryanlink = new RyanlinkManager({
+  nodes: [
+    {
+      authorization: 'localhoist',
+      host: 'localhost',
+      port: 2333,
+      id: 'testnode',
+      // get the previously used session, to restart with "resuming" enabled
+      sessionId: previouslyUsedSessions.get('testnode'),
+      requestSignalTimeoutMS: 3000,
+      closeOnError: true,
+      heartBeatInterval: 30_000,
+      enablePingOnStatsCheck: true,
+      retryDelay: 10e3,
+      secure: false,
+      retryAmount: 5,
+    },
+  ],
+  sendToShard: (guildId, payload) => client.guilds.cache.get(guildId)?.shard?.send(payload),
+  autoSkip: true,
+  autoMove: false, // auto move to next node, if a node disconnects
+  //playerClass: yourCustomPlayerClass // class yourCustomPlayerClass extends Player {} .. make your own player class and types, the RyanlinkManager is generic so then you can do new RyanlinkManager<yourCustomPlayerClass>({})
+  client: {
+    // client: client.user
+    id: envConfig.clientId, // REQUIRED! (at least after the .init)
+    username: 'RyanlinkBot',
+  },
+  autoSkipOnResolveError: true, // skip song, if resolving an unresolved song fails
+  emitNewSongsOnly: true, // don't emit "looping songs"
+  playerOptions: {
+    // These are the default prevention methods
+    maxErrorsPerTime: {
+      threshold: 10_000,
+      maxAmount: 3,
+    },
+    // only allow an autoplay function to execute, if the previous function was longer ago than this number.
+    minAutoPlayMs: 10_000,
+
+    applyVolumeAsFilter: false,
+    clientBasedPositionUpdateInterval: 50, // in ms to up-calc player.position
+    defaultSearchPlatform: 'ytmsearch',
+    allowCustomSources: false, // set to true if you want to allow custom sources which ryanlink does not support (yet)
+    volumeDecrementer: 0.75, // on client 100% == on ryanlink 75%
+    requesterTransformer: requesterTransformer,
+    onDisconnect: {
+      autoReconnect: true, // automatically attempts a reconnect, if the bot disconnects from the voice channel, if it fails, it get's destroyed
+      destroyPlayer: false, // overrides autoReconnect and directly destroys the player if the bot disconnects from the vc
+    },
+    onEmptyQueue: {
+      // will auto destroy the player after 30s if the queue got empty and autoplay function does not add smt to the queue
+      destroyAfterMs: 30_000, // 1 === instantly destroy | don't provide the option, to don't destroy the player
+      autoPlayFunction: autoPlayFunction,
+    },
+    useUnresolvedData: true,
+  },
+  queueOptions: {
+    maxPreviousTracks: 10,
+    // only needed if you want and need external storage, don't provide if you don't need to
+    queueStore: new myCustomStore(client.redis), // client.redis = new redis()
+    // only needed, if you want to watch changes in the queue via a custom class,
+    queueChangesWatcher: new myCustomWatcher(client),
+  },
+  linksAllowed: true,
+  // example: don't allow p*rn / youtube links., you can also use a regex pattern if you want.
+  // linksBlacklist: ["porn", "youtube.com", "youtu.be"],
+  linksBlacklist: [],
+  linksWhitelist: [],
+  advancedOptions: {
+    enableDebugEvents: true,
+    maxFilterFixDuration: 600_000, // only allow instafixfilterupdate for tracks sub 10mins
+    debugOptions: {
+      noAudio: false,
+      playerDestroy: {
+        dontThrowError: false,
+        debugLog: false,
+      },
+      logCustomSearches: false,
+    },
+  },
+})
+// IMPORTANT- Send voice data to the audio node
+client.on('raw', (d) => client.ryanlink.provideVoiceUpdate(d))
+
+client.on('ready', () => {
+  client.ryanlink.init(client.user) // init ryanlink
+})
+
+// for the custom queue Store create a redis instance
+client.redis = createClient({ url: 'redis://localhost:6379', password: 'securepass' })
+client.redis.connect()
+
+// Custom external queue Store
+// if queueStore is not provided on default it uses MiniMap
+export class myCustomStore implements QueueStoreManager {
+  private redis: RedisClientType
+  constructor(redisClient: RedisClientType) {
+    this.redis = redisClient
+  }
+  async get(guildId): Promise<any> {
+    return await this.redis.get(this.id(guildId))
+  }
+  async set(guildId, stringifiedQueueData): Promise<any> {
+    return await this.redis.set(this.id(guildId), stringifiedQueueData)
+  }
+  async delete(guildId): Promise<any> {
+    return await this.redis.del(this.id(guildId))
+  }
+  async parse(stringifiedQueueData): Promise<Partial<StoredQueue>> {
+    return JSON.parse(stringifiedQueueData)
+  }
+  async stringify(parsedQueueData): Promise<any> {
+    return JSON.stringify(parsedQueueData)
+  }
+  private id(guildId) {
+    return `ryanlink_queue_${guildId}` // transform the id to your belikings
+  }
+}
+
+// Custom Queue Watcher Functions (with couple special features..)
+
+function updateNextTrackGapLess(guildId: string) {
+  // this function is for nodelink users relevant for gapless audio.
+  const player = this.client.ryanlink.players.get(guildId)
+  if (!player || !player.node.isNodeLink()) return
+  return player.node.removeNextTrackGapLess(player)
+}
+class myCustomWatcher implements QueueChangesWatcher {
+  constructor(client) {
+    this.client = client
+  }
+  shuffled(guildId, oldStoredQueue, newStoredQueue) {
+    console.log(`${this.client.guilds.cache.get(guildId)?.name || guildId}: Queue got shuffled`)
+    updateNextTrackGapLess(guildId)
+  }
+  tracksAdd(guildId, tracks, position, oldStoredQueue, newStoredQueue) {
+    console.log(
+      `${this.client.guilds.cache.get(guildId)?.name || guildId}: ${tracks.length} Tracks got added into the Queue at position #${position}`
+    )
+    updateNextTrackGapLess(guildId)
+  }
+  tracksRemoved(guildId, tracks, position, oldStoredQueue, newStoredQueue) {
+    console.log(
+      `${this.client.guilds.cache.get(guildId)?.name || guildId}: ${tracks.length} Tracks got removed from the Queue at position #${position}`
+    )
+    updateNextTrackGapLess(guildId)
+  }
+}
+```

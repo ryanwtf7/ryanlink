@@ -1,0 +1,43 @@
+---
+title: 'Features'
+description: High-performance, flexible and feature-rich lavalink-v4 wrapper for Discord bots.
+---
+
+import { Badge } from '@astrojs/starlight/components'
+
+### Core Protocol
+- **Lavalink v4 Supported** <Badge text="v4" variant="note" />
+  - Native support for the latest Lavalink features and filters.
+  - Compatible with many Lavalink Plugins for enhanced functionality.
+
+### Queue Management
+- **Flexible Queue Stores** <Badge text="Scalable" variant="success" />
+  - Choose between Maps, Collections, Redis, or custom database stores.
+  - Effortlessly sync queues across multiple connections (e.g., Dashboard-Bot).
+  - Automated Queue Synchronization and unresolved track handling (optimizes memory by fetching tracks only when needed).
+
+### Advanced Audio Control
+- **Sophisticated Filtering & Searching** <Badge text="Precise" variant="tip" />
+  - Filter by title, author, duration, source, and more.
+  - Flexible search criteria and multi-criteria sorting.
+  - Built-in management for complex Audio Node filters and Equalizer settings.
+
+### Player Stability
+- **Intelligent Recovery** <Badge text="Automated" variant="note" />
+  - Detailed Player-Destroy reasons (Channel deletion, Voice disconnection, etc.).
+  - Automatic reconnection logic when voice states change.
+  - `instaFixFilter`: Instantly applies filter changes by automatically recalculating positions.
+  - `internalVolume`: Highly accurate volume scaling independent of the Node's base volume.
+
+### Security & Validations
+- **Lavalink Logic Validations** <Badge text="Secure" variant="danger" />
+  - Enforces strict usage of filters, plugins, and sources based on what the specific Lavalink Node actually supports.
+- **Client-Side Request Filtering** <Badge text="Robust" variant="caution" />
+  - Advanced **Whitelisting** and **Blacklisting**: Block or allow specific links, keywords, or domain names to maintain server safety.
+  - Pre-flight Validation: Validates almost all requests for "out of bound" errors before they are sent to the Node, preventing preventable process errors.
+
+### Automation
+- **Seamless Handlers** <Badge text="Reliable" variant="note" />
+  - Automatic track skipping on `TrackEnd`, `TrackStuck`, or `TrackError`.
+  - Automatic pausing and resuming based on server-wide voice state changes (Mute/Unmute).
+  - Memory-friendly architecture designed for high-concurrency bots.

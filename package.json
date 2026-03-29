@@ -1,0 +1,90 @@
+{
+  "name": "ryanlink",
+  "version": "1.0.2",
+  "description": "High-performance, flexible and feature-rich lavalink-v4 wrapper for Discord bots,",
+  "keywords": [
+    "advanced",
+    "bot",
+    "client",
+    "discord",
+    "ryanlink",
+    "audio",
+    "music",
+    "typescript",
+    "audio-engine"
+  ],
+  "homepage": "https://github.com/ryanwtf7/ryanlink",
+  "bugs": {
+    "url": "https://github.com/ryanwtf7/ryanlink/issues"
+  },
+  "license": "Apache-2.0",
+  "author": "RY4N",
+  "contributors": [],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ryanwtf7/ryanlink.git"
+  },
+  "directories": {
+    "lib": "src"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "fmt": "prettier --write .",
+    "test": "jest",
+    "test:jest": "jest",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run fmt && npm run build"
+  },
+  "dependencies": {
+    "tslib": "^2.8.1",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^24.10.15",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.26.0",
+    "@typescript-eslint/parser": "^8.26.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "eslint": "^9.21.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.5.3",
+    "ts-jest": "^29.2.6",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "bun": ">=1.1.27",
+    "node": ">=18.0.0"
+  },
+  "packageManager": "bun@1.3.9",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
