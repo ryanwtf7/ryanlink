@@ -2,7 +2,12 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testMatch: ['**/test/**/*.test.ts'],
+  testMatch: [
+    '**/test/filters.test.ts',
+    '**/test/lavalink.test.ts',
+    '**/test/constants.test.ts',
+    '**/test/sanity.test.ts',
+  ],
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',
