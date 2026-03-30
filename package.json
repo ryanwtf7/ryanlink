@@ -1,6 +1,6 @@
 {
   "name": "ryanlink",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "High-performance, flexible and feature-rich lavalink-v4 wrapper for Discord bots,",
   "keywords": [
     "advanced",
