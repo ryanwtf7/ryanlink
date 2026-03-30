@@ -10,23 +10,23 @@ vi.mock('ws', () => {
     public static CLOSED = 3
     public readyState = 0
     constructor(public url: string, public options: any) {
-       super()
-       setTimeout(() => {
-         this.readyState = 1
-         this.emit('open')
-         setTimeout(() => {
-           this.emit('message', JSON.stringify({ 
-             op: 'ready', 
-             sessionId: '123', 
-             resumed: false,
-             info: {
-               version: { semver: '4.0.0' },
-               sourceManagers: ['youtube'],
-               plugins: []
-             }
-           }))
-         }, 10)
-       }, 5)
+      super()
+      setTimeout(() => {
+        this.readyState = 1
+        this.emit('open')
+        setTimeout(() => {
+          this.emit('message', JSON.stringify({
+            op: 'ready',
+            sessionId: '123',
+            resumed: false,
+            info: {
+              version: { semver: '4.0.0' },
+              sourceManagers: ['youtube'],
+              plugins: []
+            }
+          }))
+        }, 10)
+      }, 5)
     }
     send = vi.fn()
     close = vi.fn()
@@ -48,21 +48,32 @@ describe('NodeLinkNode', () => {
     globalThis.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
       const urlObj = new URL(url)
       const path = urlObj.pathname
-      if (path.includes('meaning')) return { status: 200, ok: true, json: async () => ({ meaning: 'test' }) }
+
+      const createResponse = (data: any, status = 200) => ({
+        status,
+        ok: status < 400,
+        json: async () => data,
+        text: async () => JSON.stringify(data),
+      })
+
+      if (path.includes('info')) return createResponse({ version: { semver: '4.0.0' }, sourceManagers: ['youtube'], plugins: [], isNodelink: true })
+      if (path.includes('version')) return createResponse('4.0.0')
+      if (path.includes('meaning')) return createResponse({ loadType: 'meaning', data: { title: 'test', description: 'desc', paragraphs: [], url: 'u', provider: 'p', type: 't' } })
       if (path.includes('mix')) {
-        if (options?.method === 'GET') return { status: 200, ok: true, json: async () => ({ layers: [] }) }
-        if (options?.method === 'POST') return { status: 200, ok: true, json: async () => ({ mixId: 'm1' }) }
-        return { status: 200, ok: true, json: async () => ({}) }
+        if (options?.method === 'GET') return createResponse({ mixes: [] })
+        if (options?.method === 'POST') return createResponse({ id: 'm1', track: {}, volume: 50 })
+        return createResponse({})
       }
-      if (path.includes('lyrics')) return { status: 200, ok: true, json: async () => ({ text: 'l' }) }
-      if (path.includes('chapters')) return { status: 200, ok: true, json: async () => ([]) }
-      if (path.includes('connection')) return { status: 200, ok: true, json: async () => ({ metrics: {} }) }
-      if (path.includes('trackstream')) return { status: 200, ok: true, json: async () => ({ url: 'stream' }) }
-      if (path.includes('loadstream')) return { status: 200, ok: true, json: async () => ({}) }
-      if (path.includes('youtube/config')) return { status: 200, ok: true, json: async () => ({ isConfigured: true }) }
-      if (path.includes('youtube/oauth')) return { status: 200, ok: true, json: async () => ({ refreshToken: 'r' }) }
-      if (path.includes('players')) return { status: 200, ok: true, json: async () => ({}) }
-      return { status: 404, ok: false, json: async () => ({}) }
+      if (path.includes('lyrics')) return createResponse({ loadType: 'synced', data: { synced: true, lang: 'en', source: 's', lines: [] } })
+      if (path.includes('chapters')) return createResponse([])
+      if (path.includes('connection')) return createResponse({ status: 'ok', metrics: {} })
+      if (path.includes('trackstream')) return createResponse({ url: 'stream' })
+      if (path.includes('loadstream')) return createResponse({})
+      if (path.includes('youtube/config')) return createResponse({ isConfigured: true })
+      if (path.includes('youtube/oauth')) return createResponse({ access_token: 't', expires_in: 3600, scope: 's', token_type: 't' })
+      if (path.includes('players')) return createResponse({})
+
+      return createResponse({}, 404)
     })
 
     manager = new RyanlinkManager({
@@ -70,11 +81,11 @@ describe('NodeLinkNode', () => {
       client: { id: '123' },
       sendToShard: vi.fn(),
     })
-    
+
     node = manager.nodeManager.nodes.get('local') as NodeLinkNode
     await node.connect()
     await waitForNode(node)
-    
+
     player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'vc1', node: 'local' })
   })
 
@@ -87,28 +98,28 @@ describe('NodeLinkNode', () => {
   it('gets meaning of a track', async () => {
     const track = manager.utils.buildTrack({ encoded: 't', info: {} } as any, 'u')
     const res = await node.getMeaning(track)
-    expect(res.meaning).toBe('test')
+    expect(res.data.title).toBe('test')
   })
 
   it('manages mixer layers', async () => {
     const track = manager.utils.buildTrack({ encoded: 't', info: {} } as any, 'u')
     const addRes = await node.addMixerLayer(player, track, 50)
-    expect(addRes.mixId).toBe('m1')
+    expect(addRes.id).toBe('m1')
 
     const listRes = await node.listMixerLayers(player)
-    expect(listRes.layers).toBeDefined()
+    expect(listRes.mixes).toBeDefined()
 
     await node.updateMixerLayerVolume(player, 'm1', 75)
     await node.removeMixerLayer(player, 'm1')
   })
 
   it('applies specific filters', async () => {
-    await node.specificFilters.echo(player, { delay: 1, decay: 0.5 })
+    await node.specificFilters.echo(player, { delay: 1, feedback: 0.5 })
     await node.specificFilters.chorus(player, { rate: 1, depth: 1 })
     await node.specificFilters.compressor(player, { threshold: -20 })
-    await node.specificFilters.highPass(player, { frequency: 100 })
+    await node.specificFilters.highPass(player, { smoothing: 100 })
     await node.specificFilters.phaser(player, { rate: 1 })
-    await node.specificFilters.spatial(player, { x: 1, y: 1, z: 1 })
+    await node.specificFilters.spatial(player, { depth: 1, rate: 1 })
     await node.specificFilters.resetNodeLinkFilters(player)
   })
 

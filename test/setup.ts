@@ -1,7 +1,17 @@
-import { beforeAll, afterAll, afterEach } from 'vitest'
+import { beforeAll, afterAll, afterEach, vi } from 'vitest'
 
-beforeAll(() => {})
+beforeAll(() => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'log').mockImplementation(() => {})
+  process.removeAllListeners('warning')
+  process.on('warning', (warning) => {
+    if (warning.name === 'PromiseRejectionHandledWarning') return
+    console.warn(warning)
+  })
+})
 
-afterAll(() => {})
+afterAll(() => {
+  vi.restoreAllMocks()
+})
 
 afterEach(() => {})
