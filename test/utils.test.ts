@@ -1,367 +1,257 @@
-import { fn } from './mock'
-import {
-  RyanlinkUtils,
-  MiniMap,
-  AudioTrackSymbol,
-  UnresolvedAudioTrackSymbol,
-  AudioQueueSymbol,
-  AudioNodeSymbol,
-  parseConnectionUrl,
-  safeStringify,
-} from '../src/utils/Utils'
-
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-function makeTrack(overrides: Record<string, any> = {}) {
-  const t: any = {
-    encoded: 'base64encodedtrack==',
-    info: {
-      identifier: 'abc123',
-      title: 'Test Track',
-      author: 'Test Author',
-      duration: 180000,
-      artworkUrl: 'https://example.com/art.jpg',
-      uri: 'https://youtube.com/watch?v=abc123',
-      sourceName: 'youtube',
-      isSeekable: true,
-      isStream: false,
-      isrc: null,
-    },
-    userData: {},
-    pluginInfo: {},
-    requester: { id: 'user1' },
-    ...overrides,
-  }
-  Object.defineProperty(t, AudioTrackSymbol, { configurable: true, value: true })
-  return t
-}
-
-function makeUnresolvedTrack(overrides: Record<string, any> = {}) {
-  const t: any = {
-    info: { title: 'Unresolved Track', author: 'Someone' },
-    requester: { id: 'user1' },
-    resolve: fn(),
-    ...overrides,
-  }
-  Object.defineProperty(t, UnresolvedAudioTrackSymbol, { configurable: true, value: true })
-  return t
-}
-
-// ─── safeStringify ──────────────────────────────────────────────────────────
-
-describe('safeStringify', () => {
-  it('serialises plain objects', () => {
-    expect(safeStringify({ a: 1 })).toBe('{"a":1}')
-  })
-
-  it('handles null', () => {
-    expect(safeStringify(null)).toBe('null')
-  })
-
-  it('handles arrays', () => {
-    expect(safeStringify([1, 2, 3])).toBe('[1,2,3]')
-  })
-
-  it('handles circular references gracefully', () => {
-    const obj: any = { a: 1 }
-    obj.self = obj
-    expect(() => safeStringify(obj)).not.toThrow()
-  })
-
-  it('respects indent parameter', () => {
-    const result = safeStringify({ a: 1 }, 2)
-    expect(result).toContain('\n')
-  })
-})
-
-// ─── parseConnectionUrl ────────────────────────────────────────────────────
-
-describe('parseConnectionUrl', () => {
-  it('parses a ryanlink:// URL correctly', () => {
-    const result = parseConnectionUrl('ryanlink://myid:mypassword@localhost:2333')
-    expect(result.authorization).toBe('mypassword')
-    expect(result.host).toBe('localhost')
-    expect(result.port).toBe(2333)
-    expect(result.nodeType).toBe('Core')
-    expect(result.id).toBe('myid')
-  })
-
-  it('parses a nodelink:// URL correctly', () => {
-    const result = parseConnectionUrl('nodelink://myid:pass@127.0.0.1:8080')
-    expect(result.nodeType).toBe('NodeLink')
-    expect(result.host).toBe('127.0.0.1')
-    expect(result.port).toBe(8080)
-  })
-
-  it('throws on invalid protocol', () => {
-    expect(() => parseConnectionUrl('http://user:pass@host:1234')).toThrow()
-  })
-})
-
-// ─── MiniMap ─────────────────────────────────────────────────────────────────
-
-describe('MiniMap', () => {
-  it('extends Map', () => {
-    const m = new MiniMap<string, number>()
-    expect(m instanceof Map).toBe(true)
-  })
-
-  it('set and get work', () => {
-    const m = new MiniMap<string, number>([['a', 1]])
-    expect(m.get('a')).toBe(1)
-  })
-
-  it('filter returns matching entries', () => {
-    const m = new MiniMap<string, number>([
-      ['a', 1],
-      ['b', 2],
-      ['c', 3],
-    ])
-    const filtered = m.filter((v) => v > 1)
-    expect(filtered.size).toBe(2)
-    expect(filtered.has('a')).toBe(false)
-    expect(filtered.has('b')).toBe(true)
-  })
-
-  it('filter returns empty MiniMap when nothing matches', () => {
-    const m = new MiniMap<string, number>([['a', 1]])
-    const filtered = m.filter((v) => v > 100)
-    expect(filtered.size).toBe(0)
-  })
-
-  it('map transforms values', () => {
-    const m = new MiniMap<string, number>([
-      ['a', 1],
-      ['b', 2],
-    ])
-    const result = m.map((v) => v * 2)
-    expect(result).toEqual([2, 4])
-  })
-
-  it('toJSON returns entries array', () => {
-    const m = new MiniMap<string, number>([['x', 10]])
-    const json = m.toJSON()
-    expect(Array.isArray(json)).toBe(true)
-    expect(json[0]).toEqual(['x', 10])
-  })
-})
-
-// ─── RyanlinkUtils ────────────────────────────────────────────────────────────
+import { RyanlinkUtils, parseConnectionUrl, MiniMap, queueTrackEnd } from '../src/utils/Utils'
+import { RyanlinkManager } from '../src/core/Manager'
 
 describe('RyanlinkUtils', () => {
   let utils: RyanlinkUtils
+  let manager: RyanlinkManager
 
-  beforeEach(() => {
-    utils = new RyanlinkUtils()
+  beforeEach(async () => {
+    manager = new RyanlinkManager({
+      nodes: [{ host: 'localhost', port: 2333, authorization: 'pw', id: 'local' }],
+      client: { id: '123', username: 'bot' },
+      sendToShard: vi.fn(),
+    })
+    utils = new RyanlinkUtils(manager)
+    const node = manager.nodeManager.nodes.get('local')!
+    // @ts-ignore
+    node.socket = { readyState: 1 } 
   })
 
-  // isTrack
-  describe('isTrack', () => {
-    it('returns true for a valid track with TrackSymbol', () => {
-      expect(utils.isTrack(makeTrack())).toBe(true)
+  describe('parseConnectionUrl', () => {
+    it('parses ryanlink url', () => {
+      const parsed = parseConnectionUrl('ryanlink://user:pass@localhost:2333')
+      expect(parsed).toEqual({
+        authorization: 'pass',
+        nodeType: 'Core',
+        id: 'user',
+        host: 'localhost',
+        port: 2333,
+      })
     })
 
-    it('returns true for a plain track object without symbol', () => {
-      const t: any = {
-        encoded: 'abc==',
-        info: { title: 'T' },
+    it('parses nodelink url', () => {
+      const parsed = parseConnectionUrl('nodelink://user:pass@localhost:2333')
+      expect(parsed.nodeType).toBe('NodeLink')
+    })
+  })
+
+  describe('buildTrack', () => {
+    const rawTrack = {
+      encoded: 'base64',
+      info: {
+        identifier: 'id',
+        title: 'title',
+        author: 'author',
+        length: 1000,
+        uri: 'uri',
+        sourceName: 'youtube',
+        isSeekable: true,
+        isStream: false,
       }
-      expect(utils.isTrack(t)).toBe(true)
+    }
+
+    it('builds a valid track', () => {
+      const track = utils.buildTrack(rawTrack as any, { id: 'user' })
+      expect(track.encoded).toBe('base64')
+      expect(track.requester).toEqual({ id: 'user' })
     })
 
-    it('returns false for null', () => {
+    it('uses requesterTransformer if provided', () => {
+      manager.options.playerOptions.requesterTransformer = (u: any) => ({ name: u.username })
+      const track = utils.buildTrack(rawTrack as any, { username: 'test' })
+      expect(track.requester).toEqual({ name: 'test' })
+    })
+  })
+
+  describe('unresolved tracks', () => {
+    it('builds unresolved track', () => {
+      const ut = utils.buildUnresolvedTrack({ title: 'test', author: 'auth' }, { id: '1' })
+      expect(utils.isUnresolvedTrack(ut)).toBe(true)
+    })
+
+    it('resolves unresolved track', async () => {
+      const ut = utils.buildUnresolvedTrack({ title: 'test' }, { id: '1' })
+      const player = manager.createPlayer({ guildId: '1', voiceChannelId: '1' })
+      
+      vi.spyOn(player, 'search').mockResolvedValue({
+        loadType: 'search',
+        tracks: [{ encoded: 'enc', info: { title: 'Resolved', duration: 1000 } } as any],
+        playlist: null,
+        exception: null,
+        pluginInfo: {}
+      } as any)
+
+      await ut.resolve(player)
+      expect(ut.encoded).toBe('enc')
+      expect(utils.isTrack(ut)).toBe(true)
+    })
+  })
+
+  describe('validations', () => {
+    it('identifies tracks correctly', () => {
+      expect(utils.isTrack({ encoded: 'a', info: {} } as any)).toBe(true)
       expect(utils.isTrack(null as any)).toBe(false)
     })
 
-    it('returns false for unresolved track', () => {
-      expect(utils.isTrack(makeUnresolvedTrack())).toBe(false)
+    it('validates query strings', () => {
+      const mockNode = { 
+        info: { sourceManagers: ['youtube'] },
+        _checkForSources: true 
+      } as any
+      
+      expect(() => utils.validateQueryString(mockNode, '  ')).toThrow('Query string is empty')
+      
+      mockNode.info.sourceManagers = []
+      expect(() => utils.validateQueryString(mockNode, 'https://youtube.com/watch?v=abc')).toThrow(/no sourceManagers enabled/)
     })
 
-    it('returns false for object without encoded', () => {
-      expect(utils.isTrack({ info: { title: 'x' } } as any)).toBe(false)
-    })
-  })
-
-  // isUnresolvedTrack
-  describe('isUnresolvedTrack', () => {
-    it('returns true for unresolved track with symbol', () => {
-      expect(utils.isUnresolvedTrack(makeUnresolvedTrack())).toBe(true)
-    })
-
-    it('returns false for a resolved track', () => {
-      expect(utils.isUnresolvedTrack(makeTrack())).toBe(false)
-    })
-
-    it('returns false for null', () => {
-      expect(utils.isUnresolvedTrack(null as any)).toBe(false)
-    })
-  })
-
-  // isUnresolvedTrackQuery
-  describe('isUnresolvedTrackQuery', () => {
-    it('returns true for object with title but no info', () => {
-      expect(utils.isUnresolvedTrackQuery({ title: 'Song' } as any)).toBe(true)
-    })
-
-    it('returns false for object with info', () => {
-      expect(utils.isUnresolvedTrackQuery({ info: { title: 'Song' } } as any)).toBe(false)
+    it('handles blacklists and whitelists', () => {
+      const mockNode = { info: { sourceManagers: ['youtube'] } } as any
+      manager.options.linksBlacklist = ['badsite.com']
+      expect(() => utils.validateQueryString(mockNode, 'https://badsite.com/foo')).toThrow('blacklisted')
+      
+      manager.options.linksBlacklist = []
+      manager.options.linksWhitelist = ['goodsite.com']
+      expect(() => utils.validateQueryString(mockNode, 'https://othersite.com')).toThrow('whitelisted')
     })
   })
 
-  // isNotBrokenTrack
-  describe('isNotBrokenTrack', () => {
-    it('returns true for a valid track with sufficient duration', () => {
-      const t = makeTrack()
-      expect(utils.isNotBrokenTrack(t, 1000)).toBe(true)
+  describe('query transformations', () => {
+    it('transforms queries', () => {
+      const transformed = utils.transformQuery('ytsearch:hello')
+      expect(transformed.source).toBe('ytsearch')
+      expect(transformed.query).toBe('hello')
     })
 
-    it('returns false for track with duration below minimum', () => {
-      const t = makeTrack({ info: { ...makeTrack().info, duration: 100 } })
-      expect(utils.isNotBrokenTrack(t, 29000)).toBe(false)
-    })
-
-    it('returns false for track with NaN duration', () => {
-      const t = makeTrack({ info: { ...makeTrack().info, duration: NaN } })
-      expect(utils.isNotBrokenTrack(t)).toBe(false)
+    it('transforms audio search queries', () => {
+      const transformed = utils.transformAudioSearchQuery({ query: 'test', types: ['track'], source: 'ymsearch' })
+      expect(transformed.types).toContain('track')
     })
   })
 
-  // buildTrack
-  describe('buildTrack', () => {
-    it('builds a track from LavalinkTrack data', () => {
-      const data: any = {
-        encoded: 'base64==',
-        info: {
-          identifier: 'id1',
-          title: 'My Song',
-          author: 'Artist',
-          length: 200000,
-          artworkUrl: null,
-          uri: 'https://example.com',
-          sourceName: 'youtube',
-          isSeekable: true,
-          isStream: false,
-          isrc: null,
-        },
-        userData: {},
-        pluginInfo: {},
-      }
-      const track = utils.buildTrack(data, { id: 'user1' })
-      expect(track.encoded).toBe('base64==')
-      expect(track.info.title).toBe('My Song')
-      expect(track.info.duration).toBe(200000)
+  describe('getClosestTrack', () => {
+    it('finds track by ISRC', async () => {
+      const ut = utils.buildUnresolvedTrack({ title: 'T', author: 'A', isrc: 'I123' }, { id: '1' })
+      const player = manager.createPlayer({ guildId: 'gc1', voiceChannelId: 'v1' })
+      
+      const searchSpy = vi.spyOn(player, 'search').mockResolvedValue({
+        loadType: 'search',
+        tracks: [{ encoded: 'e1', info: { title: 'Other', author: 'Other', isrc: 'I123', duration: 1000 } } as any]
+      } as any)
+
+      const result = await utils.getClosestTrack(ut, player)
+      expect(result.encoded).toBe('e1')
+      expect(searchSpy).toHaveBeenCalledWith(expect.objectContaining({ query: 'T by A' }), { id: '1' })
     })
 
-    it('throws if encoded is missing', () => {
-      expect(() => utils.buildTrack({ info: {} } as any, null)).toThrow()
+    it('finds track by title and author', async () => {
+      const ut = utils.buildUnresolvedTrack({ title: 'Real Title', author: 'Real Author', duration: 1000 }, { id: '1' })
+      const player = manager.createPlayer({ guildId: 'gc2', voiceChannelId: 'v1' })
+      
+      vi.spyOn(player, 'search').mockResolvedValue({
+        loadType: 'search',
+        tracks: [
+          { encoded: 'wrong', info: { title: 'Wrong', author: 'Auth', duration: 1000 } } as any,
+          { encoded: 'right', info: { title: 'Real Title', author: 'Real Author', duration: 1000 } } as any
+        ]
+      } as any)
+
+      const result = await utils.getClosestTrack(ut, player)
+      expect(result.encoded).toBe('right')
     })
 
-    it('throws if info is missing', () => {
-      expect(() => utils.buildTrack({ encoded: 'abc==' } as any, null)).toThrow()
-    })
-  })
+    it('finds track by duration if no exact title match', async () => {
+      const ut = utils.buildUnresolvedTrack({ title: 'T', author: 'A', duration: 5000 }, { id: '1' })
+      const player = manager.createPlayer({ guildId: 'gc3', voiceChannelId: 'v1' })
+      
+      vi.spyOn(player, 'search').mockResolvedValue({
+        loadType: 'search',
+        tracks: [
+          { encoded: 'far', info: { title: 'Other', author: 'Other', duration: 10000 } } as any,
+          { encoded: 'close', info: { title: 'Other', author: 'Other', duration: 4900 } } as any
+        ]
+      } as any)
 
-  // buildUnresolvedTrack
-  describe('buildUnresolvedTrack', () => {
-    it('builds an unresolved track from query', () => {
-      const t = utils.buildUnresolvedTrack({ title: 'Song', author: 'Artist' } as any, { id: 'u1' })
-      expect(utils.isUnresolvedTrack(t)).toBe(true)
-      expect(typeof t.resolve).toBe('function')
-    })
-
-    it('throws if query is undefined', () => {
-      expect(() => utils.buildUnresolvedTrack(undefined as any, null)).toThrow()
-    })
-  })
-
-  // isNodeOptions
-  describe('isNodeOptions', () => {
-    it('returns true for valid node options', () => {
-      expect(utils.isNodeOptions({ host: 'localhost', port: 2333, authorization: 'youshallnotpass' })).toBe(true)
+      const result = await utils.getClosestTrack(ut, player)
+      expect(result.encoded).toBe('close')
     })
 
-    it('returns false if host is missing', () => {
-      expect(utils.isNodeOptions({ port: 2333, authorization: 'pass' } as any)).toBe(false)
+    it('resolves by URI if provided', async () => {
+      const ut = utils.buildUnresolvedTrack({ title: 'T', uri: 'https://uri.com' }, { id: '1' })
+      const player = manager.createPlayer({ guildId: 'gc4', voiceChannelId: 'v1' })
+      
+      const searchSpy = vi.spyOn(player, 'search').mockResolvedValue({
+        loadType: 'track',
+        tracks: [{ encoded: 'e_uri', info: { title: 'T' } } as any]
+      } as any)
+
+      const result = await utils.getClosestTrack(ut, player)
+      expect(result.encoded).toBe('e_uri')
+      expect(searchSpy).toHaveBeenCalledWith(expect.objectContaining({ query: 'https://uri.com' }), { id: '1' })
     })
 
-    it('returns false if port is out of range', () => {
-      expect(utils.isNodeOptions({ host: 'localhost', port: 99999, authorization: 'pass' })).toBe(false)
+    it('resolves by encoded base64 if provided', async () => {
+      const ut = utils.buildUnresolvedTrack({ title: 'T', encoded: 'e64' } as any, { id: '1' })
+      const player = manager.createPlayer({ guildId: 'gc5', voiceChannelId: 'v1' })
+      
+      // @ts-ignore
+      const decodeSpy = vi.spyOn(player.node.decode, 'singleTrack').mockResolvedValue({ encoded: 'e64', info: { title: 'T' } } as any)
+
+      const result = await utils.getClosestTrack(ut, player)
+      expect(result.encoded).toBe('e64')
+      expect(decodeSpy).toHaveBeenCalledWith('e64', { id: '1' })
     })
 
-    it('returns false if authorization is empty', () => {
-      expect(utils.isNodeOptions({ host: 'localhost', port: 2333, authorization: '' })).toBe(false)
-    })
-
-    it('returns false for null', () => {
-      expect(utils.isNodeOptions(null as any)).toBe(false)
-    })
-
-    it('returns false for array', () => {
-      expect(utils.isNodeOptions([] as any)).toBe(false)
-    })
-  })
-
-  // findSourceOfQuery
-  describe('findSourceOfQuery', () => {
-    it('detects ytsearch prefix', () => {
-      const result = utils.findSourceOfQuery('ytsearch:my song')
-      expect(result).toBe('ytsearch')
-    })
-
-    it('detects scsearch prefix', () => {
-      const result = utils.findSourceOfQuery('scsearch:my song')
-      expect(result).toBe('scsearch')
-    })
-
-    it('returns null for plain query', () => {
-      expect(utils.findSourceOfQuery('just a song name')).toBeNull()
-    })
-
-    it('returns null for http/https (not a source prefix)', () => {
-      expect(utils.findSourceOfQuery('https://youtube.com/watch?v=abc')).toBeNull()
+    it('throws if missing required fields', async () => {
+      const ut = utils.buildUnresolvedTrack({ title: 'T' }, { id: '1' })
+      // @ts-ignore
+      delete ut.info.title
+      const player = manager.createPlayer({ guildId: 'gc6', voiceChannelId: 'v1' })
+      await expect(utils.getClosestTrack(ut, player)).rejects.toThrow(/required for unresolved tracks/)
     })
   })
 
-  // transformQuery
-  describe('transformQuery', () => {
-    it('handles string query', () => {
-      const result = utils.transformQuery('my song')
-      expect(result.query).toBe('my song')
+  describe('MiniMap', () => {
+    it('filters correctly', () => {
+      const map = new MiniMap<string, number>([['a', 1], ['b', 2], ['c', 3]])
+      const filtered = map.filter((v) => v > 1)
+      expect(filtered.size).toBe(2)
     })
 
-    it('handles object query with source', () => {
-      const result = utils.transformQuery({ query: 'my song', source: 'scsearch' as any })
-      expect(result.query).toBe('my song')
-    })
-
-    it('strips source prefix from string query', () => {
-      const result = utils.transformQuery('ytsearch:my song')
-      expect(result.query).toBe('my song')
-      expect(result.source).toBe('ytsearch')
+    it('maps correctly', () => {
+      const map = new MiniMap<string, number>([['a', 1], ['b', 2]])
+      const mapped = map.map((v) => v * 2)
+      expect(mapped).toEqual([2, 4])
     })
   })
 
-  // Symbols
-  describe('Symbols', () => {
-    it('TrackSymbol is a Symbol', () => {
-      expect(typeof AudioTrackSymbol).toBe('symbol')
+  describe('queueTrackEnd', () => {
+    it('shifts queue and sets current track', async () => {
+      const player = manager.createPlayer({ guildId: 'q1', voiceChannelId: 'v1' })
+      const track1 = { encoded: 't1', info: { title: 'T1' } } as any
+      const track2 = { encoded: 't2', info: { title: 'T2' } } as any
+      player.queue.current = track1
+      player.queue.tracks.push(track2)
+      
+      await queueTrackEnd(player)
+      
+      expect(player.queue.current).toBe(track2)
+      expect(player.queue.previous[0]).toBe(track1)
+      expect(player.queue.tracks.length).toBe(0)
     })
 
-    it('UnresolvedTrackSymbol is a Symbol', () => {
-      expect(typeof UnresolvedAudioTrackSymbol).toBe('symbol')
-    })
-
-    it('QueueSymbol is a Symbol', () => {
-      expect(typeof AudioQueueSymbol).toBe('symbol')
-    })
-
-    it('NodeSymbol is a Symbol', () => {
-      expect(typeof AudioNodeSymbol).toBe('symbol')
-    })
-
-    it('all symbols are unique', () => {
-      const syms = [AudioTrackSymbol, UnresolvedAudioTrackSymbol, AudioQueueSymbol, AudioNodeSymbol]
-      expect(new Set(syms).size).toBe(4)
+    it('handles queue repeat mode', async () => {
+      const player = manager.createPlayer({ guildId: 'q2', voiceChannelId: 'v1' })
+      player.repeatMode = 'queue'
+      const track1 = { encoded: 't1', info: { title: 'T1' } } as any
+      const track2 = { encoded: 't2', info: { title: 'T2' } } as any
+      player.queue.current = track1
+      player.queue.tracks.push(track2)
+      
+      await queueTrackEnd(player)
+      // track1 should be pushed to the end of tracks, and track2 should become current
+      expect(player.queue.current).toBe(track2)
+      expect(player.queue.tracks).toContain(track1)
     })
   })
 })

@@ -357,14 +357,83 @@ describe('Queue', () => {
       expect(queue.tracks[0].info.duration).toBe(300)
     })
 
-    it('sorts by title ascending', async () => {
-      await queue.sortBy('title', 'asc')
-      expect(queue.tracks[0].info.title).toBe('Track a')
+    it('sorts tracks by custom comparator', () => {
+      const queue = makeQueue()
+      const track1 = makeTrack('B')
+      const track2 = makeTrack('A')
+      queue.tracks.push(track1, track2)
+      
+      // toSortedBy returns a NEW array, it doesn't mutate queue.tracks
+      const sorted = queue.toSortedBy((a, b) => a.info.title.localeCompare(b.info.title))
+      expect(sorted[0].info.title).toBe('Track A')
+      expect(sorted[1].info.title).toBe('Track B')
     })
 
-    it('sorts by custom comparator', async () => {
-      await queue.sortBy((a, b) => (b.info.duration || 0) - (a.info.duration || 0))
-      expect(queue.tracks[0].info.duration).toBe(300)
+    // ─── Remove ──────────────────────────────────────────────────────────────
+    
+    it('removes tracks by array of objects (identifier, uri, title, isrc, artworkUrl)', async () => {
+      const queue = makeQueue()
+      const track1 = makeTrack('id1')
+      const track2 = makeTrack('id2')
+      const track3 = makeTrack('id3')
+      
+      queue.tracks.push(track1, track2, track3)
+      
+      // Remove by various fields in an array
+      const result = await queue.remove([
+        { info: { identifier: 'id1' } },
+        { info: { uri: track2.info.uri } },
+        { info: { title: track3.info.title } }
+      ] as any)
+      
+      expect(result?.removed.length).toBe(3)
+      expect(queue.tracks.length).toBe(0)
+    })
+
+    it('handles tracksRemoved callback in remove', async () => {
+      const queue = makeQueue()
+      const track = makeTrack('id1')
+      queue.tracks.push(track)
+      
+      let callbackCalled = false
+      // @ts-ignore
+      ;(queue as any).queueChanges = {
+        tracksRemoved: () => { callbackCalled = true }
+      }
+      
+      await queue.remove({ info: { identifier: 'id1' } } as any)
+      expect(callbackCalled).toBe(true)
+    })
+
+    // ─── Splice ─────────────────────────────────────────────────────────────
+    
+    it('handles splice with specific index', async () => {
+      const queue = makeQueue()
+      const track1 = makeTrack('1')
+      const track2 = makeTrack('2')
+      queue.tracks.push(track1, track2)
+      
+      const track3 = makeTrack('3')
+      await queue.splice(1, 0, track3)
+      
+      expect(queue.tracks[1].info.identifier).toBe('3')
+    })
+
+    // ─── Filter ─────────────────────────────────────────────────────────────
+
+    it('filters tracks by object predicate (title, author, source)', () => {
+      const queue = makeQueue()
+      const track1 = makeTrack('1')
+      const track2 = makeTrack('2')
+      track2.info.sourceName = 'spotify'
+      queue.tracks.push(track1, track2)
+      
+      const filtered = queue.utils.filterTracks({ title: track1.info.title })
+      expect(filtered.length).toBe(1)
+      expect(filtered[0].track.info.title).toBe(track1.info.title)
+      
+      const sourceFiltered = queue.utils.filterTracks({ sourceName: 'spotify' })
+      expect(sourceFiltered.length).toBe(1)
     })
   })
 
@@ -376,6 +445,26 @@ describe('Queue', () => {
       expect(sorted[0].info.duration).toBe(100)
       // original order unchanged
       expect(queue.tracks[0].info.identifier).toBe('c')
+    })
+
+    it('sorts by author', async () => {
+      await queue.add([makeTrack('z', 100), makeTrack('y', 100)])
+      // Artist z vs Artist y (localeCompare)
+      const sorted = queue.toSortedBy('author', 'asc')
+      expect(sorted[0].info.author).toBe('Artist y')
+    })
+
+    it('sorts with a custom function', async () => {
+      await queue.add([makeTrack('a', 100), makeTrack('b', 200)])
+      const sorted = queue.toSortedBy((a, b) => (b.info.duration || 0) - (a.info.duration || 0))
+      expect(sorted[0].info.duration).toBe(200)
+    })
+
+    it('returns original array for default case', async () => {
+      await queue.add([makeTrack('a'), makeTrack('b')])
+      // @ts-ignore
+      const sorted = queue.toSortedBy('unknown')
+      expect(sorted[0].info.identifier).toBe('a')
     })
   })
 
@@ -400,6 +489,35 @@ describe('Queue', () => {
       const removed = await queue.shiftPrevious()
       expect(removed?.info.identifier).toBe('p1')
       expect(queue.previous).toHaveLength(1)
+    })
+  })
+
+  // sync / destroy
+  describe('utils.sync / destroy', () => {
+    it('syncs and destroys with QueueSaver', async () => {
+      const store = {
+        get: vi.fn(),
+        set: vi.fn(),
+        delete: vi.fn(),
+        stringify: (v: any) => v,
+        parse: (v: any) => v
+      }
+      const saver = new QueueSaver({ queueStore: store as any })
+      const queue = new Queue('guild-sync', {}, saver)
+      
+      const mockData = {
+        current: { encoded: 'curr', info: { title: 'T' } },
+        tracks: [{ encoded: 't1', info: { title: 'T1' } }],
+        previous: [{ encoded: 'p1', info: { title: 'P1' } }]
+      }
+      store.get.mockResolvedValue(mockData)
+      
+      await queue.utils.sync(true, false)
+      expect(queue.current?.encoded).toBe('curr')
+      expect(queue.tracks.length).toBe(1)
+      
+      await queue.utils.destroy()
+      expect(store.delete).toHaveBeenCalledWith('guild-sync')
     })
   })
 })

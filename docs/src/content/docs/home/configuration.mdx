@@ -25,76 +25,95 @@ client.ryanlink = new RyanlinkManager({
       host: 'localhost',
       port: 2333,
       id: 'testnode',
-      // get the previously used session, to restart with "resuming" enabled
-      sessionId: previouslyUsedSessions.get('testnode'),
-      requestSignalTimeoutMS: 3000,
-      closeOnError: true,
-      heartBeatInterval: 30_000,
-      enablePingOnStatsCheck: true,
-      retryDelay: 10e3,
-      secure: false,
-      retryAmount: 5,
+      
+      // Resuming support
+      sessionId: previouslyUsedSessions.get('testnode'), // session ID from a previous connection
+      
+      // Connection Stability
+      requestSignalTimeoutMS: 3000, // Timeout for REST requests to the node.
+      heartBeatInterval: 30_000, // Frequency of keep-alive packets.
+      closeOnError: true, // Whether to close the connection if a critical error occurs.
+      
+      // Performance & Stats
+      enablePingOnStatsCheck: true, // Perform a ping check whenever stats are received.
+      retryAmount: 5, // Number of reconnection attempts before giving up.
+      retryDelay: 10e3, // Delay (in ms) between reconnection attempts.
+      
+      // Security & Validation
+      secure: false, // Use wss:// and https:// if the node requires SSL.
+      autoChecks: {
+        pluginValidations: true, // Validate whether the node supports required plugins on startup.
+        sourcesValidations: true, // Validate whether the node supports required audio sources.
+      },
     },
   ],
   sendToShard: (guildId, payload) => client.guilds.cache.get(guildId)?.shard?.send(payload),
-  autoSkip: true,
-  autoMove: false, // auto move to next node, if a node disconnects
-  //playerClass: yourCustomPlayerClass // class yourCustomPlayerClass extends Player {} .. make your own player class and types, the RyanlinkManager is generic so then you can do new RyanlinkManager<yourCustomPlayerClass>({})
+  
+  // High-level Automation
+  autoSkip: true, // Automatically skip to the next track on track-end, error, or stuck.
+  autoMove: false, // Auto-move a player to a new node if its current node disconnects.
+  autoSkipOnResolveError: true, // Skip the current song if an UnresolvedTrack fails to resolve properly.
+  emitNewSongsOnly: true, // Only emit 'trackStart' for new songs (prevents spam when looping).
+  
+  // Whitelist / Blacklist for safety
+  linksAllowed: true, // Whether to allow raw URL playback.
+  linksBlacklist: [], // Domains or keywords to block from playback (Regex supported).
+  linksWhitelist: [], // Domains or keywords that are always allowed.
+
   client: {
-    // client: client.user
-    id: envConfig.clientId, // REQUIRED! (at least after the .init)
+    id: envConfig.clientId, // REQUIRED for signaling and voice state management.
     username: 'RyanlinkBot',
   },
-  autoSkipOnResolveError: true, // skip song, if resolving an unresolved song fails
-  emitNewSongsOnly: true, // don't emit "looping songs"
+
   playerOptions: {
-    // These are the default prevention methods
+    // Stability thresholds
     maxErrorsPerTime: {
       threshold: 10_000,
-      maxAmount: 3,
+      maxAmount: 3, // Destroy player if it hits more than 3 errors in 10 seconds.
     },
-    // only allow an autoplay function to execute, if the previous function was longer ago than this number.
-    minAutoPlayMs: 10_000,
-
-    applyVolumeAsFilter: false,
-    clientBasedPositionUpdateInterval: 50, // in ms to up-calc player.position
-    defaultSearchPlatform: 'ytmsearch',
-    allowCustomSources: false, // set to true if you want to allow custom sources which ryanlink does not support (yet)
-    volumeDecrementer: 0.75, // on client 100% == on ryanlink 75%
-    requesterTransformer: requesterTransformer,
+    
+    // Autoplay configuration
+    minAutoPlayMs: 10_000, // Cooldown for autoplay triggers to prevent spam.
+    
+    // Audio manipulation
+    applyVolumeAsFilter: false, // Whether to apply volume via a filter for smoother transitions.
+    volumeDecrementer: 0.75, // Scale client volume (e.g., 100% in client = 75% on Lavalink).
+    
+    // Advanced player state
+    clientBasedPositionUpdateInterval: 50, // Frequency (in ms) to locally predict track position.
+    defaultSearchPlatform: 'ytmsearch', // Default prefix for queries without a source.
+    allowCustomSources: false, // Allow playback of URLs not natively supported by Lavalink plugins.
+    useUnresolvedData: true, // Optimize memory by using unresolved metadata instead of full track data.
+    
+    requesterTransformer: requesterTransformer, // Function to normalize requester objects.
+    
     onDisconnect: {
-      autoReconnect: true, // automatically attempts a reconnect, if the bot disconnects from the voice channel, if it fails, it get's destroyed
-      destroyPlayer: false, // overrides autoReconnect and directly destroys the player if the bot disconnects from the vc
+      autoReconnect: true, // Attempt to reconnect the player if the bot is kicked from VC.
+      destroyPlayer: false, // Instantly destroy the player on any voice disconnect (overrides autoReconnect).
     },
+    
     onEmptyQueue: {
-      // will auto destroy the player after 30s if the queue got empty and autoplay function does not add smt to the queue
-      destroyAfterMs: 30_000, // 1 === instantly destroy | don't provide the option, to don't destroy the player
-      autoPlayFunction: autoPlayFunction,
+      destroyAfterMs: 30_000, // Duration to wait before auto-destroying an empty player.
+      autoPlayFunction: autoPlayFunction, // Handler to fetch more tracks when the queue is dry.
     },
-    useUnresolvedData: true,
   },
+
   queueOptions: {
-    maxPreviousTracks: 10,
-    // only needed if you want and need external storage, don't provide if you don't need to
-    queueStore: new myCustomStore(client.redis), // client.redis = new redis()
-    // only needed, if you want to watch changes in the queue via a custom class,
-    queueChangesWatcher: new myCustomWatcher(client),
+    maxPreviousTracks: 10, // How many played tracks to keep in history.
+    queueStore: new myCustomStore(client.redis), // Custom manager for external queue persistence (Redis/DB).
+    queueChangesWatcher: new myCustomWatcher(client), // Callback listener for queue mutations.
   },
-  linksAllowed: true,
-  // example: don't allow p*rn / youtube links., you can also use a regex pattern if you want.
-  // linksBlacklist: ["porn", "youtube.com", "youtu.be"],
-  linksBlacklist: [],
-  linksWhitelist: [],
+
   advancedOptions: {
-    enableDebugEvents: true,
-    maxFilterFixDuration: 600_000, // only allow instafixfilterupdate for tracks sub 10mins
+    enableDebugEvents: true, // Required to listen to the 'debug' event.
+    maxFilterFixDuration: 600_000, // Limit 'instaFixFilter' to tracks shorter than 10 mins.
     debugOptions: {
-      noAudio: false,
+      noAudio: false, // Enable granular logs for initial voice connection debugging.
       playerDestroy: {
-        dontThrowError: false,
-        debugLog: false,
+        dontThrowError: false, // Prevent the manager from throwing on improper player deletion.
+        debugLog: false, // Log stack traces for player destruction events.
       },
-      logCustomSearches: false,
+      logCustomSearches: false, // Debug output for raw search plugin query handling.
     },
   },
 })

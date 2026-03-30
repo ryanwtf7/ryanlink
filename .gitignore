@@ -14,4 +14,6 @@ pnpm-lock.yaml
 dist
 *.DS_Store
 bun.lock
-coverage
+coveragecoverage
+html
+.nyc_output

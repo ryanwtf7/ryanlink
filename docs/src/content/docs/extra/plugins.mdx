@@ -1,0 +1,78 @@
+---
+title: Plugin Integrations
+description: Learn how to use advanced plugins with Ryanlink.
+---
+
+Ryanlink is a feature-rich wrapper designed to seamlessly integrate with popular Lavalink plugins.
+
+## SponsorBlock
+
+The [**SponsorBlock plugin**](https://github.com/lavalink-devs/sponsorblock-plugin) allows you to automatically skip specific track segments (e.g., sponsors, intros, music-only sections).
+
+### Events
+
+Ryanlink provides high-level events to monitor SponsorBlock activities:
+
+- **`SegmentsLoaded`**: Triggered when all defined segments for the current track are loaded.
+- **`SegmentSkipped`**: Emitted when the plugin successfully skips a segment.
+- **`ChaptersLoaded`**: Triggered when YouTube chapters are successfully loaded.
+- **`ChapterStarted`**: Emitted at the start of each new chapter.
+
+```ts
+manager.on('SegmentSkipped', (player, track, payload) => {
+    console.log(`Skipped segment in ${track.info.title}: ${payload.segment.category}`);
+});
+```
+
+## LavaLyrics
+
+The [**LavaLyrics plugin**](https://github.com/topi314/LavaLyrics) provides real-time, time-synced lyrics for the current track.
+
+### Events
+
+- **`LyricsFound`**: Triggered when lyrics for the current track are successfully identified.
+- **`LyricsNotFound`**: Emitted when no lyrics can be found.
+- **`LyricsLine`**: Triggered for every new line of lyrics during playback, allowing for real-time display in your bot.
+
+```ts
+manager.on('LyricsLine', (player, track, payload) => {
+    console.log(`[${track.info.title}] Lyrics: ${payload.line.text}`);
+});
+```
+
+## Gapless Audio (NodeLink)
+
+For users running [**NodeLink**](https://github.com/lavalink-devs/nodelink), Ryanlink supports advanced gapless playback features.
+
+### Implementation
+
+To ensure smooth transitions between tracks, you should use the `updateNextTrackGapLess` pattern within a `QueueChangesWatcher`.
+
+```ts
+function updateNextTrackGapLess(guildId: string) {
+  const player = manager.players.get(guildId);
+  if (!player || !player.node.isNodeLink()) return;
+  // Pre-load the next track on the NodeLink server
+  return player.node.removeNextTrackGapLess(player);
+}
+
+class myCustomWatcher implements QueueChangesWatcher {
+  tracksAdd(guildId, tracks, ...args) {
+    updateNextTrackGapLess(guildId);
+  }
+}
+```
+
+### NodeLink Events
+
+NodeLink emits specialized events that you can catch using the `nodeLinkEvent` listener:
+
+```ts
+manager.nodeManager.on('nodeLinkEvent', (node, event, player, track, payload) => {
+    // Handle NodeLink specialized events (e.g. metadata, state updates)
+    console.log(`NodeLink Event: ${event} on ${node.id}`);
+});
+```
+
+> [!IMPORTANT]
+> Ensure your Lavalink Node has the corresponding plugins installed in its `plugins` directory and configured in `application.yml`.

@@ -388,4 +388,61 @@ describe('FilterManager', () => {
       expect(fm.filters.nightcore).toBe(false)
     })
   })
+
+  describe('dspxPlugin', () => {
+    beforeEach(() => {
+      player.node.info.plugins = [{ name: 'lavadspx-plugin' }]
+      player.node.info.filters = ['low-pass', 'high-pass', 'normalization', 'echo']
+    })
+
+    it('toggles lowPass', async () => {
+      await fm.dspxPlugin.toggleLowPass(1.5, 100)
+      expect(fm.filters.dspxPlugin.lowPass).toBe(true)
+      expect((fm.data.pluginFilters as any)['low-pass'].boostFactor).toBe(1.5)
+      await fm.dspxPlugin.toggleLowPass()
+      expect(fm.filters.dspxPlugin.lowPass).toBe(false)
+    })
+
+    it('toggles highPass', async () => {
+      await fm.dspxPlugin.toggleHighPass(2.0, 150)
+      expect(fm.filters.dspxPlugin.highPass).toBe(true)
+      await fm.dspxPlugin.toggleHighPass()
+      expect(fm.filters.dspxPlugin.highPass).toBe(false)
+    })
+
+    it('toggles normalization', async () => {
+      await fm.dspxPlugin.toggleNormalization(0.8, false)
+      expect(fm.filters.dspxPlugin.normalization).toBe(true)
+      await fm.dspxPlugin.toggleNormalization()
+      expect(fm.filters.dspxPlugin.normalization).toBe(false)
+    })
+
+    it('toggles echo', async () => {
+      await fm.dspxPlugin.toggleEcho(0.6, 0.7)
+      expect(fm.filters.dspxPlugin.echo).toBe(true)
+      await fm.dspxPlugin.toggleEcho()
+      expect(fm.filters.dspxPlugin.echo).toBe(false)
+    })
+  })
+
+  describe('coreFilterPlugin', () => {
+    beforeEach(() => {
+      player.node.info.plugins = [{ name: 'filter-engine' }]
+      player.node.info.filters = ['echo', 'reverb']
+    })
+
+    it('toggles echo', async () => {
+      await fm.coreFilterPlugin.toggleEcho(5, 0.9)
+      expect(fm.filters.coreFilterPlugin.echo).toBe(true)
+      await fm.coreFilterPlugin.toggleEcho()
+      expect(fm.filters.coreFilterPlugin.echo).toBe(false)
+    })
+
+    it('toggles reverb', async () => {
+      await fm.coreFilterPlugin.toggleReverb([0.1], [0.5])
+      expect(fm.filters.coreFilterPlugin.reverb).toBe(true)
+      await fm.coreFilterPlugin.toggleReverb()
+      expect(fm.filters.coreFilterPlugin.reverb).toBe(false)
+    })
+  })
 })

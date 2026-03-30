@@ -36,8 +36,16 @@ import { Badge } from '@astrojs/starlight/components'
   - Advanced **Whitelisting** and **Blacklisting**: Block or allow specific links, keywords, or domain names to maintain server safety.
   - Pre-flight Validation: Validates almost all requests for "out of bound" errors before they are sent to the Node, preventing preventable process errors.
 
-### Automation
+### Plugin ecosystem & Integration
+- **Advanced Metadata & Content Control** <Badge text="Integrated" variant="tip" />
+  - **SponsorBlock**: Automatically detect and skip sponsors, intros, or music-only segments in YouTube videos with specialized event tracking.
+  - **LavaLyrics**: Real-time, time-synced lyrics support with `LyricsLine` and `LyricsFound` events for immersive bot experiences.
+  - **NodeLink Gapless Audio**: Specialized support for NodeLink playback, ensuring absolute zero silence between consecutive tracks.
+
+### Automation & Memory Efficiency
 - **Seamless Handlers** <Badge text="Reliable" variant="note" />
   - Automatic track skipping on `TrackEnd`, `TrackStuck`, or `TrackError`.
   - Automatic pausing and resuming based on server-wide voice state changes (Mute/Unmute).
-  - Memory-friendly architecture designed for high-concurrency bots.
+  - Memory-friendly architecture designed for high-concurrency bots using `unresolvedData` to minimize footprint.
+- **Search & Platform Support** <Badge text="Expansive" variant="success" />
+  - Native support for over 50 different search prefixes, including Spotify, Apple Music, Deezer, and specialized sources like Flowery TTS.

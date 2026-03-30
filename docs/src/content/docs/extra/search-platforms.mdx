@@ -1,0 +1,57 @@
+---
+title: Search Prefixes
+description: A comprehensive list of all supported search prefixes in Ryanlink.
+---
+
+Ryanlink supports a vast array of search platforms and plugins. When performing a search using `manager.search()`, you can either pass a URL or a query string prefixed with one of the following identifiers.
+
+## Standard Platforms
+
+These platforms are supported by default or via common Lavalink plugins.
+
+| Platform | Prefix | Description |
+| :--- | :--- | :--- |
+| **YouTube** | `ytsearch:` | Standard YouTube search |
+| **YouTube Music** | `ytmsearch:` | YouTube Music search (Recommended for music) |
+| **SoundCloud** | `scsearch:` | SoundCloud search |
+| **Bandcamp** | `bcsearch:` | Bandcamp search |
+
+## Plugin-Extended Platforms
+
+The following prefixes require specific Lavalink plugins (like **LavaSrc** or **LavaSearch**) to be installed on your Node.
+
+| Platform | Search Prefix | Recommendation Prefix | ISRC Prefix |
+| :--- | :--- | :--- | :--- |
+| **Spotify** | `spsearch:` | `sprec:` | - |
+| **Apple Music** | `amsearch:` | `amrec:` | - |
+| **Deezer** | `dzsearch:` | `dzrec:` | `dzisrc:` |
+| **Yandex Music** | `ymsearch:` | `ymrec:` | - |
+| **VK Music** | `vksearch:` | `vkrec:` | - |
+| **Tidal** | `tdsearch:` | `tdrec:` | - |
+| **Qobuz** | `qbsearch:` | `qbrec:` | `qbisrc:` |
+| **Pandora** | `pdsearch:` | `pdrec:` | `pdisrc:` |
+
+## Specialized & Custom Sources
+
+| Source | Prefix | Description |
+| :--- | :--- | :--- |
+| **Flowery TTS** | `ftts:` | Text-to-Speech via Flowery |
+| **JioSaavn** | `jssearch:` | JioSaavn search (Region-specific) |
+| **Pornhub** | `phsearch:` | Pornhub search (Requires specific plugin) |
+| **Local File** | `local` | Play a file from the Node's local filesystem |
+| **HTTP(S) Link** | `link` / `uri` | Play via a direct web URL |
+
+## Additional Identifiers
+
+Ryanlink also supports internal aliases for many of these platforms to allow more natural input:
+
+- **Apple**: `apple`, `applemusic`, `apple music`
+- **Spotify**: `sp`, `spotify`, `spotify.com`
+- **Deezer**: `dz`, `deezer`
+- **Tidal**: `td`, `tidal`
+- **Instagram**: `ig`, `igsearch`
+- **Bilibili**: `bl`, `blsearch`
+... and many more.
+
+> [!TIP]
+> You can set a global default search platform in your Manager options using `defaultSearchPlatform`. This prefix will be automatically applied to any query that isn't a direct link.

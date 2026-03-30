@@ -72,6 +72,10 @@ export default defineConfig({
               link: '/home/setup-ryanlink',
             },
             {
+              label: 'Lavalink Hosting',
+              link: '/home/lavalink-hosting',
+            },
+            {
               label: 'Features',
               link: '/home/features',
             },
@@ -104,6 +108,18 @@ export default defineConfig({
             {
               label: 'Node Events',
               link: '/extra/node-events',
+            },
+            {
+              label: 'Autoplay System',
+              link: '/extra/autoplay-system',
+            },
+            {
+              label: 'Search Prefixes',
+              link: '/extra/search-platforms',
+            },
+            {
+              label: 'Plugin Integrations',
+              link: '/extra/plugins',
             },
             {
               label: 'Resuming',

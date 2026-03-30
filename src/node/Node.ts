@@ -247,8 +247,12 @@ export class RyanlinkNode {
     if (['DELETE', 'PUT'].includes(options.method)) return
 
     if (response.status === 204) return
-    if (response.status === 404)
-      throw new Error(`Node Request resulted into an error, request-PATH: ${options.path} | headers: ${safeStringify(response.headers)}`)
+    if (response.status === 404 && endpoint.includes('sessions/'))
+      throw new Error(`The provided session was not found on the Ryanlink Server! -> Endpoint: ${endpoint}`)
+    if (response.status >= 400) {
+      const text = await response.text()
+      throw new Error(`Ryanlink Server returned status ${response.status}: ${text}`)
+    }
 
     return parseAsText ? await response.text() : await response.json()
   }

@@ -898,10 +898,13 @@ export class Player {
 
   public async moveNode(node?: string) {
     try {
-      if (!node)
-        node = Array.from(this.RyanlinkManager.nodeManager.leastUsedNodes('playingPlayers')).find(
+      if (!node) {
+        const targetNode = Array.from(this.RyanlinkManager.nodeManager.leastUsedNodes('playingPlayers')).find(
           (n) => n.connected && n.options.id !== this.node.options.id
-        ).id
+        )
+        if (!targetNode) throw new RangeError('No nodes are available.')
+        node = targetNode.id
+      }
       if (!node || !this.RyanlinkManager.nodeManager.nodes.get(node)) throw new RangeError('No nodes are available.')
       if (this.node.options.id === node) return this
       this.RyanlinkManager.emit('debug', DebugEvents.PlayerChangeNode, {

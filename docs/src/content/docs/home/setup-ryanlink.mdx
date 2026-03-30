@@ -1,7 +1,9 @@
 ---
 title: Setup Lavalink Node
-description: Learn how to setup a ryanlink Server
+description: Learn how to setup a Lavalink Server
 ---
+
+import { LinkCard } from '@astrojs/starlight/components';
 
 ## Lavalink Node
 
@@ -9,7 +11,17 @@ In order to use ryanlink, you need a Lavalink Node, you can host them yourself p
 
 For that please follow the [**official Lavalink Guide**](https://lavalink.dev/getting-started/index.html) and their information about [**how to configure it**](https://lavalink.dev/configuration/index.html)
 
-If you want to use stuff like spotify, deezer, more filters, lyrics, new youtube ... then you need to also install [**plugins (to ryanlink.**](https://lavalink.dev/plugins.html)
+If you want to use stuff like spotify, deezer, more filters, lyrics, new youtube ... then you need to also install [**plugins (to Lavalink.**](https://lavalink.dev/plugins.html)
+
+## Hosting
+
+If you want the best performance for your Discord bot without the hassle of manual configuration, we recommend **HeavenCloud Lavalink Hosting**.
+
+<LinkCard
+  title="HeavenCloud Lavalink Hosting"
+  description="AMD Ryzen 9 9950X, 60 Gbps Network, 120 Tbps DDoS Shield. Global Regions Available."
+  href="/ryanlink/home/lavalink-hosting"
+/>
 
 ## Sample Configuration (application.yaml)
 
@@ -19,10 +31,10 @@ This sample configuration enables several plugins for additional sources, filter
 server:
   port: 2333
   address: 0.0.0.0
-ryanlink.
+lavalink:
   server:
     sources:
-      youtube: false # Using Youtube nativly on ryanlink is deprecated, disable it and use https://github.com/lavalink-devs/youtube-source instead.
+      youtube: false # Using Youtube nativly on lavalink is deprecated, disable it and use https://github.com/lavalink-devs/youtube-source instead.
     password: 'youshallnotpass'
     bufferDurationMs: 225
     frameBufferDurationMs: 5000
@@ -36,7 +48,7 @@ ryanlink.
     soundcloudSearchEnabled: true
     gc-warnings: true
   plugins:
-    - dependency: 'dev.ryanlink.youtube:youtube-plugin:1.18.0' # https://github.com/lavalink-devs/youtube-source
+    - dependency: 'dev.lavalink.youtube:youtube-plugin:1.18.0' # https://github.com/lavalink-devs/youtube-source
     - dependency: 'com.github.topi314.lavasrc:lavasrc-plugin:4.8.1' # https://github.com/topi314/LavaSrc
     - dependency: 'com.github.topi314.lavasearch:lavasearch-plugin:1.0.0' # https://github.com/topi314/LavaSearch
     - dependency: 'com.dunctebot:skybot-lavalink-plugin:1.7.0' # https://github.com/DuncteBot/skybot-lavalink-plugin
@@ -62,7 +74,6 @@ plugins:
     remoteCipher:
       userAgent: 'your_service_name'
       url: 'http://localhost:8001' # The base URL of your remote cipher server.
-      password: 'your_secret_password' # The password to authenticate with your remote cipher server.
     oauth:
       enabled: false
       # refreshToken: "Insert your refresh token here" # For more details, please refer to https://github.com/lavalink-devs/youtube-source?tab=readme-ov-file#using-oauth-tokens
@@ -212,7 +223,7 @@ logging:
   path: ./logs/
   level:
     root: DEBUG
-    ryanlink: DEBUG
+    lavalink: DEBUG
   request:
     enabled: true
     includeClientInfo: true

@@ -585,7 +585,7 @@ export async function queueTrackEnd(player: Player, dontShiftQueue: boolean = fa
   return player.queue.current
 }
 
-async function applyUnresolvedData(resTrack: Track, data: UnresolvedTrack, utils: RyanlinkUtils) {
+export async function applyUnresolvedData(resTrack: Track, data: UnresolvedTrack, utils: RyanlinkUtils) {
   if (!resTrack?.info || !data?.info) return
   if (data.info.uri) resTrack.info.uri = data.info.uri
   if (utils?.RyanlinkManager?.options?.playerOptions?.useUnresolvedData === true) {
