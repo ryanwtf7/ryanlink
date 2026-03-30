@@ -231,7 +231,7 @@ describe('RyanlinkNode', () => {
     
     const promise = once(manager, 'trackError')
     // @ts-ignore
-    await node.message(JSON.stringify({ op: 'event', type: 'TrackExceptionEvent', guildId: 'tex1', track: { encoded: 'e' }, exception: { message: 'err', severity: 'COMMON', cause: 'none' } }))
+    await node.message(JSON.stringify({ op: 'event', type: 'TrackExceptionEvent', guildId: 'tex1', track: { encoded: 'e', info: { title: 'T' } }, exception: { message: 'err', severity: 'COMMON', cause: 'none' } }))
     const [p, t, error] = await promise
     expect(p).toBe(player)
     expect(error.exception.message).toBe('err')
@@ -243,7 +243,7 @@ describe('RyanlinkNode', () => {
     
     const promise = once(manager, 'trackStuck')
     // @ts-ignore
-    await node.message(JSON.stringify({ op: 'event', type: 'TrackStuckEvent', guildId: 'tst1', track: { encoded: 'e' }, thresholdMs: 1000 }))
+    await node.message(JSON.stringify({ op: 'event', type: 'TrackStuckEvent', guildId: 'tst1', track: { encoded: 'e', info: { title: 'T' } }, thresholdMs: 1000 }))
     const [p, t, threshold] = await promise
     expect(p).toBe(player)
     expect(threshold).toBe(1000)
