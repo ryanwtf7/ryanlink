@@ -17,7 +17,7 @@ export default defineConfig({
     dangerouslyIgnoreUnhandledErrors: true,
     coverage: {
       enabled: false,
-      provider: 'v8',
+      provider: 'istanbul',
       reporter: ['text', 'lcov', 'clover', 'json'],
       reportsDirectory: 'coverage',
       include: ['src/**/*.ts'],
