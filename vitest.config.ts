@@ -13,7 +13,7 @@ export default defineConfig({
     setupFiles: ['./test/setup.ts'],
     environment: 'node',
     include: ['test/**/*.test.ts'],
-    pool: 'forks',
+    pool: 'vmThreads',
     dangerouslyIgnoreUnhandledErrors: true,
     coverage: {
       enabled: false,
