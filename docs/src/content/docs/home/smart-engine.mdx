@@ -1,0 +1,71 @@
+---
+title: 'Smart Audio Engine'
+description: Deep-dive into Ryanlink's proactive state management and high-availability architecture.
+---
+
+import { Card, CardGrid, Steps, Badge } from '@astrojs/starlight/components';
+
+**Ryanlink** is powered by a proactive "Smart Layer" designed to handle the complexities of Discord audio automatically. This architecture ensures that your users experience zero-jitter playback and consistent sessions, even during node failures or bot restarts.
+
+## Core Pillars
+
+<CardGrid stagger>
+  <Card title="Zero-Config Persistence" icon="save">
+    Every queue mutation and playback position is saved in real-time. Whether using **Redis**, **Local Disk**, or **In-Memory** storage, your sessions are always recoverable.
+  </Card>
+  <Card title="Atomic Migration" icon="random">
+    When a Lavalink node goes offline, Ryanlink initiates a seamless failover. Players are moved to the healthiest standby node with millisecond precision, maintaining filters and exact timestamps.
+  </Card>
+  <Card title="Memory Efficiency" icon="rocket">
+    The **TrackRegistry** system maps tracks to lightweight references, allowing you to handle queues with **10,000+ tracks** while maintaining a minimal RAM footprint.
+  </Card>
+  <Card title="Self-Healing" icon="shieldCheck">
+    Automated resolve retries ensure that flaky external sources don't break your playback. Tracks are retried up to 3 times before being safely purged from the queue.
+  </Card>
+</CardGrid>
+
+---
+
+## Technical Overview
+
+### Session Persistence & Resuming
+
+Ryanlink uses high-resolution timestamp tracking to ensure that when a player is recreated, it starts at the exact millisecond where it left off.
+
+<Steps>
+1. **Shadow Listeners**: A Proxy-based system monitors your queue for any changes.
+2. **Auto-Save**: On any mutation (`push`, `shift`, `shuffle`), the state is pushed to the `QueueStore`.
+3. **Session Verification**: Upon instantiation, the Player checks for existing saved states.
+4. **Millisecond Sync**: The `play()` command is issued with the precise `startTime`.
+</Steps>
+
+### High-Availability Failover
+
+Load balancing is not just about player counts; it's about node health.
+
+- **Weighted Scoring**: Nodes are scored based on CPU usage, memory availability, and frame deficits.
+- **Failover Logic**: If a node disconnects, the Manager automatically selects the node with the lowest weighted score and migrates all active players atomically.
+
+---
+
+## Lifecycle Hooks <Badge text="New in 2.0" variant="tip" />
+
+You can now respond to engine-level events directly within the player options:
+
+```typescript
+const player = manager.createPlayer({
+  guildId: '...',
+  voiceChannelId: '...',
+  // Triggered when a track starts
+  onTrackStart: (p, track) => { ... },
+  // Triggered when the queue is naturally exhausted
+  onQueueEnd: (p) => { ... },
+  // Triggered after a successful node migration
+  onNodeFailover: (p, oldNode, targetNode) => { ... }
+});
+```
+
+---
+
+> [!TIP]
+> The Smart Engine is enabled by default. To customize persistence, explore the `QueueStore` drivers in the configuration section.

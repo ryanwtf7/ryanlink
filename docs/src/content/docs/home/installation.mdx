@@ -5,11 +5,43 @@ description: Easy, flexible and feature-rich ryanlink@v4 Client. Both for Beginn
 
 import Version from '../../../components/version.astro'
 import InstallSelector from '../../../components/InstallSelector.astro'
+import { Steps, Badge, Card, CardGrid } from '@astrojs/starlight/components';
 
-## Install: 🎉
+# Installation
 
-**Latest stable Version that is released: <Version />**
+Install the latest stable version of **Ryanlink** to get started with the pro-active audio engine.
 
-_Choose your favourite Package Manager and copy the installation script!_
+## Choose Your Runtime
+
+Ryanlink is natively optimized for all modern JavaScript runtimes. Choose your favorite package manager below:
 
 <InstallSelector />
+
+<CardGrid>
+  <Card title="Node.js 18+" icon="node">
+    Full support for legacy and modern Node.js environments.
+  </Card>
+  <Card title="Bun 1.0+" icon="rocket">
+    High-performance execution with native Bun optimization.
+  </Card>
+  <Card title="Deno 2.0+" icon="seti:javascript">
+    Strictly secure and standards-compliant audio processing.
+  </Card>
+</CardGrid>
+
+---
+
+## Technical Requirements
+
+To ensure a stable audio experience, verify that your environment meets the following baseline requirements:
+
+<Steps>
+1. **Lavalink Server**: Version **4.0.0** or higher is required for the full "Smart Engine" feature set.
+2. **TypeScript**: Version **5.4+** is recommended for standard-compliant module augmentation.
+3. **Hardware**: At least **512MB RAM** allocated for your bot process (recommended for large queues).
+</Steps>
+
+---
+
+> [!TIP]
+> Always use the latest version <Badge text="v2.0.1" variant="success" /> to benefit from the latest performance patches and security updates.

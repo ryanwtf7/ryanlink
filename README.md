@@ -11,7 +11,7 @@
   [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
   [![Node Version](https://img.shields.io/node/v/ryanlink)](https://nodejs.org)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.4+-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
-  [![Codecov Coverage](https://img.shields.io/codecov/c/github/ryanwtf7/ryanlink?label=codecov&logo=codecov)](https://app.codecov.io/gh/ryanwtf7/ryanlink)
+  [![Codecov Coverage](https://img.shields.io/codecov/c/github/ryanwtf7/ryanlink?label=codecov&logo=codecov)](https://discord.gg/W2GheK3F9m)
   
   [Documentation](https://ryanwtf7.github.io/ryanlink/) • [NPM Package](https://www.npmjs.com/package/ryanlink) • [Coverage](http://app.codecov.io/gh/ryanwtf7/ryanlink) • [GitHub](https://github.com/ryanwtf7/ryanlink)
 
@@ -25,14 +25,26 @@
 
 ### Key Features
 
-- **Lavalink v4 Protocol** - Full support for the latest lavalink features and filters.
+- **Lavalink v4 Protocol** - Full support for the latest lavalink features, filters, and SponsorBlock.
 - **Cross-Runtime Ready** - Optimized for **Node.js**, **Bun**, and **Deno**.
-- **Flexible Queue Stores** - Use the default in-memory store or bring your own (Redis, databases, etc.).
+- **Advanced Queue Persistence** - Built-in drivers for **Redis**, **Local Disk**, and **In-Memory** storage.
 - **High-Performance Audio** - Native fetch, efficient memory management, and parallel track loading.
-- **Professional Filters** - Built-in EQ presets and custom DSP filters (Bassboost, Nightcore, etc.).
-- **Smart Automation** - Optional auto-pause on mute and instant filter application via `instaFixFilter`.
+- **Dynamic Filter Stacking** - Non-destructive filter layering with built-in presets (**Hardcore**, **Nightcore**, etc.).
+- **Proactive Automation** - Smart auto-pause/resume, empty channel handling, and resolution self-healing.
+- **Memory-Optimized Registry** - Industry-leading `TrackRegistry` for zero-overhead large queue management.
 - **Strictly Type-Safe** - 100% TypeScript with advanced module augmentation support.
-- **Dynamic Metadata** - Real-time access to library version and package information.
+
+---
+
+## Smart Engine
+
+Introduces a **Proactive Smart Layer** that reduces developer boilerplate by automating session and queue management.
+
+- **Zero-Config Persistence** — Automated queue saving and millisecond-precise session recovery across bot restarts.
+- **Atomic Migration** — Seamless node failover during disconnections with zero audio interruption for your users.
+- **TrackRegistry** — Memory-optimized reference mapping for handling massive queues (10k+ tracks) with minimal RAM overhead.
+- **Self-Healing Resolution** — Automated retry logic for unresolved tracks, ensuring playback stability even with flaky external sources.
+- **Smart Context Hooks** — Integrated `onTrackStart`, `onQueueEnd`, and `onNodeFailover` hooks for rapid, reliable development.
 
 ---
 
@@ -125,19 +137,33 @@ await player.setVolume(50) // 0 - 100
 player.setRepeatMode('queue') // "off" | "track" | "queue"
 ```
 
+### Lifecycle Hooks
+
+```typescript
+const player = client.ryanlink.createPlayer({
+  guildId: '...',
+  voiceChannelId: '...',
+  // Smart Engine Hooks
+  onTrackStart: (p, track) => console.log(`Now playing: ${track.info.title}`),
+  onQueueEnd: (p) => console.log('Queue has finished!'),
+  onNodeFailover: (p, oldNode, targetNode) => console.log(`Migrated to ${targetNode.id}`),
+})
+```
+
 ### Audio Filters
 
 ```typescript
-// Apply professional EQ presets
-await player.filterManager.setEQ([
-  { band: 0, gain: 0.25 },
-  { band: 1, gain: 0.25 },
-])
+// Apply Professional EQ Presets
+await player.filterManager.setPreset('BassBoost') // or 'Pop', 'Electronic', etc.
 
-// Custom Timescale via filterManager
-await player.filterManager.setFilters({
-  timescale: { speed: 1.2, pitch: 1.1 },
-})
+// Apply Immersive DSP Presets
+await player.filterManager.setPreset('8D') // 360° Rotation
+await player.filterManager.setPreset('Lofi') // Chill, Low-Fi vibes
+await player.filterManager.setPreset('Radio') // Broadcast simulation
+
+// Reset all filters atomically
+await player.filterManager.setPreset('Clear')
+```
 ```
 
 ---

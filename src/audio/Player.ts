@@ -79,6 +79,14 @@ export class Player {
 
   public createdTimeStamp: number
 
+  public recentHistory: string[] = []
+
+  public recentHistoryLimit: number = 15
+
+  public autoplay: boolean = false
+
+  public resolveRetryCount: number = 0
+
   public connected: boolean | undefined = false
 
   public voice: VoiceConnectionOptions = {
@@ -124,6 +132,13 @@ export class Player {
     this.filterManager = new FilterManager(this)
     this.RyanlinkManager = RyanlinkManager
 
+    if (typeof this.options.autoplay === 'boolean') {
+      this.autoplay = this.options.autoplay
+    }
+    if (Array.isArray(this.options.recentHistory)) {
+      this.recentHistory = this.options.recentHistory
+    }
+
     this.guildId = this.options.guildId
     this.voiceChannelId = this.options.voiceChannelId
     this.textChannelId = this.options.textChannelId || null
@@ -165,6 +180,21 @@ export class Player {
     if (!dontEmitPlayerCreateEvent) this.RyanlinkManager.emit('playerCreate', this)
 
     this.queue = new Queue(this.guildId, {}, new QueueSaver(this.RyanlinkManager.options.queueOptions), this.RyanlinkManager.options.queueOptions)
+
+    if (this.RyanlinkManager.options.resuming.enabled) {
+      this.autoResume().catch(() => {})
+    }
+  }
+
+  public async autoResume() {
+    await this.queue.utils.sync(true, false)
+    if (this.queue.current) {
+      await this.play({
+        clientTrack: this.queue.current,
+        position: this.queue.position,
+      })
+    }
+    return this
   }
 
   public set(key: string, value: unknown) {
@@ -216,6 +246,8 @@ export class Player {
       this.setData('internal_queueempty', undefined)
     }
 
+    if (typeof options.startTime === 'number') options.position = options.startTime
+
     if (
       options?.clientTrack &&
       (this.RyanlinkManager.utils.isTrack(options?.clientTrack) || this.RyanlinkManager.utils.isUnresolvedTrack(options.clientTrack))
@@ -223,13 +255,28 @@ export class Player {
       if (this.RyanlinkManager.utils.isUnresolvedTrack(options.clientTrack)) {
         try {
           await (options.clientTrack as UnresolvedTrack).resolve(this)
+          this.resolveRetryCount = 0
         } catch (error) {
+          this.resolveRetryCount++
+          const limit = this.options.trackResolveRetryLimit || 3
+          
           this.dispatchDebug(DebugEvents.PlayerPlayUnresolvedTrackFailed, {
             state: 'error',
             error: error,
-            message: `Player Play was called with clientTrack, Song is unresolved, but couldn't resolve it`,
+            message: `Player Play failed to resolve track (Attempt ${this.resolveRetryCount}/${limit})`,
             functionLayer: 'Player > play() > resolve currentTrack',
           })
+
+          if (this.resolveRetryCount >= limit) {
+            this.resolveRetryCount = 0
+            this.queue.tracks.shift() // Purge the failing track
+            this.RyanlinkManager.emit('queueErrorReport', this, options.clientTrack as UnresolvedTrack, error)
+            
+            if (this.RyanlinkManager.options?.autoSkipOnResolveError === true && this.queue.tracks[0]) {
+              return this.play(options)
+            }
+            return this
+          }
 
           this.RyanlinkManager.emit('trackError', this, this.queue.current, error)
 
@@ -448,10 +495,26 @@ export class Player {
 
   async setVolume(volume: number, ignoreVolumeDecrementer: boolean = false) {
     volume = Number(volume)
-
     if (isNaN(volume)) throw new TypeError('Volume must be a number.')
 
-    this.volume = Math.round(Math.max(Math.min(volume, 1000), 0))
+    const targetVolume = Math.round(Math.max(Math.min(volume, 1000), 0))
+    if (this.volume === targetVolume) return this
+
+    const startVolume = this.volume
+    const steps = 10
+    const interval = 50 // 500ms total
+
+    for (let i = 1; i <= steps; i++) {
+      const currentVolume = Math.round(startVolume + (targetVolume - startVolume) * (i / steps))
+      await this._setVolumeInternal(currentVolume, ignoreVolumeDecrementer)
+      if (i < steps) await new Promise((resolve) => setTimeout(resolve, interval))
+    }
+
+    return this
+  }
+
+  private async _setVolumeInternal(volume: number, ignoreVolumeDecrementer: boolean = false) {
+    this.volume = volume
 
     this.internalVolume = Math.round(
       Math.max(
@@ -487,7 +550,6 @@ export class Player {
       })
     }
     this.ping.node = Math.round((performance.now() - now) / 10) / 100
-    return this
   }
 
   async audioSearch(query: AudioSearchQuery, requestUser: unknown, throwOnEmpty: boolean = false) {
@@ -797,6 +859,7 @@ export class Player {
   }
 
   public async changeNode(newNode: RyanlinkNode | string, checkSources: boolean = true) {
+    const oldNode = this.node
     const updateNode = typeof newNode === 'string' ? this.RyanlinkManager.nodeManager.nodes.get(newNode) : newNode
     if (!updateNode) throw new Error('Could not find the new Node')
     if (!updateNode.connected) throw new Error('The provided Node is not active or disconnected')
@@ -826,9 +889,22 @@ export class Player {
 
     this.dispatchDebug(DebugEvents.PlayerChangeNode, {
       state: 'log',
-      message: `Player.changeNode() was executed, trying to change from "${this.node.id}" to "${updateNode.id}"`,
+      message: `Player: ${this.guildId} changing node to: ${updateNode.id}`,
       functionLayer: 'Player > changeNode()',
     })
+
+    const targetNode = updateNode
+    if (typeof this.options.onNodeFailover === 'function') {
+      try {
+        this.options.onNodeFailover(this, oldNode, targetNode)
+      } catch (e) {
+        this.dispatchDebug(DebugEvents.PlayerChangeNode, {
+          state: 'error',
+          message: `Error in player.options.onNodeFailover: ${e.message}`,
+          functionLayer: 'Player > changeNode() > onNodeFailover',
+        })
+      }
+    }
 
     const data = this.toJSON()
     const currentTrack = this.queue.current
@@ -899,7 +975,7 @@ export class Player {
   public async moveNode(node?: string) {
     try {
       if (!node) {
-        const targetNode = Array.from(this.RyanlinkManager.nodeManager.leastUsedNodes('playingPlayers')).find(
+        const targetNode = Array.from(this.RyanlinkManager.nodeManager.leastUsedNodes('weighted')).find(
           (n) => n.connected && n.options.id !== this.node.options.id
         )
         if (!targetNode) throw new RangeError('No nodes are available.')
@@ -941,6 +1017,8 @@ export class Player {
       nodeSessionId: this.node?.sessionId,
       ping: this.ping,
       queue: this.queue?.utils?.toJSON?.(),
+      autoplay: this.autoplay,
+      recentHistory: this.recentHistory,
     } as PlayerJson
   }
 }
@@ -953,7 +1031,7 @@ export class Autoplay {
 
     const config: AutoplayConfig = player.RyanlinkManager.options.playerOptions.autoplayConfig
 
-    if (config.enabled === false) return
+    if (!player.autoplay && config.enabled !== true) return
 
     if (Autoplay.adding.has(player.guildId)) return
     Autoplay.adding.add(player.guildId)
@@ -1001,6 +1079,8 @@ export class Autoplay {
     player.queue.previous.forEach(addTrack)
     player.queue.tracks.forEach(addTrack)
 
+    player.recentHistory.forEach((id) => playedIds.add(id))
+
     return { playedIds, playedTracks }
   }
 
@@ -1028,10 +1108,10 @@ export class Autoplay {
       tracks.push(...searchTracks)
     }
 
-    return this.filterTracks(tracks, playedData, config)
+    return this.filterTracks(lastTrack, tracks, playedData, config)
   }
 
-  private static filterTracks(tracks: Track[], playedData: { playedIds: Set<string>; playedTracks: Set<string> }, config: AutoplayConfig): Track[] {
+  private static filterTracks(lastTrack: Track, tracks: Track[], playedData: { playedIds: Set<string>; playedTracks: Set<string> }, config: AutoplayConfig): Track[] {
     const excludeKeywords = config.excludeKeywords?.map((k) => k.toLowerCase()) || []
 
     return tracks
@@ -1051,7 +1131,11 @@ export class Autoplay {
 
         return true
       })
-      .sort(() => Math.random() - 0.5)
+      .sort((a, b) => {
+        const diffA = Math.abs(a.info.duration - lastTrack.info.duration)
+        const diffB = Math.abs(b.info.duration - lastTrack.info.duration)
+        return (diffA - diffB) + (Math.random() - 0.5) * 30000
+      })
       .slice(0, config.limit || 5)
   }
 

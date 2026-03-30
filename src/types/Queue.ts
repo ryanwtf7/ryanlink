@@ -5,6 +5,7 @@ export interface StoredQueue {
   current: Track | null
   previous: Track[]
   tracks: (Track | UnresolvedTrack)[]
+  position?: number
 }
 
 export interface QueueStoreManager {
@@ -25,6 +26,11 @@ export interface ManagerQueueOptions {
   queueStore?: QueueStoreManager
 
   queueChangesWatcher?: QueueChangesWatcher
+
+  resuming?: {
+    enabled: boolean
+    timeout: number
+  }
 }
 
 export interface QueueChangesWatcher {

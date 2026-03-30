@@ -1,82 +1,64 @@
 ---
-editUrl: false
-next: true
-prev: true
-title: Resuming
-description: 'How to do resuming on a Lavalink Node.'
+title: Session Resuming
+description: How Ryanlink's Smart Persistence ensures zero-config state recovery across system restarts.
 ---
 
-1. You need to enable resuming on a **connected** Lavalink Node : **`node.updateSession(true, 360e3)`**
-2. The NodeManager#resumed event will emit when the node resumes, you retrieves all fetchedPlayers (fetched by the client), and thus all you need to do is re-create all player instances (and possibly the queues too)
+import { Steps, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
 
-- For that is the queuestore useful
-- To save the playerData you can utilize smt like playerUpdate event.
+**Ryanlink** replaces traditional "manual resuming" with a proactive **Smart Persistence** layer. Instead of just resuming the WebSocket connection, the engine can now recover full player states, queues, and playback positions across entire process restarts.
 
-## Resuming full Example
+## Automated Persistence
 
+When `resume: true` is enabled in your `RyanlinkManager` configuration, the engine automatically manages state recovery without any additional code.
 
-```js
-// but here is the schema:
-client.ryanlink.nodeManager.on("connect", (node) => node.updateSession(true, 360e3));
-client.ryanlink.nodeManager.on("resumed", (node, payload, fetchedPlayers) => {
-  // create players:
-  for(const fetchedPlayer of fetchedPlayers) {
-    // fetchedPlayer is the live data from the audio node
-    // saved Player data is the config you should save in a database / file or smt
-    const savedPlayerData = await getSavedPlayerData(fetchedPlayer.guildId);
-    const player = client.ryanlink.createPlayer({
-       guildId: fetchedPlayer.guildId,
-    });
-    // if ryanlink says the bot got disconnected, we can skip the resuming, or force reconnect whatever you want!, here we choose to not do anything and thus delete the saved player data
-    if(!data.state.connected) {
-        console.log("skipping resuming player, because it already disconnected");
-        await deletedSavedPlayerData(data.guildId);
-        continue;
-    }
-    // now you can create the player based on the live and saved data
-    const player = client.ryanlink.createPlayer({
-        guildId: data.guildId,
-        node: node.id,
-        // you need to update the volume of the player by the volume of ryanlink which might got decremented by the volume decrementer
-        volume: client.ryanlink.options.playerOptions?.volumeDecrementer
-        ? Math.round(data.volume / client.ryanlink.options.playerOptions.volumeDecrementer)
-        : data.volume,
-        // all of the following options are needed to be provided by some sort of player saving
-        voiceChannelId: dataOfSaving.voiceChannelId,
-        textChannelId: dataOfSaving.textChannelId,
-        // all of the following options can either be saved too, or you can use pre-defined defaults
-        selfDeaf: dataOfSaving.options?.selfDeaf || true,
-        selfMute: dataOfSaving.options?.selfMute || false,
-
-        applyVolumeAsFilter: dataOfSaving.options.applyVolumeAsFilter,
-        instaUpdateFiltersFix: dataOfSaving.options.instaUpdateFiltersFix,
-        vcRegion: dataOfSaving.options.vcRegion,
-    });
-
-    // player.voice = data.voice;
-    // normally just player.voice is enough, but if you restart the entire bot, you need to create a new connection, thus call player.connect();
-    await player.connect();
-
-    player.filterManager.data = data.filters; // override the filters data
-    await player.queue.utils.sync(true, false); // get the queue data including the current track (for the requester)
-    // override the current track with the data from the audio node
-    if(data.track) player.queue.current = client.ryanlink.utils.buildTrack(data.track, player.queue.current?.requester || client.user);
-    // override the position of the player
-    player.lastPosition = data.state.position;
-    player.lastPositionChange = Date.now();
-    // you can also override the ping of the player, or wait about 30s till it's done automatically
-    player.ping.ryanlink = data.state.ping;
-    // important to have skipping work correctly later
-    player.paused = data.paused;
-    player.playing = !data.paused && !!data.track;
-    // That's about it
-  }
-})
-client.ryanlink.on("playerUpdate", (oldPlayer, newPlayer) => { // automatically sync player data on updates. if you don'T want to save everything you can instead also just save the data on playerCreate
-    setSavedPlayerData(newPlayer.toJSON());
+```typescript
+const manager = new RyanlinkManager({
+  // ... rest of your config ...
+  resume: true,               // Enable automated session persistence
+  resumeTimeout: 60,          // Retry window (seconds) for same-guild connections
+  trackResolveRetryLimit: 3,  // Self-healing for unresolved tracks
 });
-// delete the player again
-client.ryanlink.on("playerDestroy", (player) => {
-    deleteSavedPlayerData(player.guildId);
-})
 ```
+
+### Supported Storage Drivers <Badge text="Scalable" variant="tip" />
+
+Ryanlink supports multiple backend drivers to store your queue data.
+
+| Driver | Best For | Requirement |
+| :--- | :--- | :--- |
+| **In-Memory** | Small bots | None (Default) |
+| **Local Disk** | Medium/Large bots | Accessible filesystem |
+| **Redis** | Clustered/Sharded bots | Redis server connection |
+
+---
+
+## Technical Workflow
+
+### 1. Shadow Persistence
+Whenever you interact with the player (`play()`, `pause()`, `add()`, `shuffle()`), the **Shadow Listener** Proxy detects the change and asynchronously persists the new state to your chosen `QueueStore`.
+
+### 2. Zero-Config Recovery
+If your bot process crashes or restarts:
+1. Upon creating a new player (`manager.createPlayer()`), the engine checks the `QueueStore` for an existing session.
+2. If found, it automatically **re-hydrates** the player state.
+3. The track list is restored with its exact playback position.
+
+### 3. Millisecond-Precise Resuming
+When playback restarts, Ryanlink sends the exact `startTime` to the Lavalink node, ensuring that the music resumes from the precise millisecond where it was interrupted.
+
+---
+
+## Manual Resuming (Advanced)
+
+If you need full control over the resumption process, you can manually provide a `sessionId` directly to your nodes:
+
+```typescript
+manager.nodes.add({
+  host: '...',
+  port: 2333,
+  sessionId: 'your-previous-session-id', // Optional: Manual resuming
+});
+```
+
+> [!TIP]
+> For production bots, we strongly recommend using the **Redis** driver to ensure state is shared across multiple shards or containers.

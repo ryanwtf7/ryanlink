@@ -33,7 +33,7 @@ export default defineConfig({
         },
         {
           icon: 'email',
-          href: 'mailto:ryan@heavencloud.io',
+          href: 'mailto:ryanwtf88@gmail.com',
           label: 'Send an Email',
         },
       ],
@@ -61,83 +61,55 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Getting Started',
-          collapsed: true,
           items: [
-            {
-              label: 'installation',
-              link: '/home/installation',
-            },
-            {
-              label: 'Lavalink Setup',
-              link: '/home/setup-ryanlink',
-            },
-            {
-              label: 'Lavalink Hosting',
-              link: '/home/lavalink-hosting',
-            },
-            {
-              label: 'Features',
-              link: '/home/features',
-            },
-            {
-              label: 'Example Guides',
-              link: '/home/example',
-            },
-            {
-              label: 'Sample Configuration',
-              link: '/home/configuration',
-            },
-            {
-              label: 'Tipps and Tricks',
-              link: '/home/tipps_and_tricks',
-            },
-            {
-              label: 'Checkout Docs (Manager-Class)',
-              link: '/api/core/manager/classes/ryanlinkmanager',
-            },
+            { label: 'Installation', link: '/home/installation' },
+            { label: 'Quick Setup', link: '/home/setup-ryanlink' },
+            { label: 'Hosting Guide', link: '/home/lavalink-hosting' },
+            { label: 'Core Features', link: '/home/features' },
           ],
         },
         {
-          label: 'Extra',
-          collapsed: true,
+          label: 'Smart Audio Engine',
           items: [
-            {
-              label: 'Manager Events',
-              link: '/extra/manager-events',
-            },
-            {
-              label: 'Node Events',
-              link: '/extra/node-events',
-            },
-            {
-              label: 'Autoplay System',
-              link: '/extra/autoplay-system',
-            },
-            {
-              label: 'Search Prefixes',
-              link: '/extra/search-platforms',
-            },
-            {
-              label: 'Plugin Integrations',
-              link: '/extra/plugins',
-            },
-            {
-              label: 'Resuming',
-              link: '/extra/resuming',
-            },
+            { label: 'Architecture Overview', link: '/home/smart-engine' },
+            { label: 'Session Persistence', link: '/extra/resuming' },
+            { label: 'Feature Guides', link: '/home/example' },
           ],
         },
-        typeDocSidebarGroup,
+        {
+          label: 'API Reference',
+          collapsed: true,
+          autogenerate: { directory: 'api/classes' },
+        },
+        {
+          label: 'Types & Interfaces',
+          collapsed: true,
+          autogenerate: { directory: 'api/interfaces' },
+        },
+        {
+          label: 'Enums & Utilities',
+          collapsed: true,
+          items: [
+            { label: 'Manager Events', link: '/extra/manager-events' },
+            { label: 'Node Events', link: '/extra/node-events' },
+            { label: 'Search Prefixes', link: '/extra/search-platforms' },
+            { label: 'All Enums', autogenerate: { directory: 'api/enums' } },
+          ],
+        },
+        {
+          label: 'Ecosystem',
+          collapsed: true,
+          items: [
+            { label: 'Plugin Integrations', link: '/extra/plugins' },
+            { label: 'Autoplay System', link: '/extra/autoplay-system' },
+          ],
+        },
         {
           label: 'GitHub',
           link: 'https://github.com/ryanwtf7/ryanlink',
         },
         {
-          label: 'NPM',
-          link: 'https://npmjs.com/ryanlink',
-        },
-        {
-          label: 'Ryanlink Discord',
+          label: 'Discord',
           link: 'https://discord.gg/W2GheK3F9m',
         },
       ],

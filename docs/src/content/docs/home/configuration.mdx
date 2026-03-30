@@ -1,187 +1,126 @@
 ---
-editUrl: false
-next: true
-prev: true
 title: Configuration
-description: Learn how to use the ryanlink@v4 Client.
+description: Detailed technical specifications for RyanlinkManager and Player configurations.
 ---
 
-```ts
-import { RyanlinkManager, QueueChangesWatcher, QueueStoreManager } from 'ryanlink'
-import { RedisClientType } from 'redis' // example for custom queue store
-import { Client, GatewayIntentBits } from 'discord.js' // example for a discord bot
+import { Steps, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
 
-// you might want to extend the types of the client, to bind ryanlink to it.
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
-})
+Ryanlink uses a highly modular configuration system designed for both simple Discord bots and large-scale, multi-node deployments.
 
-const previouslyUsedSessions = new Map<string, string>() //nodeManager.on("connect", node => previouslyUsedSessions.set(node.id, node.sessionId))
+## Manager Configuration
 
-client.ryanlink = new RyanlinkManager({
+The `RyanlinkManager` is the brain of the engine. It handles node management, voice state synchronization, and global persistence.
+
+```typescript
+import { RyanlinkManager } from 'ryanlink';
+
+const manager = new RyanlinkManager({
   nodes: [
     {
-      authorization: 'localhoist',
+      id: 'main-node',
       host: 'localhost',
       port: 2333,
-      id: 'testnode',
-      
-      // Resuming support
-      sessionId: previouslyUsedSessions.get('testnode'), // session ID from a previous connection
-      
-      // Connection Stability
-      requestSignalTimeoutMS: 3000, // Timeout for REST requests to the node.
-      heartBeatInterval: 30_000, // Frequency of keep-alive packets.
-      closeOnError: true, // Whether to close the connection if a critical error occurs.
-      
-      // Performance & Stats
-      enablePingOnStatsCheck: true, // Perform a ping check whenever stats are received.
-      retryAmount: 5, // Number of reconnection attempts before giving up.
-      retryDelay: 10e3, // Delay (in ms) between reconnection attempts.
-      
-      // Security & Validation
-      secure: false, // Use wss:// and https:// if the node requires SSL.
-      autoChecks: {
-        pluginValidations: true, // Validate whether the node supports required plugins on startup.
-        sourcesValidations: true, // Validate whether the node supports required audio sources.
-      },
-    },
+      password: 'youshallnotpass',
+      secure: false,
+    }
   ],
-  sendToShard: (guildId, payload) => client.guilds.cache.get(guildId)?.shard?.send(payload),
-  
-  // High-level Automation
-  autoSkip: true, // Automatically skip to the next track on track-end, error, or stuck.
-  autoMove: false, // Auto-move a player to a new node if its current node disconnects.
-  autoSkipOnResolveError: true, // Skip the current song if an UnresolvedTrack fails to resolve properly.
-  emitNewSongsOnly: true, // Only emit 'trackStart' for new songs (prevents spam when looping).
-  
-  // Whitelist / Blacklist for safety
-  linksAllowed: true, // Whether to allow raw URL playback.
-  linksBlacklist: [], // Domains or keywords to block from playback (Regex supported).
-  linksWhitelist: [], // Domains or keywords that are always allowed.
-
   client: {
-    id: envConfig.clientId, // REQUIRED for signaling and voice state management.
-    username: 'RyanlinkBot',
+    id: 'your-bot-id',
+    username: 'RyanlinkBot'
   },
-
-  playerOptions: {
-    // Stability thresholds
-    maxErrorsPerTime: {
-      threshold: 10_000,
-      maxAmount: 3, // Destroy player if it hits more than 3 errors in 10 seconds.
-    },
-    
-    // Autoplay configuration
-    minAutoPlayMs: 10_000, // Cooldown for autoplay triggers to prevent spam.
-    
-    // Audio manipulation
-    applyVolumeAsFilter: false, // Whether to apply volume via a filter for smoother transitions.
-    volumeDecrementer: 0.75, // Scale client volume (e.g., 100% in client = 75% on Lavalink).
-    
-    // Advanced player state
-    clientBasedPositionUpdateInterval: 50, // Frequency (in ms) to locally predict track position.
-    defaultSearchPlatform: 'ytmsearch', // Default prefix for queries without a source.
-    allowCustomSources: false, // Allow playback of URLs not natively supported by Lavalink plugins.
-    useUnresolvedData: true, // Optimize memory by using unresolved metadata instead of full track data.
-    
-    requesterTransformer: requesterTransformer, // Function to normalize requester objects.
-    
-    onDisconnect: {
-      autoReconnect: true, // Attempt to reconnect the player if the bot is kicked from VC.
-      destroyPlayer: false, // Instantly destroy the player on any voice disconnect (overrides autoReconnect).
-    },
-    
-    onEmptyQueue: {
-      destroyAfterMs: 30_000, // Duration to wait before auto-destroying an empty player.
-      autoPlayFunction: autoPlayFunction, // Handler to fetch more tracks when the queue is dry.
-    },
+  sendToShard: (guildId, payload) => {
+    // Your library's shard-send logic
+    client.guilds.cache.get(guildId)?.shard.send(payload);
   },
+  // --- Smart Engine Options ---
+  resume: true,               // Enable automated session recovery
+  trackResolveRetryLimit: 3,  // Automated retries for flaky sources
+  useMemoryRegistry: true,    // Optimized mapping for massive queues
+});
+```
 
-  queueOptions: {
-    maxPreviousTracks: 10, // How many played tracks to keep in history.
-    queueStore: new myCustomStore(client.redis), // Custom manager for external queue persistence (Redis/DB).
-    queueChangesWatcher: new myCustomWatcher(client), // Callback listener for queue mutations.
-  },
+### Advanced Manager Options
 
-  advancedOptions: {
-    enableDebugEvents: true, // Required to listen to the 'debug' event.
-    maxFilterFixDuration: 600_000, // Limit 'instaFixFilter' to tracks shorter than 10 mins.
-    debugOptions: {
-      noAudio: false, // Enable granular logs for initial voice connection debugging.
-      playerDestroy: {
-        dontThrowError: false, // Prevent the manager from throwing on improper player deletion.
-        debugLog: false, // Log stack traces for player destruction events.
-      },
-      logCustomSearches: false, // Debug output for raw search plugin query handling.
-    },
-  },
-})
-// IMPORTANT- Send voice data to the audio node
-client.on('raw', (d) => client.ryanlink.provideVoiceUpdate(d))
+| Option | Type | Description |
+| :--- | :--- | :--- |
+| `autoSkip` | `boolean` | Automatically skip to the next track on playback end. |
+| `autoMove` | `boolean` | Automatically trigger Atomic Migration on node disconnect. |
+| `linksAllowed` | `boolean` | Allow direct URL playback (YouTube, Spotify, etc.). |
+| `emitNewSongsOnly` | `boolean` | Prevent duplicate 'trackStart' events during loops. |
 
-client.on('ready', () => {
-  client.ryanlink.init(client.user) // init ryanlink
-})
+---
 
-// for the custom queue Store create a redis instance
-client.redis = createClient({ url: 'redis://localhost:6379', password: 'securepass' })
-client.redis.connect()
+## Player Configuration
 
-// Custom external queue Store
-// if queueStore is not provided on default it uses MiniMap
-export class myCustomStore implements QueueStoreManager {
-  private redis: RedisClientType
-  constructor(redisClient: RedisClientType) {
-    this.redis = redisClient
-  }
-  async get(guildId): Promise<any> {
-    return await this.redis.get(this.id(guildId))
-  }
-  async set(guildId, stringifiedQueueData): Promise<any> {
-    return await this.redis.set(this.id(guildId), stringifiedQueueData)
-  }
-  async delete(guildId): Promise<any> {
-    return await this.redis.del(this.id(guildId))
-  }
-  async parse(stringifiedQueueData): Promise<Partial<StoredQueue>> {
-    return JSON.parse(stringifiedQueueData)
-  }
-  async stringify(parsedQueueData): Promise<any> {
-    return JSON.stringify(parsedQueueData)
-  }
-  private id(guildId) {
-    return `ryanlink_queue_${guildId}` // transform the id to your belikings
-  }
-}
+Players are created per-guild and inherit global settings but can be customized with specific lifecycle hooks.
 
-// Custom Queue Watcher Functions (with couple special features..)
+```typescript
+const player = manager.createPlayer({
+  guildId: interaction.guildId,
+  voiceChannelId: interaction.member.voice.channelId,
+  textChannelId: interaction.channelId,
+  selfDeaf: true,
+  // --- Lifecycle Hooks ---
+  onTrackStart: (p, track) => console.log(`Playing: ${track.info.title}`),
+  onQueueEnd: (p) => console.log('Queue exhausted'),
+  onNodeFailover: (p, oldNode, newNode) => console.log(`Migrated to ${newNode.id}`),
+});
+```
 
-function updateNextTrackGapLess(guildId: string) {
-  // this function is for nodelink users relevant for gapless audio.
-  const player = this.client.ryanlink.players.get(guildId)
-  if (!player || !player.node.isNodeLink()) return
-  return player.node.removeNextTrackGapLess(player)
-}
-class myCustomWatcher implements QueueChangesWatcher {
-  constructor(client) {
-    this.client = client
-  }
-  shuffled(guildId, oldStoredQueue, newStoredQueue) {
-    console.log(`${this.client.guilds.cache.get(guildId)?.name || guildId}: Queue got shuffled`)
-    updateNextTrackGapLess(guildId)
-  }
-  tracksAdd(guildId, tracks, position, oldStoredQueue, newStoredQueue) {
-    console.log(
-      `${this.client.guilds.cache.get(guildId)?.name || guildId}: ${tracks.length} Tracks got added into the Queue at position #${position}`
-    )
-    updateNextTrackGapLess(guildId)
-  }
-  tracksRemoved(guildId, tracks, position, oldStoredQueue, newStoredQueue) {
-    console.log(
-      `${this.client.guilds.cache.get(guildId)?.name || guildId}: ${tracks.length} Tracks got removed from the Queue at position #${position}`
-    )
-    updateNextTrackGapLess(guildId)
-  }
+### Player Persistence
+
+Ryanlink supports multiple storage drivers for zero-config persistence.
+
+<Tabs>
+  <TabItem label="In-Memory">
+    ```typescript
+    // Default: Best for small bots
+    queueOptions: {
+      storageType: 'memory'
+    }
+    ```
+  </TabItem>
+  <TabItem label="Local Disk">
+    ```typescript
+    // Persistent across process restarts
+    queueOptions: {
+      storageType: 'disk',
+      path: './sessions'
+    }
+    ```
+  </TabItem>
+  <TabItem label="Redis">
+    ```typescript
+    // Best for distributed/sharded clusters
+    queueOptions: {
+      storageType: 'redis',
+      url: 'redis://localhost:6379'
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+---
+
+## Search Enhancements
+
+Ryanlink supports over 50+ search prefixes. You can set a default platform to allow users to search without specifying a source.
+
+```typescript
+playerOptions: {
+  defaultSearchPlatform: 'ytmsearch', // YouTube Music as default
+  useUnresolvedData: true,            // High-performance metadata handling
 }
 ```
+
+### Supported Platform Prefixes
+- `ytsearch:` / `ytmsearch:` (YouTube / Music)
+- `scsearch:` (SoundCloud)
+- `spsearch:` / `sprec:` (Spotify / Recommendations)
+- `amsearch:` / `dzsearch:` (Apple Music / Deezer)
+- `flowery-tts` <Badge text="TTS" variant="note" />
+
+---
+
+> [!IMPORTANT]
+> Always ensure `sendToShard` is correctly implemented for your Discord library (Discord.js, Eris, etc.) to allow Ryanlink to communicate with Discord's voice servers.

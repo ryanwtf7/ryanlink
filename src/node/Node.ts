@@ -67,6 +67,7 @@ export class RyanlinkNode {
   private heartBeatPongTimestamp: number = 0
   private heartBeatInterval?: NodeJS.Timeout
   private pingTimeout?: NodeJS.Timeout
+  private consecutiveReconnectAttempts: number = 0
 
   public nodeType: NodeTypes = 'Core'
   public isAlive: boolean = false
@@ -75,6 +76,16 @@ export class RyanlinkNode {
   public options: NodeConfiguration
 
   public calls: number = 0
+
+  public handshakePing: number = 0
+
+  public get weightedScore(): number {
+    if (!this.connected || !this.stats) return Infinity
+    const cpuScore = (this.stats.cpu.systemLoad || 0) * 0.7
+    const memScore = ((this.stats.memory.used || 0) / (this.stats.memory.allocated || 1)) * 0.2
+    const playerScore = (this.stats.players / 100) * 0.1 // Normalized to 100 players
+    return cpuScore + memScore + playerScore
+  }
 
   public stats: NodeStats = {
     players: 0,
@@ -1070,10 +1081,16 @@ export class RyanlinkNode {
     }
 
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout)
+    
+    this.consecutiveReconnectAttempts++
+    const baseDelay = this.options.retryDelay || 1000
+    const maxDelay = 30000
+    const delay = Math.min(baseDelay * Math.pow(2, this.consecutiveReconnectAttempts - 1), maxDelay)
+
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null
       this.executeReconnect()
-    }, this.options.retryDelay || 1000)
+    }, delay)
   }
 
   public get reconnectionAttemptCount(): number {
@@ -1109,6 +1126,7 @@ export class RyanlinkNode {
   private resetReconnectionAttempts(): void {
     this.reconnectionState = ReconnectionState.IDLE
     this.reconnectAttempts = []
+    this.consecutiveReconnectAttempts = 0
     clearTimeout(this.reconnectTimeout)
     this.reconnectTimeout = null
     return
@@ -1128,10 +1146,29 @@ export class RyanlinkNode {
 
   private async open(): Promise<void> {
     this.isAlive = true
+    const syncStart = Date.now()
 
     this.resetReconnectionAttempts()
 
     if (this.nodeType === 'Core') {
+      try {
+        await this.fetchInfo()
+        const syncEnd = Date.now()
+        const delta = syncEnd - syncStart
+        this.handshakePing = delta
+        this.dispatchDebug(DebugEvents.NodeHandshakeSync, {
+          state: 'log',
+          message: `Handshake Synchronization successful. Node latency: ${delta}ms.`,
+          functionLayer: 'RyanlinkNode > open()',
+        })
+      } catch (e) {
+        this.dispatchDebug(DebugEvents.NodeHandshakeSync, {
+          state: 'warn',
+          message: `Handshake Synchronization failed: ${e.message}`,
+          functionLayer: 'RyanlinkNode > open()',
+        })
+      }
+
       if (this.options.enablePingOnStatsCheck) this.heartBeat()
 
       if (this.heartBeatInterval) clearInterval(this.heartBeatInterval)
@@ -1201,10 +1238,19 @@ export class RyanlinkNode {
       .filter((p) => p?.node?.options?.id === this?.options?.id)
       .forEach((p) => {
         if (!this._LManager.options.autoMove) return (p.playing = false)
-        if (this._LManager.options.autoMove) {
-          if (this.NodeManager.nodes.filter((n) => n.connected).size === 0) return (p.playing = false)
-          p.moveNode()
-        }
+        this.dispatchDebug(DebugEvents.NodeAtomicMigration, {
+          state: 'log',
+          message: `Initiating Atomic Migration for player on guild "${p.guildId}" due to node disconnect.`,
+          functionLayer: 'RyanlinkNode > close() > AtomicMigration',
+        })
+        if (this.NodeManager.nodes.filter((n) => n.connected).size === 0) return (p.playing = false)
+        p.moveNode().catch((e) => {
+          this.dispatchDebug(DebugEvents.NodeAtomicMigration, {
+            state: 'error',
+            message: `Atomic Migration failed for player on guild "${p.guildId}": ${e.message}`,
+            functionLayer: 'RyanlinkNode > close() > AtomicMigration',
+          })
+        })
       })
   }
 
@@ -1259,6 +1305,9 @@ export class RyanlinkNode {
           player.lastPosition = payload.state.position || 0
           player.connected = payload.state.connected
           player.ping.ws = payload.state.ping >= 0 ? payload.state.ping : player.ping.ws <= 0 && player.connected ? null : player.ping.ws || 0
+
+          player.queue.position = player.lastPosition
+          player.queue.utils.save().catch(() => {})
 
           if (!player.createdTimeStamp && payload.state.time) player.createdTimeStamp = payload.state.time
 
@@ -1411,6 +1460,18 @@ export class RyanlinkNode {
         })
       }
     }
+    if (typeof player.options.onTrackStart === 'function') {
+      try {
+        player.options.onTrackStart(player, track)
+      } catch (e) {
+        this.dispatchDebug(DebugEvents.NodeRawEvent, {
+          state: 'error',
+          message: `Error in player.options.onTrackStart: ${e.message}`,
+          functionLayer: 'RyanlinkNode > trackStart() > onTrackStart',
+        })
+      }
+    }
+
     this._LManager.emit('trackStart', player, player.queue.current, payload)
     return
   }
@@ -1707,6 +1768,18 @@ export class RyanlinkNode {
             player.destroy(DestroyReasons.QueueEmpty)
           }, this._LManager.options.playerOptions.onEmptyQueue?.destroyAfterMs)
         )
+      }
+    }
+
+    if (typeof player.options.onQueueEnd === 'function') {
+      try {
+        player.options.onQueueEnd(player)
+      } catch (e) {
+        this.dispatchDebug(DebugEvents.QueueEnded, {
+          state: 'error',
+          message: `Error in player.options.onQueueEnd: ${e.message}`,
+          functionLayer: 'RyanlinkNode > queueEnd() > onQueueEnd',
+        })
       }
     }
 

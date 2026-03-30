@@ -4,7 +4,7 @@ Thank you for showing interest in contributing to this project. There are multip
 
 ## Issues
 
-These are only meant for bug reports and feature requests, blank issues have been disabled for the same. If you just have a thing or two to ask, consider joining our [Discord server](https://discord.com/invite/1sT-952570101784281139).
+These are only meant for bug reports and feature requests, blank issues have been disabled for the same. If you just have a thing or two to ask, consider joining our [Discord server](https://discord.gg/W2GheK3F9m).
 
 ## Pull Requests
 

@@ -1,255 +1,103 @@
 ---
 title: Example Guide
-description: Learn how to use the ryanlink@v4 Client.
+description: Learn how to use the Ryanlink Smart Audio Engine for modern Discord bots.
 ---
 
-```ts
-import { RyanlinkManager } from 'ryanlink'
-import { Client, GatewayIntentBits } from 'discord.js' // example for a discord bot
+import { Steps, Badge, Card, CardGrid } from '@astrojs/starlight/components';
 
-// you might want to extend the types of the client, to bind ryanlink to it.
+This guide provides a comprehensive example of setting up **Ryanlink** with a modern Discord bot (Discord.js). It showcases the proactive Smart Engine features like zero-config persistence and lifecycle hooks.
+
+## 🚀 Basic Setup (Smart Engine)
+
+The following example initializes the manager with **persistence** and **high-availability** enabled by default.
+
+```typescript
+import { RyanlinkManager } from 'ryanlink';
+import { Client, GatewayIntentBits } from 'discord.js';
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
-})
+});
 
-// create instance
 client.ryanlink = new RyanlinkManager({
   nodes: [
-    {
-      authorization: 'youshallnotpass',
-      host: 'localhost',
-      port: 2333,
-      id: 'testnode',
-    },
+    { id: 'main-node', host: 'localhost', port: 2333, password: 'youshallnotpass' }
   ],
-  sendToShard: (guildId, payload) => client.guilds.cache.get(guildId)?.shard?.send(payload),
-  autoSkip: true,
-  client: {
-    id: envConfig.clientId,
-    username: 'RyanlinkBot',
+  client: { id: '...', username: 'Bot' },
+  sendToShard: (guildId, payload) => {
+    client.guilds.cache.get(guildId)?.shard.send(payload);
   },
-})
+  // --- Smart Engine Options ---
+  resume: true,               // Enable automated session persistence
+  trackResolveRetryLimit: 3,  // Automated retries for flaky sources
+  autoMove: true              // Enable Atomic Migration on node failure
+});
 
-client.on('raw', (d) => client.ryanlink.provideVoiceUpdate(d)) // send raw data to ryanlink to handle stuff
+// Important: Provide voice updates to Ryanlink
+client.on('raw', (d) => client.ryanlink.provideVoiceUpdate(d));
 
 client.on('ready', () => {
-  client.ryanlink.init(client.user) // init ryanlink
-})
+  client.ryanlink.init(client.user);
+  console.log(`[BOOT] Ryanlink is online.`);
+});
 ```
 
-# All Events:
+---
 
-## On **Ryanlink-Manager**:
+## 👂 Global Event Listeners
 
-> _Player related logs_
+Ryanlink provides a rich event lifecycle to help you monitor your players and nodes.
 
-- `playerCreate` ➡️ `(player) => {}`
-- `playerDestroy` ➡️ `(player, reason) => {}`
-- `playerDisconnect` ➡️ `(player, voiceChannelId) => {}`
-- `playerMove` ➡️ `(player, oldChannelId, newChannelId) => {}`
-  - Updating the voice channel is handled by the client automatically
-- `playerSocketClosed` ➡️ `(player, payload) => {}`
+### Player Lifecycle
+```typescript
+manager.on('trackStart', (player, track) => {
+  console.log(`Playing: ${track.info.title}`);
+});
 
-> _Track / Manager related logs_
+manager.on('queueEnd', (player) => {
+  console.log('Finished playing all tracks.');
+});
 
-- `trackStart` ➡️ `(player, track, payload) => {}`
-- `trackStuck` ➡️ `(player, track, payload) => {}`
-- `trackError` ➡️ `(player, track, payload) => {}`
-- `trackEnd` ➡️ `(player, track, payload) => {}`
-- `queueEnd` ➡️ `(player, track, payload) => {}`
-- `debug` ➡️ `(eventKey, eventData) => {}` _... for debugging errors, need to enable it via `RyanConfiguration#advancedOptions#enableDebugEvents: true`_
-- `playerUpdate` ➡️ `(player) => {}`
-
-```js
-client.ryanlink.on('create', (node, payload) => {
-  console.log(`The Lavalink Node #${node.id} connected`)
-})
-// for all node based errors:
-client.ryanlink.on('error', (node, error, payload) => {
-  console.error(`The Lavalink Node #${node.id} errored: `, error)
-  console.error(`Error-Payload: `, payload)
-})
+manager.on('queueErrorReport', (player, track, error) => {
+  console.error(`Failed to resolve: ${track.info.title} after 3 retries.`);
+});
 ```
 
-## On **Node-Manager**:
+### Node Lifecycle
+```typescript
+manager.nodeManager.on('connect', (node) => {
+  console.log(`Node #${node.id} is connected.`);
+});
 
-- `raw` ➡️ `(node, payload) => {}`
-- `disconnect` ➡️ `(node, reason) => {}`
-- `connect` ➡️ `(node) => {}`
-- `reconnecting` ➡️ `(node) => {}`
-- `create` ➡️ `(node) => {}`
-- `destroy` ➡️ `(node) => {}`
-- `error` ➡️ `(node, error, payload) => {}`
-- `resumed` ➡️ `(node, payload, players) => {}`
-  - Resuming needs to be handled manually by you _(aka add the players to the manager)_
-- e.g. of listening to node events:
-
-```ts
-client.ryanlink.nodeManager.on('create', (node, payload) => {
-  console.log(`The Lavalink Node #${node.id} connected`)
-})
-// for all node based errors:
-client.ryanlink.nodeManager.on('error', (node, error, payload) => {
-  console.error(`The Lavalink Node #${node.id} errored: `, error)
-  console.error(`Error-Payload: `, payload)
-})
+manager.on('nodeFailover', (player, oldNode, newNode) => {
+  console.log(`Atomic Migration complete for guild ${player.guildId}.`);
+});
 ```
 
-## How to log queue logs?
+---
 
-> When creating the manager, add the option: `queueOptions.queueChangesWatcher: new myCustomWatcher(botClient)`
-> E.g:
+## 📁 Queue Synchronization (Advanced)
 
-```ts
-import { QueueChangesWatcher, RyanlinkManager } from 'ryanlink'
+If you need to sync your queue with a dashboard or external storage, use the `QueueChangesWatcher`.
 
-function updateNextTrackGapLess(guildId: string) {
-  // this function is for nodelink users relevant for gapless audio.
-  const player = this.client.ryanlink.players.get(guildId)
-  if (!player || !player.node.isNodeLink()) return
-  return player.node.removeNextTrackGapLess(player)
-}
-class myCustomWatcher implements QueueChangesWatcher {
-  constructor(client) {
-    this.client = client
-  }
-  shuffled(guildId, oldStoredQueue, newStoredQueue) {
-    console.log(`${this.client.guilds.cache.get(guildId)?.name || guildId}: Queue got shuffled`)
-    updateNextTrackGapLess(guildId)
-  }
-  tracksAdd(guildId, tracks, position, oldStoredQueue, newStoredQueue) {
-    console.log(
-      `${this.client.guilds.cache.get(guildId)?.name || guildId}: ${tracks.length} Tracks got added into the Queue at position #${position}`
-    )
-    updateNextTrackGapLess(guildId)
-  }
-  tracksRemoved(guildId, tracks, position, oldStoredQueue, newStoredQueue) {
-    console.log(
-      `${this.client.guilds.cache.get(guildId)?.name || guildId}: ${tracks.length} Tracks got removed from the Queue at position #${position}`
-    )
-    updateNextTrackGapLess(guildId)
+```typescript
+import { QueueChangesWatcher } from 'ryanlink';
+
+class MyWatcher implements QueueChangesWatcher {
+  tracksAdd(guildId, tracks, ...args) {
+    console.log(`${tracks.length} tracks added to guild ${guildId}`);
   }
 }
 
-client.ryanlink = new RyanlinkManager({
-  // ... other options
+const manager = new RyanlinkManager({
+  // ... rest of config ...
   queueOptions: {
-    queueChangesWatcher: new myCustomWatcher(client),
-  },
-})
-```
-
-## How to do resuming
-
-1. You need to enable resuming on a **connected** Lavalink Node : **`node.updateSession(true, 360e3)`**
-2. The NodeManager#resumed event will emit when the node resumes, you retrieves all fetchedPlayers (fetched by the client), and thus all you need to do is re-create all player instances (and possibly the queues too)
-
-- For that is the queuestore useful
-- To save the playerData you can utilize smt like playerUpdate event.
-
-## Resuming full Example
-
-
-```js
-// but here is the schema:
-client.ryanlink.nodeManager.on("connect", (node) => node.updateSession(true, 360e3));
-client.ryanlink.nodeManager.on("resumed", (node, payload, fetchedPlayers) => {
-  // create players:
-  for(const fetchedPlayer of fetchedPlayers) {
-    // fetchedPlayer is the live data from the audio node
-    // saved Player data is the config you should save in a database / file or smt
-    const savedPlayerData = await getSavedPlayerData(fetchedPlayer.guildId);
-    const player = client.ryanlink.createPlayer({
-       guildId: fetchedPlayer.guildId,
-    });
-    // if ryanlink says the bot got disconnected, we can skip the resuming, or force reconnect whatever you want!, here we choose to not do anything and thus delete the saved player data
-    if(!data.state.connected) {
-        console.log("skipping resuming player, because it already disconnected");
-        await deletedSavedPlayerData(data.guildId);
-        continue;
-    }
-    // now you can create the player based on the live and saved data
-    const player = client.ryanlink.createPlayer({
-        guildId: data.guildId,
-        node: node.id,
-        // you need to update the volume of the player by the volume of ryanlink which might got decremented by the volume decrementer
-        volume: client.ryanlink.options.playerOptions?.volumeDecrementer
-        ? Math.round(data.volume / client.ryanlink.options.playerOptions.volumeDecrementer)
-        : data.volume,
-        // all of the following options are needed to be provided by some sort of player saving
-        voiceChannelId: dataOfSaving.voiceChannelId,
-        textChannelId: dataOfSaving.textChannelId,
-        // all of the following options can either be saved too, or you can use pre-defined defaults
-        selfDeaf: dataOfSaving.options?.selfDeaf || true,
-        selfMute: dataOfSaving.options?.selfMute || false,
-
-        applyVolumeAsFilter: dataOfSaving.options.applyVolumeAsFilter,
-        instaUpdateFiltersFix: dataOfSaving.options.instaUpdateFiltersFix,
-        vcRegion: dataOfSaving.options.vcRegion,
-    });
-
-    // player.voice = data.voice;
-    // normally just player.voice is enough, but if you restart the entire bot, you need to create a new connection, thus call player.connect();
-    await player.connect();
-
-    player.filterManager.data = data.filters; // override the filters data
-    await player.queue.utils.sync(true, false); // get the queue data including the current track (for the requester)
-    // override the current track with the data from the audio node
-    if(data.track) player.queue.current = client.ryanlink.utils.buildTrack(data.track, player.queue.current?.requester || client.user);
-    // override the position of the player
-    player.lastPosition = data.state.position;
-    player.lastPositionChange = Date.now();
-    // you can also override the ping of the player, or wait about 30s till it's done automatically
-    player.ping.ryanlink = data.state.ping;
-    // important to have skipping work correctly later
-    player.paused = data.paused;
-    player.playing = !data.paused && !!data.track;
-    // That's about it
+    queueChangesWatcher: new MyWatcher()
   }
-})
-client.ryanlink.on("playerUpdate", (oldPlayer, newPlayer) => { // automatically sync player data on updates. if you don'T want to save everything you can instead also just save the data on playerCreate
-    setSavedPlayerData(newPlayer.toJSON());
 });
-// delete the player again
-client.ryanlink.on("playerDestroy", (player) => {
-    deleteSavedPlayerData(player.guildId);
-})
 ```
 
-## How to Debug the Client
+---
 
-```ts
-import { DebugEvents } from 'ryanlink'
-
-// YOU NEED TO HAVE THE debug EVENT ENABLED
-/*
-
-client.ryanlink = new RyanlinkManager<myCustomPlayer>({
-    ....
-    advancedOptions: {
-        enableDebugEvents: true, // enable the DEBUG EVENT LISTENER
-        debugOptions: {
-            noAudio: true, // if set to true, you will get additional logs related to not hearing audio while playing on the first setup
-            playerDestroy: {
-                dontThrowError: false,
-                debugLog: false, // if set to true, you will see additional debug logs related to destroying players
-            },
-            logCustomSearches: false, // if set to true, you will see logs related to custom search plugins.
-        }
-    }
-});
-
-*/
-client.ryanlink.on('debug', (eventKey, eventData) => {
-  // skip specific log
-  if (eventKey === DebugEvents.NoAudioDebug && eventData.message === 'Manager is not initated yet') return
-  // skip specific event log of a log-level-state "log"
-  if (eventKey === DebugEvents.PlayerUpdateSuccess && eventData.state === 'log') return
-  console.group('ryanlink-Debug:')
-  console.log('-'.repeat(20))
-  console.debug(`[${eventKey}]`)
-  console.debug(eventData)
-  console.log('-'.repeat(20))
-  console.groupEnd()
-})
-```
+> [!IMPORTANT]
+> The manual "Resuming" logic found in older versions is now deprecated. Please use the top-level **`resume: true`** option for automated persistence.

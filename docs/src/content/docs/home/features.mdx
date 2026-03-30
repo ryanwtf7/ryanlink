@@ -5,47 +5,33 @@ description: High-performance, flexible and feature-rich lavalink-v4 wrapper for
 
 import { Badge } from '@astrojs/starlight/components'
 
-### Core Protocol
-- **Lavalink v4 Supported** <Badge text="v4" variant="note" />
-  - Native support for the latest Lavalink features and filters.
-  - Compatible with many Lavalink Plugins for enhanced functionality.
+### Smart Audio Engine <Badge text="2.0" variant="tip" />
+- **Zero-Config Persistence** <Badge text="Reliable" variant="success" />
+  - Automated state recovery for queues and playback positions across restarts.
+  - Built-in drivers for **Redis**, **Local Disk**, and **In-Memory** storage.
+- **Atomic Migration** <Badge text="Seamless" variant="note" />
+  - Automated node failover with zero-interruption playback during disconnections.
+  - Weighted load balancing scoring (CPU, Memory, Frame Deficit).
 
-### Queue Management
-- **Flexible Queue Stores** <Badge text="Scalable" variant="success" />
-  - Choose between Maps, Collections, Redis, or custom database stores.
-  - Effortlessly sync queues across multiple connections (e.g., Dashboard-Bot).
-  - Automated Queue Synchronization and unresolved track handling (optimizes memory by fetching tracks only when needed).
+### Performance & Memory
+- **Memory-Optimized TrackRegistry** <Badge text="Efficient" variant="caution" />
+  - High-performance reference mapping for queues with **10,000+ tracks**.
+  - Minimized RAM footprint by deferring track metadata resolution.
+- **Fisher-Yates Shuffle** <Badge text="Fair" variant="note" />
+  - Statistically unbiased randomization for high-fidelity audio shuffling.
 
-### Advanced Audio Control
-- **Sophisticated Filtering & Searching** <Badge text="Precise" variant="tip" />
-  - Filter by title, author, duration, source, and more.
-  - Flexible search criteria and multi-criteria sorting.
-  - Built-in management for complex Audio Node filters and Equalizer settings.
+### Audio Intelligence
+- **High-Fidelity Filters** <Badge text="Professional" variant="tip" />
+  - Non-destructive filter stacking with atomic updates.
+  - Professional presets including **8D**, **Lofi**, **Radio**, **Nightcore**, and **Vaporwave**.
+- **Automated Self-Healing** <Badge text="Robust" variant="danger" />
+  - Integrated track resolve retries (3 attempts) before auto-purging flaky sources.
+  - Lifecycle hooks for `onTrackStart`, `onQueueEnd`, and `onNodeFailover`.
 
-### Player Stability
-- **Intelligent Recovery** <Badge text="Automated" variant="note" />
-  - Detailed Player-Destroy reasons (Channel deletion, Voice disconnection, etc.).
-  - Automatic reconnection logic when voice states change.
-  - `instaFixFilter`: Instantly applies filter changes by automatically recalculating positions.
-  - `internalVolume`: Highly accurate volume scaling independent of the Node's base volume.
-
-### Security & Validations
-- **Lavalink Logic Validations** <Badge text="Secure" variant="danger" />
-  - Enforces strict usage of filters, plugins, and sources based on what the specific Lavalink Node actually supports.
-- **Client-Side Request Filtering** <Badge text="Robust" variant="caution" />
-  - Advanced **Whitelisting** and **Blacklisting**: Block or allow specific links, keywords, or domain names to maintain server safety.
-  - Pre-flight Validation: Validates almost all requests for "out of bound" errors before they are sent to the Node, preventing preventable process errors.
-
-### Plugin ecosystem & Integration
-- **Advanced Metadata & Content Control** <Badge text="Integrated" variant="tip" />
-  - **SponsorBlock**: Automatically detect and skip sponsors, intros, or music-only segments in YouTube videos with specialized event tracking.
-  - **LavaLyrics**: Real-time, time-synced lyrics support with `LyricsLine` and `LyricsFound` events for immersive bot experiences.
-  - **NodeLink Gapless Audio**: Specialized support for NodeLink playback, ensuring absolute zero silence between consecutive tracks.
-
-### Automation & Memory Efficiency
-- **Seamless Handlers** <Badge text="Reliable" variant="note" />
-  - Automatic track skipping on `TrackEnd`, `TrackStuck`, or `TrackError`.
-  - Automatic pausing and resuming based on server-wide voice state changes (Mute/Unmute).
-  - Memory-friendly architecture designed for high-concurrency bots using `unresolvedData` to minimize footprint.
-- **Search & Platform Support** <Badge text="Expansive" variant="success" />
-  - Native support for over 50 different search prefixes, including Spotify, Apple Music, Deezer, and specialized sources like Flowery TTS.
+### Plugin Ecosystem
+- **SponsorBlock** <Badge text="Integrated" variant="tip" />
+  - Automatic detection and skipping of sponsors, intros, and music-only segments.
+- **LavaLyrics** <Badge text="Real-time" variant="note" />
+  - Time-synced lyrics support with specialized event tracking for immersive UI.
+- **NodeLink Gapless** <Badge text="Perfect" variant="success" />
+  - Zero-silence playback between consecutive tracks for a seamless listening experience.

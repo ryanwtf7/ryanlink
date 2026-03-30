@@ -1,6 +1,7 @@
 import type { ManagerQueueOptions, QueueChangesWatcher, QueueStoreManager, StoredQueue } from '../types/Queue'
 import type { Track, UnresolvedTrack } from '../types/Track'
 import { RyanlinkUtils, MiniMap, AudioQueueSymbol } from '../utils/Utils'
+import { MemoryQueueStore } from './QueueStore'
 
 export class QueueSaver {
   private _: QueueStoreManager
@@ -9,7 +10,7 @@ export class QueueSaver {
     maxPreviousTracks: number
   }
   constructor(options: ManagerQueueOptions) {
-    this._ = options?.queueStore || new DefaultQueueStore()
+    this._ = options?.queueStore || new MemoryQueueStore()
     this.options = {
       maxPreviousTracks: options?.maxPreviousTracks || 25,
     }
@@ -32,36 +33,14 @@ export class QueueSaver {
   }
 }
 
-export class DefaultQueueStore implements QueueStoreManager {
-  private data = new MiniMap<string, StoredQueue>()
-  constructor() {}
 
-  get(guildId: string): StoredQueue | undefined {
-    return this.data.get(guildId)
-  }
-
-  set(guildId: string, valueToStringify): boolean {
-    return this.data.set(guildId, valueToStringify) ? true : false
-  }
-
-  delete(guildId: string) {
-    return this.data.delete(guildId)
-  }
-
-  stringify(value: StoredQueue | string): StoredQueue | string {
-    return value
-  }
-
-  parse(value: StoredQueue | string): Partial<StoredQueue> {
-    return value as Partial<StoredQueue>
-  }
-}
 
 export class Queue {
   public readonly tracks: (Track | UnresolvedTrack)[] = []
   public readonly previous: Track[] = []
   public current: Track | null = null
   public options = { maxPreviousTracks: 25 }
+  public position: number = 0
   private readonly guildId: string = ''
   private readonly QueueSaver: QueueSaver | null = null
   private managerUtils = new RyanlinkUtils()
@@ -71,7 +50,7 @@ export class Queue {
     this.queueChanges = queueOptions?.queueChangesWatcher || null
     this.guildId = guildId
     this.QueueSaver = QueueSaver
-    this.options.maxPreviousTracks = this.QueueSaver?.options?.maxPreviousTracks ?? this.options.maxPreviousTracks
+    this.position = data.position || 0
 
     this.current = this.managerUtils.isTrack(data.current) ? data.current : null
     this.previous =
@@ -83,7 +62,28 @@ export class Queue {
         ? data.tracks.filter((track) => this.managerUtils.isTrack(track) || this.managerUtils.isUnresolvedTrack(track))
         : []
 
+    const createShadowListener = (target: any[]) => {
+      return new Proxy(target, {
+        set: (obj, prop, value) => {
+          const ret = Reflect.set(obj, prop, value)
+          if (prop !== 'length') this.utils.save().catch(() => {})
+          return ret
+        },
+        deleteProperty: (obj, prop) => {
+          const ret = Reflect.deleteProperty(obj, prop)
+          this.utils.save().catch(() => {})
+          return ret
+        },
+      })
+    }
+
+    this.tracks = createShadowListener(this.tracks)
+    this.previous = createShadowListener(this.previous)
+
     Object.defineProperty(this, AudioQueueSymbol, { configurable: true, value: true })
+    if (queueOptions?.resuming?.enabled) {
+      this.utils.sync().catch(() => {})
+    }
   }
 
   public utils = {
@@ -127,11 +127,13 @@ export class Queue {
     },
 
     toJSON: (): StoredQueue => {
-      if (this.previous?.length > this.options?.maxPreviousTracks) this.previous?.splice(this.options?.maxPreviousTracks, this.previous.length)
+      if (this.previous?.length > this.options?.maxPreviousTracks)
+        this.previous?.splice(this.options?.maxPreviousTracks, this.previous.length)
       return {
         current: this.current ? { ...this.current } : null,
         previous: this.previous ? [...this.previous] : [],
         tracks: this.tracks ? [...this.tracks] : [],
+        position: this.position,
       }
     },
 
@@ -226,14 +228,7 @@ export class Queue {
 
     if (this.tracks.length <= 1) return this.tracks.length
 
-    if (this.tracks.length === 2) {
-      ;[this.tracks[0], this.tracks[1]] = [this.tracks[1], this.tracks[0]]
-    } else {
-      for (let i = this.tracks.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1))
-        ;[this.tracks[i], this.tracks[j]] = [this.tracks[j], this.tracks[i]]
-      }
-    }
+    this.managerUtils.shuffle(this.tracks)
 
     if (typeof this.queueChanges?.shuffled === 'function') this.queueChanges.shuffled(this.guildId, oldStored, this.utils.toJSON())
 

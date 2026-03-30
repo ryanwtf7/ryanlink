@@ -93,6 +93,8 @@ export interface ManagerEvents<CustomPlayerT extends Player = Player> {
   playerResumed: (player: CustomPlayerT, track: Track | UnresolvedTrack | null) => void
 
   playerPaused: (player: CustomPlayerT, track: Track | UnresolvedTrack | null) => void
+
+  queueErrorReport: (player: CustomPlayerT, track: Track | UnresolvedTrack, error: any) => void
 }
 
 export interface BotClientOptions {
@@ -143,6 +145,14 @@ export interface ManagerPlayerOptions<CustomPlayerT extends Player = Player> {
   useUnresolvedData?: boolean
 
   enforceSponsorBlockRequestForEventEnablement?: boolean
+
+  trackResolveRetryLimit?: number
+
+  onTrackStart?: (player: CustomPlayerT, track: Track) => void
+
+  onQueueEnd?: (player: CustomPlayerT) => void
+
+  onNodeFailover?: (player: CustomPlayerT, from: any, to: any) => void
 }
 
 export type DeepRequired<T> = {
@@ -172,6 +182,13 @@ export interface RyanConfiguration<CustomPlayerT extends Player = Player> {
 
   autoSkip?: boolean
 
+  resuming?: {
+    enabled: boolean
+    timeout: number
+  }
+
+  resume?: boolean
+
   autoMove?: boolean
 
   autoSkipOnResolveError?: boolean
@@ -183,6 +200,14 @@ export interface RyanConfiguration<CustomPlayerT extends Player = Player> {
   linksBlacklist?: (RegExp | string)[]
 
   linksAllowed?: boolean
+
+  trackResolveRetryLimit?: number
+
+  onTrackStart?: (player: CustomPlayerT, track: Track) => void
+
+  onQueueEnd?: (player: CustomPlayerT) => void
+
+  onNodeFailover?: (player: CustomPlayerT, from: any, to: any) => void
 
   advancedOptions?: {
     maxFilterFixDuration?: number

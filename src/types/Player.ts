@@ -52,6 +52,10 @@ export interface PlayerJson {
   nodeSessionId?: string
 
   queue?: StoredQueue
+
+  autoplay?: boolean
+
+  recentHistory: string[]
 }
 
 export type RepeatMode = 'queue' | 'track' | 'off'
@@ -76,15 +80,33 @@ export interface PlayerOptions {
 
   autoPauseOnMute?: boolean
 
+  smartLeave?: boolean
+
+  autoPause?: boolean
+
   applyVolumeAsFilter?: boolean
 
+  autoplay?: boolean
+
+  recentHistory?: string[]
+
   customData?: anyObject
+
+  onTrackStart?: (player: any, track: Track) => void
+
+  onQueueEnd?: (player: any) => void
+
+  onNodeFailover?: (player: any, from: any, to: any) => void
+
+  trackResolveRetryLimit?: number
 }
 
 export type anyObject = { [key: string | number]: string | number | null | anyObject }
 
 export interface BasePlayOptions {
   position?: number
+
+  startTime?: number
 
   endTime?: number
 

@@ -1,53 +1,63 @@
 ---
-editUrl: false
-next: true
-prev: true
 title: Node Events
-description: 'All Events of the Lavalink Node.'
+description: Comprehensive list of all Lavalink Node lifecycle events in Ryanlink.
 ---
 
-## Node-Manager Events
+import { Steps, Badge } from '@astrojs/starlight/components';
 
-> _Monitor and manage Lavalink Nodes:_
+The `RyanlinkNode` emits events that allow you to monitor the health and connectivity of your audio infrastructure. You can listen to these events on the global `manager.nodeManager` instance.
 
-- **`raw`** ➡️ `(node, payload) => {}`
-  _Triggered when raw data is received from the node._
+## Global Node Events
 
-- **`disconnect`** ➡️ `(node, reason) => {}`
-  _Triggered when the node disconnects. Reason for disconnection is provided._
+| Event | Payload | Description |
+| :--- | :--- | :--- |
+| `connect` | `(node: Node)` | Triggered when a WebSocket connection is established. |
+| `disconnect` | `(node: Node, reason: string)` | Triggered when a connection is severed. |
+| `reconnecting` | `(node: Node)` | Triggered when the manager initiates a reconnection attempt. |
+| `error` | `(node: Node, err: Error)` | Triggered when a node encounters a critical REST or WS error. |
+| `raw` | `(node: Node, payload: any)` | Triggered for every raw packet received from the node. |
 
-- **`connect`** ➡️ `(node) => {}`
-  _Triggered when the node successfully connects._
+---
 
-- **`reconnecting`** ➡️ `(node) => {}`
-  _Triggered when the node is attempting to reconnect._
+## Smart Engine Lifecycle <Badge text="New in 2.0" variant="tip" />
 
-- **`reconnectinprogress`** ➡️ `(node) => {}`
-  _Triggered when the node reconnection process started (because of NodeOptions#retryDelay)._
+These events are specifically triggered by the Smart Layer to ensure high-availability and state recovery.
 
-- **`create`** ➡️ `(node) => {}`
-  _Triggered when a new node is created._
+### `resumed`
+Triggered when a node successfully recovers its session.
 
-- **`destroy`** ➡️ `(node) => {}`
-  _Triggered when a node is destroyed._
-
-- **`error`** ➡️ `(node, error, payload) => {}`
-  _Triggered when an error occurs with the node._
-
-- **`resumed`** ➡️ `(node, payload, players) => {}`
-  _Triggered when the node resumes._
-  _Resuming needs to be handled manually; ensure to add the players to the manager._
-
-## Example: Listening to Node Events
-
-```js
-client.ryanlink.nodeManager.on('create', (node, payload) => {
-  console.log(`The Lavalink Node #${node.id} connected`)
-})
-
-// For all node-based errors:
-client.ryanlink.nodeManager.on('error', (node, error, payload) => {
-  console.error(`The Lavalink Node #${node.id} errored: `, error)
-  console.error(`Error Payload: `, payload)
-})
+```typescript
+manager.nodeManager.on('resumed', (node, payload, fetchedPlayers) => {
+  console.log(`Node ${node.id} successfully resumed with ${fetchedPlayers.length} players.`);
+});
 ```
+
+### `nodeFailover`
+Triggered when an Atomic Migration starts because a node went offline.
+
+```typescript
+manager.on('nodeFailover', (player, oldNode, newNode) => {
+  console.log(`Successfully migrated player ${player.guildId} from ${oldNode.id} to ${newNode.id}.`);
+});
+```
+
+---
+
+## Technical Example
+
+```typescript
+import { RyanlinkManager, Node } from 'ryanlink';
+
+manager.nodeManager.on('connect', (node: Node) => {
+    console.log(`[NODE] ${node.id} is online and ready for playback.`);
+});
+
+manager.nodeManager.on('error', (node: Node, error: Error) => {
+    console.error(`[NODE] ${node.id} reported an error: ${error.message}`);
+});
+```
+
+---
+
+> [!TIP]
+> Use the `raw` event with caution, as it can be extremely verbose in high-concurrency environments.

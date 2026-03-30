@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { DebugEvents, DestroyReasons } from '../config/Constants'
 import { NodeManager } from '../node/NodeManager'
 import { Player, Autoplay } from '../audio/Player'
-import { DefaultQueueStore } from '../audio/Queue'
+import { MemoryQueueStore } from '../audio/QueueStore'
 import type { BotClientOptions, DeepRequired, ManagerEvents, RyanConfiguration, RequiredManagerOptions } from '../types/Manager'
 import type { NodeConfiguration } from '../types/Node'
 import type { PlayerOptions } from '../types/Player'
@@ -41,6 +41,12 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
   public nodeManager: NodeManager
 
   public utils: RyanlinkUtils
+
+  public voiceStates: Map<string, { guildId: string; channelId: string; userId: string; deaf: boolean; mute: boolean }> = new Map()
+
+  public getVoiceStateUsers(guildId: string, channelId: string) {
+    return Array.from(this.voiceStates.values()).filter((v) => v.guildId === guildId && v.channelId === channelId)
+  }
 
   public initiated: boolean = false
 
@@ -89,17 +95,34 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
           maxAmount: options?.playerOptions?.maxErrorsPerTime?.maxAmount ?? 3,
         },
         enforceSponsorBlockRequestForEventEnablement: options?.playerOptions?.enforceSponsorBlockRequestForEventEnablement ?? true,
+        trackResolveRetryLimit: options?.playerOptions?.trackResolveRetryLimit ?? options?.trackResolveRetryLimit ?? 3,
+        onTrackStart: options?.playerOptions?.onTrackStart ?? options?.onTrackStart ?? null,
+        onQueueEnd: options?.playerOptions?.onQueueEnd ?? options?.onQueueEnd ?? null,
+        onNodeFailover: options?.playerOptions?.onNodeFailover ?? options?.onNodeFailover ?? null,
       },
       linksWhitelist: options?.linksWhitelist ?? [],
       linksBlacklist: options?.linksBlacklist ?? [],
       linksAllowed: options?.linksAllowed ?? true,
       autoSkip: options?.autoSkip ?? true,
+      resuming: {
+        enabled: options?.resuming?.enabled ?? options?.resume ?? false,
+        timeout: options?.resuming?.timeout ?? (options?.resume ? 60000 : 0),
+      },
+      resume: options?.resume ?? false,
       autoSkipOnResolveError: options?.autoSkipOnResolveError ?? true,
       emitNewSongsOnly: options?.emitNewSongsOnly ?? false,
+      trackResolveRetryLimit: options?.playerOptions?.trackResolveRetryLimit ?? options?.trackResolveRetryLimit ?? 3,
+      onTrackStart: options?.playerOptions?.onTrackStart ?? options?.onTrackStart ?? null,
+      onQueueEnd: options?.playerOptions?.onQueueEnd ?? options?.onQueueEnd ?? null,
+      onNodeFailover: options?.playerOptions?.onNodeFailover ?? options?.onNodeFailover ?? null,
       queueOptions: {
         maxPreviousTracks: options?.queueOptions?.maxPreviousTracks ?? 25,
         queueChangesWatcher: options?.queueOptions?.queueChangesWatcher ?? null,
-        queueStore: options?.queueOptions?.queueStore ?? new DefaultQueueStore(),
+        queueStore: options?.queueOptions?.queueStore ?? new MemoryQueueStore(),
+        resuming: {
+          enabled: options?.resuming?.enabled ?? false,
+          timeout: options?.resuming?.timeout ?? 60000,
+        },
       },
       advancedOptions: {
         enableDebugEvents: options?.advancedOptions?.enableDebugEvents ?? false,
@@ -212,6 +235,15 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     return newPlayer
   }
 
+  public async search(query: import('../types/Utils').SearchQuery | string, requestUser?: unknown, throwOnEmpty: boolean = false): Promise<import('../types/Utils').SearchResult> {
+    const Query = this.utils.transformQuery(query)
+    const least = this.nodeManager.leastUsedNodes('weighted')
+    const node = least[0]
+    if (!node) throw new Error('No available Node was found to perform the search.')
+
+    return node.search(Query, requestUser, throwOnEmpty)
+  }
+
   public destroyPlayer(guildId: string, destroyReason?: string): Promise<void | CustomPlayerT> {
     const oldPlayer = this.getPlayer(guildId)
     if (!oldPlayer) return
@@ -311,6 +343,20 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
         return
       }
 
+      if ('user_id' in update && update.guild_id) {
+        if (update.channel_id) {
+          this.voiceStates.set(`${update.guild_id}_${update.user_id}`, {
+            guildId: update.guild_id,
+            channelId: update.channel_id,
+            userId: update.user_id,
+            deaf: update.deaf ?? false,
+            mute: update.mute ?? false,
+          })
+        } else {
+          this.voiceStates.delete(`${update.guild_id}_${update.user_id}`)
+        }
+      }
+
       if (!('token' in update) && !('session_id' in update)) {
         this._debugNoAudio(
           'error',
@@ -402,6 +448,25 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
       if (update.user_id !== this.options?.client.id) {
         if (update.user_id && player.voiceChannelId) {
           this.emit(update.channel_id === player.voiceChannelId ? 'playerVoiceJoin' : 'playerVoiceLeave', player, update.user_id)
+          
+          if (update.channel_id !== player.voiceChannelId) {
+            const users = this.getVoiceStateUsers(player.guildId, player.voiceChannelId)
+            if (users.length <= 1) {
+              if (player.options.smartLeave) {
+                player.destroy('Destroyed due to empty channel (smartLeave)')
+                return
+              } else if (player.options.autoPause && !player.paused) {
+                player.setData('internal_autoPaused', true)
+                player.pause().catch(() => {})
+              }
+            }
+          } else {
+            // User joined the channel
+            if (player.options.autoPause && player.paused && player.getData('internal_autoPaused')) {
+              player.setData('internal_autoPaused', undefined)
+              player.resume().catch(() => {})
+            }
+          }
         }
 
         this._debugNoAudio(
@@ -420,7 +485,18 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
       }
 
       if (update.channel_id) {
-        if (player.voiceChannelId !== update.channel_id) this.emit('playerMove', player, player.voiceChannelId, update.channel_id)
+        if (player.voiceChannelId !== update.channel_id) {
+           this.emit('playerMove', player, player.voiceChannelId, update.channel_id)
+           const users = this.getVoiceStateUsers(player.guildId, update.channel_id)
+           if (users.length <= 1) {
+             if (player.options.smartLeave) {
+               player.destroy('Destroyed due to empty channel (smartLeave)')
+               return
+             } else if (player.options.autoPause && !player.paused) {
+               player.pause().catch(() => {})
+             }
+           }
+        }
 
         player.voice.sessionId = update.session_id || player.voice.sessionId
         player.voice.channelId = update.channel_id || player.voice.channelId

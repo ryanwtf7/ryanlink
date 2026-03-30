@@ -9,6 +9,7 @@ import type { Player } from '../audio/Player'
 import type { NodeConfiguration, NodeTypes } from '../types/Node'
 import type { AudioTrack, Track, UnresolvedQuery, UnresolvedTrack } from '../types/Track'
 import type { RyanlinkSearchPlatform, AudioSearchQuery, MiniMapConstructor, SearchPlatform, SearchQuery, SearchResult } from '../types/Utils'
+import { TrackEntry } from './TrackRegistry'
 export const AudioTrackSymbol = Symbol('Ryanlink-Track')
 export const UnresolvedAudioTrackSymbol = Symbol('Ryanlink-Track-Unresolved')
 export const AudioQueueSymbol = Symbol('Ryanlink-Queue')
@@ -42,6 +43,14 @@ export class RyanlinkUtils {
     }
   }
 
+  public shuffle<T>(array: T[]): T[] {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[array[i], array[j]] = [array[j], array[i]]
+    }
+    return array
+  }
+
   buildTrack(data: AudioTrack | Track, requester: unknown) {
     if (!data?.encoded || typeof data.encoded !== 'string') throw new RangeError("Argument 'data.encoded' must be present.")
     if (!data.info) throw new RangeError("Argument 'data.info' must be present.")
@@ -52,7 +61,7 @@ export class RyanlinkUtils {
         transformedRequester = this.getTransformedRequester(data.userData.requester)
       }
 
-      const r = {
+      const baseTrack = {
         encoded: data.encoded,
         info: {
           identifier: data.info.identifier,
@@ -73,6 +82,8 @@ export class RyanlinkUtils {
         pluginInfo: this.buildPluginInfo(data, 'clientData' in data ? data.clientData : {}),
         requester: transformedRequester || this.getTransformedRequester(this.RyanlinkManager?.options?.client),
       } as Track
+
+      const r = new TrackEntry(baseTrack)
       Object.defineProperty(r, AudioTrackSymbol, { configurable: true, value: true })
       return r
     } catch (error) {
@@ -554,6 +565,15 @@ export async function queueTrackEnd(player: Player, dontShiftQueue: boolean = fa
     player.queue.previous.unshift(player.queue.current)
     if (player.queue.previous.length > player.queue.options.maxPreviousTracks)
       player.queue.previous.splice(player.queue.options.maxPreviousTracks, player.queue.previous.length)
+
+    const trackId = player.queue.current.info.isrc || player.queue.current.info.identifier
+    if (trackId && !player.recentHistory.includes(trackId)) {
+      player.recentHistory.unshift(trackId)
+      if (player.recentHistory.length > player.recentHistoryLimit) {
+        player.recentHistory.splice(player.recentHistoryLimit, player.recentHistory.length)
+      }
+    }
+
     await player.queue.utils.save()
   }
 

@@ -298,6 +298,36 @@ export class FilterManager {
     return this
   }
 
+  public async clear(): Promise<FilterManager> {
+    this.filters.dspxPlugin.echo = false
+    this.filters.dspxPlugin.normalization = false
+    this.filters.dspxPlugin.highPass = false
+    this.filters.dspxPlugin.lowPass = false
+    this.filters.coreFilterPlugin.echo = false
+    this.filters.coreFilterPlugin.reverb = false
+    this.filters.nightcore = false
+    this.filters.lowPass = false
+    this.filters.rotation = false
+    this.filters.tremolo = false
+    this.filters.vibrato = false
+    this.filters.karaoke = false
+    this.filters.vaporwave = false
+    this.filters.volume = false
+    this.filters.nodeLinkEcho = false
+    this.filters.nodeLinkChorus = false
+    this.filters.nodeLinkCompressor = false
+    this.filters.nodeLinkHighPass = false
+    this.filters.nodeLinkPhaser = false
+    this.filters.nodeLinkSpatial = false
+    this.filters.audioOutput = 'stereo'
+
+    this.data = structuredClone(DEFAULT_FILTER_DATAS)
+    this.equalizerBands = []
+
+    await this.applyPlayerFilters()
+    return this
+  }
+
   public async setVolume(volume: number) {
     if (volume < 0 || volume > 5) throw new SyntaxError('Volume-Filter must be between 0 and 5')
 
@@ -596,36 +626,105 @@ export class FilterManager {
     return this.filters.custom
   }
 
-  public async setEQPreset(preset: keyof typeof EQList): Promise<this> {
-    const bands = EQList[preset]
-    return this.setEQ(bands)
+  public async setPreset(preset: keyof typeof EQList | 'Vaporwave' | 'Nightcore' | '8D' | 'Slowmo' | 'DoubleTime' | 'Radio' | 'Lofi' | 'Tremolo' | 'Vibrato' | 'Clear'): Promise<this> {
+    if (preset === 'Clear') {
+      await this.clear()
+      return this
+    }
+    if (preset === 'Vaporwave') {
+      this.filters.vaporwave = true
+      this.filters.nightcore = false
+      this.data.timescale = { speed: 0.85, pitch: 0.8, rate: 1 }
+      await this.applyPlayerFilters()
+      return this
+    }
+    if (preset === 'Nightcore') {
+      this.filters.nightcore = true
+      this.filters.vaporwave = false
+      this.data.timescale = { speed: 1.1, pitch: 1.2, rate: 1 }
+      await this.applyPlayerFilters()
+      return this
+    }
+    if (preset === '8D') {
+      this.filters.custom = true
+      this.data.rotation = { rotationHz: 0.2 }
+      await this.applyPlayerFilters()
+      return this
+    }
+    if (preset === 'Slowmo') {
+      this.filters.custom = true
+      this.data.timescale = { speed: 0.7, pitch: 1, rate: 1 }
+      await this.applyPlayerFilters()
+      return this
+    }
+    if (preset === 'DoubleTime') {
+      this.filters.custom = true
+      this.data.timescale = { speed: 1.5, pitch: 1, rate: 1 }
+      await this.applyPlayerFilters()
+      return this
+    }
+    if (preset === 'Radio') {
+      this.filters.custom = true
+      this.data.lowPass = { smoothing: 10 }
+      await this.setEQ(EQList.Radio)
+      return this
+    }
+    if (preset === 'Lofi') {
+      this.filters.custom = true
+      this.data.timescale = { speed: 1.0, pitch: 1.0, rate: 1 }
+      this.data.lowPass = { smoothing: 20 }
+      await this.setEQ(EQList.Lofi)
+      return this
+    }
+    if (preset === 'Tremolo') {
+      this.filters.tremolo = true
+      this.data.tremolo = { frequency: 2, depth: 0.5 }
+      await this.applyPlayerFilters()
+      return this
+    }
+    if (preset === 'Vibrato') {
+      this.filters.vibrato = true
+      this.data.vibrato = { frequency: 2, depth: 0.5 }
+      await this.applyPlayerFilters()
+      return this
+    }
+    return this.setEQ(EQList[preset as keyof typeof EQList])
   }
 
-  public async setEQ(bands: EQBand | EQBand[]): Promise<this> {
+  public async setEQPreset(preset: keyof typeof EQList): Promise<this> {
+    return this.setEQ(EQList[preset])
+  }
+
+  public async setEQ(bands: EQBand | EQBand[], transitionMs: number = 0): Promise<this> {
     if (!Array.isArray(bands)) bands = [bands]
 
     if (!bands.length || !bands.every((band) => safeStringify(Object.keys(band).sort()) === '["band","gain"]'))
       throw new TypeError("Bands must be a non-empty object array containing 'band' and 'gain' properties.")
 
-    for (const { band, gain } of bands) this.equalizerBands[band] = { band, gain }
+    const startBands = [...this.equalizerBands]
 
-    if (!this.player.node.sessionId) throw new Error('The Lavalink-Node is either not ready or not up to date')
-
-    const now = performance.now()
-
-    if (this.player.options.instaFixFilter === true) this.filterUpdatedState = true
-
-    this.player.syncState()
-    await this.player.node.updatePlayer({
-      guildId: this.player.guildId,
-      playerOptions: {
-        filters: { equalizer: this.equalizerBands },
-      },
-    })
-
-    this.player.ping.node = Math.round((performance.now() - now) / 10) / 100
+    if (transitionMs > 0) {
+      const steps = 10
+      const interval = transitionMs / steps
+      for (let i = 1; i <= steps; i++) {
+        for (const { band, gain } of bands) {
+          const startGain = startBands[band]?.gain || 0
+          const currentGain = startGain + (gain - startGain) * (i / steps)
+          this.equalizerBands[band] = { band, gain: currentGain }
+        }
+        await this._applyEQInternal()
+        await new Promise((resolve) => setTimeout(resolve, interval))
+      }
+    } else {
+      for (const { band, gain } of bands) this.equalizerBands[band] = { band, gain }
+      await this._applyEQInternal()
+    }
 
     return this
+  }
+
+  private async _applyEQInternal(): Promise<void> {
+    await this.applyPlayerFilters()
   }
 
   public async clearEQ(): Promise<this> {

@@ -1,28 +1,41 @@
 ---
-title: Setup Lavalink Node
-description: Learn how to setup a Lavalink Server
+title: Setup Lavalink
+description: Learn how to setup a Lavalink Server for Ryanlink.
 ---
 
-import { LinkCard } from '@astrojs/starlight/components';
+import { LinkCard, Card, CardGrid, Steps, Badge } from '@astrojs/starlight/components';
 
-## Lavalink Node
+# Setup Lavalink
 
-In order to use ryanlink, you need a Lavalink Node, you can host them yourself pretty easily.
+To use **Ryanlink**, you need a Lavalink Server. Whether you choose to host it locally or use a premium provider, our engine is designed for absolute technical compatibility.
 
-For that please follow the [**official Lavalink Guide**](https://lavalink.dev/getting-started/index.html) and their information about [**how to configure it**](https://lavalink.dev/configuration/index.html)
+## Hosting Options
 
-If you want to use stuff like spotify, deezer, more filters, lyrics, new youtube ... then you need to also install [**plugins (to Lavalink.**](https://lavalink.dev/plugins.html)
+<CardGrid>
+  <Card title="Managed Hosting" icon="rocket">
+    Avoid the hassle of manual configuration. Use **HeavenCloud** forAMD Ryzen 9 9950X performance.
+    <LinkCard
+      title="HeavenCloud Lavalink"
+      description="60 Gbps Network, 120 Tbps DDoS Shield. Global Regions."
+      href="/ryanlink/home/lavalink-hosting"
+    />
+  </Card>
+  <Card title="Self-Hosted Node" icon="seti:javascript">
+    Follow the [**Official Lavalink Guide**](https://lavalink.dev/getting-started/index.html) to get started on your own server.
+  </Card>
+</CardGrid>
 
-## Hosting
+---
 
-If you want the best performance for your Discord bot without the hassle of manual configuration, we recommend **HeavenCloud Lavalink Hosting**.
+## Technical Prerequisites
 
-<LinkCard
-  title="HeavenCloud Lavalink Hosting"
-  description="AMD Ryzen 9 9950X, 60 Gbps Network, 120 Tbps DDoS Shield. Global Regions Available."
-  href="/ryanlink/home/lavalink-hosting"
-/>
+<Steps>
+1. **Lavalink v4.0+**: Native support for v4 filters and plugin architectures.
+2. **Plugins**: For features like Spotify, Lyrics, and SponsorBlock, ensure [**plugins**](https://lavalink.dev/plugins.html) are installed.
+3. **Smart Tier Integration**: Review the [**Architecture Overview**](/ryanlink/home/smart-engine) to understand how Ryanlink manages node health.
+</Steps>
 
+---
 ## Sample Configuration (application.yaml)
 
 This sample configuration enables several plugins for additional sources, filters and lyrics

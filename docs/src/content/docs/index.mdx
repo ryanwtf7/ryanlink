@@ -1,66 +1,81 @@
 ---
-# https://starlight.astro.build/reference/icons/#all-icons
-
-title: ryanlink
-description: High-performance, flexible and feature-rich lavalink-v4 wrapper for Discord bots.
+title: Ryanlink
+description: A modern, high-performance, and proactive audio engine for Discord bots.
 template: splash
 hero:
-  tagline: High-performance, flexible and feature-rich lavalink-v4 wrapper for Discord bots.
+  tagline: The pro-active audio engine for Discord. Zero-config persistence, atomic migration, and memory-optimized track management.
   image:
     file: ../../assets/ryanlink.png
   actions:
-    - text: Example Guide
-      link: /ryanlink/home/example
-      icon: right-arrow
-    - text: Read the docs
+    - text: Getting Started
       link: /ryanlink/home/installation
-      icon: document
+      icon: right-arrow
+    - text: Discover Smart Engine
+      link: /ryanlink/home/smart-engine
+      icon: star
       variant: secondary
-    - text: Join my Public Discord
+    - text: Support Discord
       link: https://discord.gg/W2GheK3F9m
       icon: discord
       variant: secondary
 ---
 
-import { LinkCard, CardGrid } from '@astrojs/starlight/components'
+import { LinkCard, CardGrid, Card } from '@astrojs/starlight/components';
 import ReadMeMD from '../../../../README.md'
 
-## Next steps
+## Why Ryanlink?
 
-<CardGrid>
-
-    <LinkCard
-        title="Installation"
-        href="/ryanlink/home/installation"
-        description="Install ryanlink"
-    />
-    <LinkCard
-        title="Lavalink Node Setup"
-        href="/ryanlink/home/setup-ryanlink"
-        description="How to setup a locally hosted Lavalink Node"
-    />
-    <LinkCard
-        title="Configuration Example"
-        href="/ryanlink/home/configuration"
-        description="List of all possible configuration with example + extesion classes"
-    />
-    <LinkCard
-        title="Example Usage Guides"
-        href="/ryanlink/home/example"
-        description="See Several examples of multiple ryanlink features"
-    />
-    <LinkCard
-        title="See a Features-list"
-        href="/ryanlink/home/features"
-        description="View a beautiful list of features from ryanlink"
-    />
-    <LinkCard
-        title="Get Started with the Docs (Manager Class)"
-        href="/ryanlink/api/core/manager/classes/ryanlinkmanager/"
-        description="See how to use the Manager"
-    />
-
+<CardGrid stagger>
+  <Card title="Proactive Management" icon="rocket">
+    Automates node failover, session recovery, and voice state synchronization with zero developer boilerplate.
+  </Card>
+  <Card title="Memory Performance" icon="seti:db">
+    The unique **TrackRegistry** allows for massive queues (10k+ tracks) with industry-leading RAM efficiency.
+  </Card>
+  <Card title="Professional Filters" icon="random">
+    Built-in, non-destructive filter stacking with presets for 8D, Lofi, Radio, Nightcore, and more.
+  </Card>
+  <Card title="Cross-Runtime" icon="seti:javascript">
+    Natively optimized for **Node.js**, **Bun**, and **Deno** environments.
+  </Card>
 </CardGrid>
+
+---
+
+<CardGrid stagger>
+  <LinkCard
+    title="Installation"
+    description="Install ryanlink"
+    href="/ryanlink/home/installation"
+  />
+  <LinkCard
+    title="Lavalink Node Setup"
+    description="How to setup a locally hosted Lavalink Node"
+    href="/ryanlink/home/setup-ryanlink"
+  />
+  <LinkCard
+    title="Configuration Example"
+    description="List of all possible configuration with example + extension classes"
+    href="/ryanlink/home/configuration"
+  />
+  <LinkCard
+    title="Example Usage Guides"
+    description="See Several examples of multiple ryanlink features"
+    href="/ryanlink/home/example"
+  />
+  <LinkCard
+    title="Features-list"
+    description="View a beautiful list of features from ryanlink"
+    href="/ryanlink/home/features"
+  />
+  <LinkCard
+    title="Get Started with the Docs (Manager Class)"
+    description="See how to use the Manager"
+    href="/ryanlink/api/classes/ryanlinkmanager"
+  />
+</CardGrid>
+
+---
 
 ## Overview
 

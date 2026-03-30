@@ -89,7 +89,9 @@ export class NodeManager extends EventEmitter {
     return newNode as T
   }
 
-  public leastUsedNodes(sortType: 'memory' | 'cpuLavalink' | 'cpuSystem' | 'calls' | 'playingPlayers' | 'players' = 'players'): RyanlinkNode[] {
+  public leastUsedNodes(
+    sortType: 'memory' | 'cpuLavalink' | 'cpuSystem' | 'calls' | 'playingPlayers' | 'players' | 'weighted' = 'players'
+  ): RyanlinkNode[] {
     const connectedNodes = Array.from(this.nodes.values()).filter((node) => node.connected)
     switch (sortType) {
       case 'memory':
@@ -117,11 +119,12 @@ export class NodeManager extends EventEmitter {
           return connectedNodes.sort((a, b) => (a.stats?.playingPlayers || 0) - (b.stats?.playingPlayers || 0))
         }
         break
-      case 'players':
+      case 'weighted':
         {
-          return connectedNodes.sort((a, b) => (a.stats?.players || 0) - (b.stats?.players || 0))
+          return (connectedNodes as RyanlinkNode[]).sort((a, b) => a.weightedScore - b.weightedScore)
         }
         break
+      case 'players':
       default:
         {
           return connectedNodes.sort((a, b) => (a.stats?.players || 0) - (b.stats?.players || 0))
