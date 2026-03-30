@@ -1,11 +1,4 @@
 node_modules
-testBot/.env
-testBot/node_modules
-testBot/package-lock.json
-testBot/yarn.lock
-testBot/bun.lockdb
-testBot/src
-testBot/package-lock.json
 .vscode
 bun.lockb
 yarn.lock
@@ -14,6 +7,7 @@ pnpm-lock.yaml
 dist
 *.DS_Store
 bun.lock
-coveragecoverage
-html
+coverage
+coverage/
 .nyc_output
+lcov.info
