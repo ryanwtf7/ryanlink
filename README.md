@@ -11,8 +11,9 @@
   [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
   [![Node Version](https://img.shields.io/node/v/ryanlink)](https://nodejs.org)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.4+-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
+  [![Codecov Coverage](https://img.shields.io/codecov/c/github/ryanwtf7/ryanlink?label=codecov&logo=codecov)](https://app.codecov.io/gh/ryanwtf7/ryanlink)
   
-  [Documentation](https://ryanwtf7.github.io/ryanlink/) • [NPM Package](https://www.npmjs.com/package/ryanlink) • [GitHub](https://github.com/ryanwtf7/ryanlink)
+  [Documentation](https://ryanwtf7.github.io/ryanlink/) • [NPM Package](https://www.npmjs.com/package/ryanlink) • [Coverage](http://app.codecov.io/gh/ryanwtf7/ryanlink) • [GitHub](https://github.com/ryanwtf7/ryanlink)
 
 </div>
 
