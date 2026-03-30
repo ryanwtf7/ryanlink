@@ -943,7 +943,7 @@ export class Player {
 }
 
 export class Autoplay {
-  private static adding = new Set<string>()
+  private static adding: Set<string> = new Set<string>()
 
   public static async defaultAutoplay(player: Player, lastTrack: Track): Promise<void> {
     if (!lastTrack) return

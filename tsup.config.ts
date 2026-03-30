@@ -1,12 +1,7 @@
-import { cpSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'tsup'
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
 
 export default defineConfig({
   entry: ['src/index.ts'],
@@ -33,15 +28,4 @@ export default defineConfig({
   outExtension: ({ format }) => ({
     js: format === 'cjs' ? '.cjs' : '.mjs',
   }),
-  onSuccess: async () => {
-    const esmPath = join(__dirname, 'dist', 'index.mjs')
-    const jsPath = join(__dirname, 'dist', 'index.js')
-
-    try {
-      cpSync(esmPath, jsPath)
-      console.log('✓ Build completed successfully!')
-    } catch {
-      // ignore if build output is missing
-    }
-  },
 })
