@@ -216,7 +216,7 @@ describe('Player Expanded', () => {
     
     // Mock the static method to throw directly
     // @ts-ignore
-    const fetchSpy = vi.spyOn(Autoplay, 'fetchRelatedTracks').mockRejectedValue(new Error('Fetch failed'))
+    const fetchSpy = vi.spyOn(Autoplay, 'fetchRelatedTracks').mockImplementation(() => Promise.reject(new Error('Fetch failed')))
     const debugSpy = vi.spyOn(localManager, 'emit')
     
     // @ts-ignore

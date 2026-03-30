@@ -29,7 +29,7 @@ describe('RyanlinkManager Comprehensive', () => {
   it('init() handles node connection failure', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const MockNode = Array.from(manager.nodeManager.nodes.values())[0]
-    vi.spyOn(MockNode, 'connect').mockRejectedValue(new Error('Connect failed'))
+    vi.spyOn(MockNode, 'connect').mockImplementation(() => Promise.reject(new Error('Connect failed')))
     
     await manager.init({ id: 'bot123' })
     expect(errorSpy).toHaveBeenCalled()
@@ -58,8 +58,7 @@ describe('RyanlinkManager Comprehensive', () => {
 
   it('provideVoiceUpdate() handles autoPauseOnMute logic', async () => {
     await manager.init({ id: 'bot123' })
-    manager.options.playerOptions.autoPauseOnMute = true
-    const player = manager.createPlayer({ guildId: 'pause1', voiceChannelId: 'v1' })
+    const player = manager.createPlayer({ guildId: 'pause1', voiceChannelId: 'v1', autoPauseOnMute: true })
     const pauseSpy = vi.spyOn(player, 'pause').mockResolvedValue(player)
     const resumeSpy = vi.spyOn(player, 'resume').mockResolvedValue(player)
 

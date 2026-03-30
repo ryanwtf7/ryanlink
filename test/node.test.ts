@@ -68,7 +68,7 @@ describe('RyanlinkNode', () => {
     })
 
     manager = new RyanlinkManager({
-      nodes: [{ host: 'localhost', port: 2333, authorization: 'pw', id: 'local', retryAmount: 2, retryDelay: 10 }],
+      nodes: [{ host: 'localhost', port: 2333, authorization: 'pw', id: 'local', retryAmount: 2, retryDelay: 10, heartBeatInterval: 0 }],
       client: { id: '123' },
       sendToShard: vi.fn(),
     })
@@ -76,6 +76,15 @@ describe('RyanlinkNode', () => {
     await manager.init({ id: '123' })
     const node = manager.nodeManager.nodes.get('local')!
     await waitForNode(node)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    const node = manager.nodeManager.nodes.get('local')
+    if (node) {
+      if ((node as any).heartBeatInterval) clearInterval((node as any).heartBeatInterval)
+      try { node.destroy(undefined, false) } catch {}
+    }
   })
 
   it('handles basic REST and metrics', async () => {
@@ -163,7 +172,7 @@ describe('RyanlinkNode', () => {
   it('handles ready op fetching error', async () => {
     const node = manager.nodeManager.nodes.get('local')!
     const resumedSpy = vi.spyOn(manager.nodeManager, 'emit')
-    vi.spyOn(node, 'fetchAllPlayers').mockRejectedValue(new Error('Fetch failed'))
+    vi.spyOn(node, 'fetchAllPlayers').mockImplementation(() => Promise.reject(new Error('Fetch failed')))
 
     // @ts-ignore
     await node.message(JSON.stringify({ op: 'ready', sessionId: 'err-sid', resumed: true }))

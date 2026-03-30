@@ -23,7 +23,7 @@ describe('Manager Expanded', () => {
 
   it('init() handles total node connection failure', async () => {
     const node = manager.nodeManager.nodes.get('local')!
-    vi.spyOn(node, 'connect').mockRejectedValue(new Error('Connection failed'))
+    vi.spyOn(node, 'connect').mockImplementation(() => Promise.reject(new Error('Connection failed')))
     
     const debugSpy = vi.fn()
     manager.on('debug', debugSpy)

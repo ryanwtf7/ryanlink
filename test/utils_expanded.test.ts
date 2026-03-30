@@ -49,7 +49,7 @@ describe('RyanlinkUtils Expanded', () => {
     manager.options.advancedOptions.enableDebugEvents = true
     
     const unresolvedTrack = manager.utils.buildUnresolvedTrack({ title: 'T' }, 'u')
-    vi.spyOn(unresolvedTrack, 'resolve').mockRejectedValue(new Error('Resolve error'))
+    vi.spyOn(unresolvedTrack, 'resolve').mockImplementation(() => Promise.reject(new Error('Resolve error')))
     
     player.queue.tracks.push(unresolvedTrack)
     

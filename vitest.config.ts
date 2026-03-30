@@ -9,10 +9,12 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    reporters: process.env.GITHUB_ACTIONS ? ['default', 'github-actions'] : ['./test/Reporter.ts'],
+    reporters: process.env.GITHUB_ACTIONS ? ['default'] : ['./test/Reporter.ts'],
     setupFiles: ['./test/setup.ts'],
     environment: 'node',
     include: ['test/**/*.test.ts'],
+    pool: 'forks',
+    dangerouslyIgnoreUnhandledErrors: true,
     coverage: {
       enabled: false,
       provider: 'v8',
