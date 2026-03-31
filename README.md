@@ -29,14 +29,14 @@
 - **Cross-Runtime Ready** - Optimized for **Node.js**, **Bun**, and **Deno**.
 - **Advanced Queue Persistence** - Built-in drivers for **Redis**, **Local Disk**, and **In-Memory** storage.
 - **High-Performance Audio** - Native fetch, efficient memory management, and parallel track loading.
-- **Dynamic Filter Stacking** - Non-destructive filter layering with built-in presets (**Hardcore**, **Nightcore**, etc.).
+- **Dynamic Filter Stacking** - Non-destructive filter layering with built-in presets (**Pop**, **Electronic**, etc.).
 - **Proactive Automation** - Smart auto-pause/resume, empty channel handling, and resolution self-healing.
 - **Memory-Optimized Registry** - Industry-leading `TrackRegistry` for zero-overhead large queue management.
 - **Strictly Type-Safe** - 100% TypeScript with advanced module augmentation support.
 
 ---
 
-## Smart Engine
+## Technical Architecture
 
 Introduces a **Proactive Smart Layer** that reduces developer boilerplate by automating session and queue management.
 
@@ -152,30 +152,24 @@ const player = client.ryanlink.createPlayer({
 
 ### Audio Filters
 
-```typescript
-// Apply Professional EQ Presets
-await player.filterManager.setPreset('BassBoost') // or 'Pop', 'Electronic', etc.
-
-// Apply Immersive DSP Presets
-await player.filterManager.setPreset('8D') // 360° Rotation
-await player.filterManager.setPreset('Lofi') // Chill, Low-Fi vibes
-await player.filterManager.setPreset('Radio') // Broadcast simulation
-
-// Reset all filters atomically
-await player.filterManager.setPreset('Clear')
-```
 ```
 
 ---
 
-## Diagnostic Metadata
+## Library Metadata
 
-Access library information dynamically:
+The following technical specifications define the current stable branch of **Ryanlink**.
+
+| Metadata | Value |
+| :--- | :--- |
+| **Engine Version** | `2.0.1` |
+| **License** | `Apache-2.0` |
+| **TypeScript** | `5.4+` |
+| **Runtime** | Node.js, Bun, Deno |
 
 ```typescript
 import { version } from 'ryanlink'
-
-console.log(`Ryanlink v${version}`)
+console.log(`ryanlink v${version}`)
 ```
 
 ---

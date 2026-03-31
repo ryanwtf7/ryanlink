@@ -69,9 +69,9 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Smart Audio Engine',
+          label: 'Library Overview',
           items: [
-            { label: 'Architecture Overview', link: '/home/smart-engine' },
+            { label: 'Architecture Overview', link: '/home/architecture' },
             { label: 'Session Persistence', link: '/extra/resuming' },
             { label: 'Feature Guides', link: '/home/example' },
           ],
@@ -79,12 +79,20 @@ export default defineConfig({
         {
           label: 'API Reference',
           collapsed: true,
-          autogenerate: { directory: 'api/classes' },
+          items: [
+            { label: 'RyanlinkManager', autogenerate: { directory: 'api/core/Manager/classes' } },
+            { label: 'Player', autogenerate: { directory: 'api/audio/Player/classes' } },
+            { label: 'Node', autogenerate: { directory: 'api/node/Node/classes' } },
+            { label: 'NodeManager', autogenerate: { directory: 'api/node/NodeManager/classes' } },
+            { label: 'Filters', autogenerate: { directory: 'api/audio/Filters/classes' } },
+            { label: 'Queue', autogenerate: { directory: 'api/audio/Queue/classes' } },
+            { label: 'Track Registry', autogenerate: { directory: 'api/utils/TrackRegistry/classes' } },
+          ],
         },
         {
           label: 'Types & Interfaces',
           collapsed: true,
-          autogenerate: { directory: 'api/interfaces' },
+          autogenerate: { directory: 'api/types' },
         },
         {
           label: 'Enums & Utilities',
@@ -93,7 +101,10 @@ export default defineConfig({
             { label: 'Manager Events', link: '/extra/manager-events' },
             { label: 'Node Events', link: '/extra/node-events' },
             { label: 'Search Prefixes', link: '/extra/search-platforms' },
-            { label: 'All Enums', autogenerate: { directory: 'api/enums' } },
+            { label: 'All Enums', items: [
+                { label: 'Constants', autogenerate: { directory: 'api/config/Constants/enumerations' } },
+                { label: 'Node Types', autogenerate: { directory: 'api/types/Node/enumerations' } },
+            ] },
           ],
         },
         {

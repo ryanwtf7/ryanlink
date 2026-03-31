@@ -32,7 +32,7 @@ const manager = new RyanlinkManager({
     // Your library's shard-send logic
     client.guilds.cache.get(guildId)?.shard.send(payload);
   },
-  // --- Smart Engine Options ---
+  // ---  Options ---
   resume: true,               // Enable automated session recovery
   trackResolveRetryLimit: 3,  // Automated retries for flaky sources
   useMemoryRegistry: true,    // Optimized mapping for massive queues
