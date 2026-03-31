@@ -198,9 +198,11 @@ describe('Manager.provideVoiceUpdate', () => {
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
     
     vi.spyOn(player, 'connect').mockImplementation(() => Promise.reject(new Error('Connect failed')))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     const destroySpy = vi.spyOn(player, 'destroy').mockResolvedValue(true as any)
     
     await manager.provideVoiceUpdate({ t: 'VOICE_STATE_UPDATE', d: { guild_id: 'g1', user_id: BOT_ID, channel_id: null, session_id: 's1' } } as any)
     expect(destroySpy).toHaveBeenCalledWith(DestroyReasons.PlayerReconnectFail)
+    expect(console.error).toHaveBeenCalled()
   })
 })

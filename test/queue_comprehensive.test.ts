@@ -29,7 +29,7 @@ describe('Queue Comprehensive', () => {
   it('handles queueChanges callback errors (splice)', async () => {
     const player = manager.createPlayer({ guildId: 'q1', voiceChannelId: 'v1' })
     const track = manager.utils.buildTrack({ encoded: 't1', info: { title: 'T1' } } as any, 'user')
-    player.queue.add(track)
+    await player.queue.add(track)
     
     // Set callback that throws
     // @ts-ignore
@@ -49,7 +49,7 @@ describe('Queue Comprehensive', () => {
   it('handles queueChanges callback errors (remove)', async () => {
     const player = manager.createPlayer({ guildId: 'q2', voiceChannelId: 'v1' })
     const track = manager.utils.buildTrack({ encoded: 't1', info: { title: 'T1' } } as any, 'user')
-    player.queue.add(track)
+    await player.queue.add(track)
     
     // @ts-ignore
     player.queue.queueChanges = {
@@ -70,7 +70,7 @@ describe('Queue Comprehensive', () => {
       { encoded: 'e2', info: { title: 'A', author: 'Y', duration: 100 } },
       { encoded: 'e3', info: { title: 'B', author: 'X', duration: 200 } },
     ].map(t => manager.utils.buildTrack(t as any, 'user'))
-    player.queue.add(tracks)
+    await player.queue.add(tracks)
 
     // Sort by duration DESC
     await player.queue.sortBy('duration', 'desc')
@@ -95,7 +95,7 @@ describe('Queue Comprehensive', () => {
       { encoded: 'e1', info: { title: 'C', author: 'Z' } },
       { encoded: 'e2', info: { title: 'A', author: 'Y' } },
     ].map(t => manager.utils.buildTrack(t as any, 'user'))
-    player.queue.add(tracks)
+    await player.queue.add(tracks)
 
     const sortedByTitle = player.queue.toSortedBy('title', 'asc')
     expect(sortedByTitle[0].info.title).toBe('A')
@@ -117,7 +117,7 @@ describe('Queue Comprehensive', () => {
       { encoded: 't2', info: { title: 'Song 2', author: 'Artist B', duration: 200, sourceName: 'spotify' } },
       { encoded: 't3', info: { title: 'Other', author: 'Artist A', duration: 150, sourceName: 'youtube' } },
     ].map(t => manager.utils.buildTrack(t as any, 'user'))
-    player.queue.add(tracks)
+    await player.queue.add(tracks)
 
     // Find by title
     expect(player.queue.utils.filterTracks({ title: 'Song' }).length).toBe(2)
@@ -137,7 +137,7 @@ describe('Queue Comprehensive', () => {
   it('handles shuffle and shuffled callback', async () => {
     const player = manager.createPlayer({ guildId: 'q6', voiceChannelId: 'v1' })
     const tracks = Array(10).fill(0).map((_, i) => manager.utils.buildTrack({ encoded: `e${i}`, info: { title: `T${i}` } } as any, 'user'))
-    player.queue.add(tracks)
+    await player.queue.add(tracks)
     
     // @ts-ignore
     player.queue.queueChanges = {
@@ -153,7 +153,7 @@ describe('Queue Comprehensive', () => {
 
   it('handles clear and remove by index', async () => {
     const player = manager.createPlayer({ guildId: 'q7', voiceChannelId: 'v1' })
-    player.queue.add(Array(5).fill(0).map((_, i) => manager.utils.buildTrack({ encoded: `e${i}`, info: { title: `T${i}` } } as any, 'user')))
+    await player.queue.add(Array(5).fill(0).map((_, i) => manager.utils.buildTrack({ encoded: `e${i}`, info: { title: `T${i}` } } as any, 'user')))
     
     await player.queue.remove(0)
     expect(player.queue.tracks.length).toBe(4)

@@ -90,7 +90,7 @@ describe('RyanlinkManager Comprehensive', () => {
     expect(connectSpy).not.toHaveBeenCalled()
 
     // Add track and disconnect (should reconnect)
-    player.queue.add({ encoded: 'e' } as any)
+    await player.queue.add(manager.utils.buildTrack({ encoded: 'e2', info: { title: 'T2' } } as any, 'u'))
     await manager.provideVoiceUpdate({ 
       t: 'VOICE_STATE_UPDATE', 
       d: { guild_id: 'recon1', channel_id: null, user_id: 'bot123', session_id: 's1' } 

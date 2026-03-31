@@ -135,7 +135,6 @@ export const BuiltinSources = {
   LavaSrc: 'source-engine',
   GoogleCloudTTS: 'tts-engine',
   LavaSearch: 'search-engine',
-  JioSaavn_Engine: 'jio-engine',
   Filter_Engine: 'filter-engine',
   TimedLyrics_Engine: 'lyrics-engine',
 }

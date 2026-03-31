@@ -114,7 +114,7 @@ describe('RyanlinkNode', () => {
     const player = manager.createPlayer({ guildId: 'te2', voiceChannelId: 'v1' })
     const track = manager.utils.buildTrack({ encoded: 'e', info: { title: 'T' } } as any, 'u')
     player.queue.current = track
-    player.queue.add(manager.utils.buildTrack({ encoded: 'e2', info: { title: 'T2' } } as any, 'u'))
+    await player.queue.add(manager.utils.buildTrack({ encoded: 'e2', info: { title: 'T2' } } as any, 'u'))
 
     const promise = once(manager, 'trackEnd')
     // @ts-ignore

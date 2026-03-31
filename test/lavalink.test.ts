@@ -120,7 +120,7 @@ describe('Lavalink', () => {
     })
 
     it('has all expected plugin keys', () => {
-      const keys = ['DuncteBot_Plugin', 'LavaSrc', 'GoogleCloudTTS', 'LavaSearch', 'JioSaavn_Engine', 'Filter_Engine', 'TimedLyrics_Engine']
+      const keys = ['DuncteBot_Plugin', 'LavaSrc', 'GoogleCloudTTS', 'LavaSearch', 'Filter_Engine', 'TimedLyrics_Engine']
       for (const key of keys) {
         expect(BuiltinSources).toHaveProperty(key)
       }

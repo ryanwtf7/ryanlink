@@ -1,7 +1,8 @@
 import type { ManagerQueueOptions, QueueChangesWatcher, QueueStoreManager, StoredQueue } from '../types/Queue'
 import type { Track, UnresolvedTrack } from '../types/Track'
 import { RyanlinkUtils, MiniMap, AudioQueueSymbol } from '../utils/Utils'
-import { MemoryQueueStore } from './QueueStore'
+import { MemoryQueueStore, DefaultQueueStore } from './QueueStore'
+export { MemoryQueueStore, DefaultQueueStore };
 
 export class QueueSaver {
   private _: QueueStoreManager

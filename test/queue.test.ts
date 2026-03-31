@@ -52,30 +52,30 @@ describe('DefaultQueueStore', () => {
     store = new DefaultQueueStore()
   })
 
-  it('get returns undefined for unknown guild', () => {
-    expect(store.get('unknown')).toBeUndefined()
+  it('get returns undefined for unknown guild', async () => {
+    expect(await store.get('unknown')).toBeUndefined()
   })
 
-  it('set and get round-trip', () => {
+  it('set and get round-trip', async () => {
     const data: any = { current: null, previous: [], tracks: [] }
-    store.set('g1', data)
-    expect(store.get('g1')).toEqual(data)
+    await store.set('g1', data)
+    expect(await store.get('g1')).toEqual(data)
   })
 
-  it('delete removes entry', () => {
-    store.set('g1', { current: null, previous: [], tracks: [] } as any)
-    store.delete('g1')
-    expect(store.get('g1')).toBeUndefined()
+  it('delete removes entry', async () => {
+    await store.set('g1', { current: null, previous: [], tracks: [] } as any)
+    await store.delete('g1')
+    expect(await store.get('g1')).toBeUndefined()
   })
 
-  it('stringify returns value as-is', () => {
+  it('stringify returns stringified value', async () => {
     const val: any = { current: null, previous: [], tracks: [] }
-    expect(store.stringify(val)).toBe(val)
+    expect(await store.stringify(val)).toBe(JSON.stringify(val))
   })
 
-  it('parse returns value as-is', () => {
+  it('parse returns value as-is', async () => {
     const val: any = { current: null, previous: [], tracks: [] }
-    expect(store.parse(val)).toBe(val)
+    expect(await store.parse(val)).toBe(val)
   })
 })
 

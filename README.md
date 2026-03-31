@@ -26,6 +26,7 @@
 ### Key Features
 
 - **Lavalink v4 Protocol** - Full support for the latest lavalink features, filters, and SponsorBlock.
+- **Cross-Platform Sources** - Built-in support for 20+ platforms including **Spotify**, **Apple Music**, **JioSaavn**, and more.
 - **Cross-Runtime Ready** - Optimized for **Node.js**, **Bun**, and **Deno**.
 - **Advanced Queue Persistence** - Built-in drivers for **Redis**, **Local Disk**, and **In-Memory** storage.
 - **High-Performance Audio** - Native fetch, efficient memory management, and parallel track loading.
@@ -45,6 +46,19 @@ Introduces a **Proactive Smart Layer** that reduces developer boilerplate by aut
 - **TrackRegistry** — Memory-optimized reference mapping for handling massive queues (10k+ tracks) with minimal RAM overhead.
 - **Self-Healing Resolution** — Automated retry logic for unresolved tracks, ensuring playback stability even with flaky external sources.
 - **Smart Context Hooks** — Integrated `onTrackStart`, `onQueueEnd`, and `onNodeFailover` hooks for rapid, reliable development.
+
+---
+
+## Supported Platforms
+
+Ryanlink provides industry-leading coverage with support for all major audio platforms and streaming services:
+
+| Category | Supported Platforms |
+| :--- | :--- |
+| **Premium Streaming** | Spotify, Apple Music, Deezer, Tidal, Amazon Music, Yandex Music, Qobuz |
+| **Social & Video** | YouTube, YouTube Music, SoundCloud, Instagram, TikTok, Twitch, Vimeo, Bilibili |
+| **Regional & Radio** | JioSaavn, Gaana, VK Music, Audiomack, Pandora, Last.fm, Mixcloud, Radiohost |
+| **Other** | Bandcamp, Local Files, HTTP/Stream links, Flowery TTS, Google Cloud TTS |
 
 ---
 
@@ -152,9 +166,18 @@ const player = client.ryanlink.createPlayer({
 
 ### Audio Filters
 
-```
+```typescript
+// Apply Professional EQ Presets
+await player.filterManager.setPreset('BassBoost') // or 'Pop', 'Electronic', etc.
 
----
+// Apply Immersive DSP Presets
+await player.filterManager.setPreset('8D') // 360° Rotation
+await player.filterManager.setPreset('Lofi') // Chill, Low-Fi vibes
+await player.filterManager.setPreset('Radio') // Broadcast simulation
+
+// Reset all filters atomically
+await player.filterManager.setPreset('Clear')
+```
 
 ## Library Metadata
 
@@ -162,7 +185,6 @@ The following technical specifications define the current stable branch of **Rya
 
 | Metadata | Value |
 | :--- | :--- |
-| **Engine Version** | `2.0.1` |
 | **License** | `Apache-2.0` |
 | **TypeScript** | `5.4+` |
 | **Runtime** | Node.js, Bun, Deno |

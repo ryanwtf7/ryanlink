@@ -341,7 +341,7 @@ export class RyanlinkUtils {
       throw new Error("Query / Link Provided for this Source but Audio Node has not 'yandexmusic' enabled")
     }
     if (LinkMatchers.jiosaavn.test(queryString) && !node.info?.sourceManagers?.includes('jiosaavn')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'jiosaavn' (via jio-engine) enabled")
+      throw new Error("Query / Link Provided for this Source but Audio Node has not 'jiosaavn' enabled")
     }
     if (LinkMatchers.tidal.test(queryString) && !node.info?.sourceManagers?.includes('tidal')) {
       throw new Error("Query / Link Provided for this Source but Audio Node has not 'tidal' enabled")
@@ -449,10 +449,10 @@ export class RyanlinkUtils {
       throw new Error("Audio Node has not 'http' enabled, which is required to have 'dzisrc' to work")
     }
     if (source === 'jsrec' && !node.info?.sourceManagers?.includes('jiosaavn')) {
-      throw new Error("Audio Node has not 'jiosaavn' (via jio-engine) enabled, which is required to have 'jsrec' to work")
+      throw new Error("Audio Node has not 'jiosaavn' enabled, which is required to have 'jsrec' to work")
     }
     if (source === 'jssearch' && !node.info?.sourceManagers?.includes('jiosaavn')) {
-      throw new Error("Audio Node has not 'jiosaavn' (via jio-engine) enabled, which is required to have 'jssearch' to work")
+      throw new Error("Audio Node has not 'jiosaavn' enabled, which is required to have 'jssearch' to work")
     }
     if (source === 'scsearch' && !node.info?.sourceManagers?.includes('soundcloud')) {
       throw new Error("Audio Node has not 'soundcloud' enabled, which is required to have 'scsearch' work")

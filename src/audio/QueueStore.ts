@@ -117,3 +117,5 @@ export class RedisQueueStore implements QueueStoreManager {
     }
   }
 }
+
+export { MemoryQueueStore as DefaultQueueStore }
