@@ -587,8 +587,6 @@ export class Player {
     let error = null
     let tracks = []
 
-    if (this.RyanlinkManager.options.advancedOptions.debugOptions.logCustomSearches)
-      console.log(`Audio-Debug | SEARCHING | - ${query} on ryanlink`)
     this.RyanlinkManager.utils.validateQueryString(this.node, query)
 
     try {
@@ -804,8 +802,9 @@ export class Player {
   }
 
   public async destroy(reason?: DestroyReasons | string, disconnect: boolean = true) {
-    if (this.RyanlinkManager.options.advancedOptions?.debugOptions.playerDestroy.debugLog)
-      console.log(`Audio-Debug | PlayerDestroy [::] destroy Function, [guildId ${this.guildId}] - Destroy-Reason: ${String(reason)}`)
+    if (this.RyanlinkManager.options.advancedOptions?.debugOptions.playerDestroy.debugLog) {
+      // Audio-Debug removed
+    }
 
     if (this.getData('internal_queueempty')) {
       clearTimeout(this.getData('internal_queueempty'))
@@ -819,8 +818,9 @@ export class Player {
         functionLayer: 'Player > destroy()',
       })
 
-      if (this.RyanlinkManager.options.advancedOptions?.debugOptions.playerDestroy.debugLog)
-        console.log(`Audio-Debug | PlayerDestroy [::] destroy Function, [guildId ${this.guildId}] - Already destroying somewhere else..`)
+      if (this.RyanlinkManager.options.advancedOptions?.debugOptions.playerDestroy.debugLog) {
+        // Audio-Debug removed
+      }
       return
     }
     this.setData('internal_destroystatus', true)
@@ -834,8 +834,9 @@ export class Player {
 
     await this.node.destroyPlayer(this.guildId)
 
-    if (this.RyanlinkManager.options.advancedOptions?.debugOptions.playerDestroy.debugLog)
-      console.log(`Audio-Debug | PlayerDestroy [::] destroy Function, [guildId ${this.guildId}] - Player got destroyed successfully`)
+    if (this.RyanlinkManager.options.advancedOptions?.debugOptions.playerDestroy.debugLog) {
+      // Audio-Debug removed
+    }
 
     this.RyanlinkManager.emit('playerDestroy', this, reason)
 

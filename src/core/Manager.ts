@@ -196,8 +196,6 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     this.emit('debug', name, eventData)
   }
 
-  private static readonly _noAudioDebugPrefix = 'Audio-Debug | NO-AUDIO [::] provideVoiceUpdate function, '
-
   private _debugNoAudio(
     state: 'log' | 'warn' | 'error',
     functionLayer: string,
@@ -205,9 +203,8 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     ...consoleArgs: unknown[]
   ): void {
     this.dispatchDebug(DebugEvents.NoAudioDebug, { state, functionLayer, message: messages.message })
-    if (this.options?.advancedOptions?.debugOptions?.noAudio === true) {
-      const consoleMsg = messages.consoleMessage ?? messages.message
-      console.debug(RyanlinkManager._noAudioDebugPrefix + consoleMsg, ...consoleArgs)
+    if (this.options?.advancedOptions?.debugOptions?.noAudio) {
+      // Audio-Debug removed
     }
   }
 
@@ -464,7 +461,7 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
       if (update.user_id !== this.options?.client.id) {
         if (update.user_id && player.voiceChannelId) {
           this.emit(update.channel_id === player.voiceChannelId ? 'playerVoiceJoin' : 'playerVoiceLeave', player, update.user_id)
-          
+
           if (update.channel_id !== player.voiceChannelId) {
             const users = this.getVoiceStateUsers(player.guildId, player.voiceChannelId)
             if (users.length <= 1) {
@@ -473,14 +470,14 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
                 return
               } else if (player.options.autoPause && !player.paused) {
                 player.setData('internal_autoPaused', true)
-                player.pause().catch(() => {})
+                player.pause().catch(() => { })
               }
             }
           } else {
             // User joined the channel
             if (player.options.autoPause && player.paused && player.getData('internal_autoPaused')) {
               player.setData('internal_autoPaused', undefined)
-              player.resume().catch(() => {})
+              player.resume().catch(() => { })
             }
           }
         }
@@ -502,16 +499,16 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
 
       if (update.channel_id) {
         if (player.voiceChannelId !== update.channel_id) {
-           this.emit('playerMove', player, player.voiceChannelId, update.channel_id)
-           const users = this.getVoiceStateUsers(player.guildId, update.channel_id)
-           if (users.length <= 1) {
-             if (player.options.smartLeave) {
-               player.destroy('Destroyed due to empty channel (smartLeave)')
-               return
-             } else if (player.options.autoPause && !player.paused) {
-               player.pause().catch(() => {})
-             }
-           }
+          this.emit('playerMove', player, player.voiceChannelId, update.channel_id)
+          const users = this.getVoiceStateUsers(player.guildId, update.channel_id)
+          if (users.length <= 1) {
+            if (player.options.smartLeave) {
+              player.destroy('Destroyed due to empty channel (smartLeave)')
+              return
+            } else if (player.options.autoPause && !player.paused) {
+              player.pause().catch(() => { })
+            }
+          }
         }
 
         player.voice.sessionId = update.session_id || player.voice.sessionId
