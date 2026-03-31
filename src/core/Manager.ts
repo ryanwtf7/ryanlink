@@ -7,8 +7,10 @@ import { MemoryQueueStore } from '../audio/QueueStore'
 import type { BotClientOptions, DeepRequired, ManagerEvents, RyanConfiguration, RequiredManagerOptions } from '../types/Manager'
 import type { NodeConfiguration } from '../types/Node'
 import type { PlayerOptions } from '../types/Player'
-import type { ChannelDeletePacket, VoicePacket, VoiceServer, VoiceState } from '../types/Utils'
+import type { ChannelDeletePacket, VoicePacket, VoiceServer, VoiceState, SearchQuery, SearchResult } from '../types/Utils'
 import { RyanlinkUtils, MiniMap, safeStringify } from '../utils/Utils'
+import type { RyanlinkNode } from '../node/Node'
+import type { NodeLinkNode } from '../node/NodeLink'
 export class RyanlinkManager<CustomPlayerT extends Player = Player> extends EventEmitter {
   emit<Event extends keyof ManagerEvents<CustomPlayerT>>(
     event: Event,
@@ -235,13 +237,27 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     return newPlayer
   }
 
-  public async search(query: import('../types/Utils').SearchQuery | string, requestUser?: unknown, throwOnEmpty: boolean = false): Promise<import('../types/Utils').SearchResult> {
+  /**
+   * Search for tracks across multiple sources directly via Lavalink.
+   * @param query The search query or link.
+   * @param requestUser The user who requested the search.
+   * @param node Optional node to use for the search.
+   * @param throwOnEmpty Whether to throw an error if no results are found.
+   */
+  public async search(
+    query: SearchQuery,
+    requestUser?: unknown,
+    node?: RyanlinkNode | NodeLinkNode,
+    throwOnEmpty: boolean = false
+  ): Promise<SearchResult> {
     const Query = this.utils.transformQuery(query)
-    const least = this.nodeManager.leastUsedNodes('weighted')
-    const node = least[0]
-    if (!node) throw new Error('No available Node was found to perform the search.')
+    const targetNode = node || this.nodeManager.leastUsedNodes('players')[0]
 
-    return node.search(Query, requestUser, throwOnEmpty)
+    if (!targetNode || !targetNode.connected) {
+      throw new Error('No nodes are available / connected to perform a search.')
+    }
+
+    return targetNode.search(Query, requestUser, throwOnEmpty)
   }
 
   public destroyPlayer(guildId: string, destroyReason?: string): Promise<void | CustomPlayerT> {

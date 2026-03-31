@@ -70,13 +70,31 @@ jobs:
           git push origin master
           git push origin "v${{ steps.version.outputs.new_version }}"
 
+      - name: Create Changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG=$(git log --oneline -n 10)
+          else
+            CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --oneline)
+          fi
+          # Escape for multiline output
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.new_version }}
           name: Release v${{ steps.version.outputs.new_version }}
           body: |
-            Release v${{ steps.version.outputs.new_version }}
+            ## Release v${{ steps.version.outputs.new_version }}
+            
+            ### Changes
+            ${{ steps.changelog.outputs.changelog }}
 
             ## Installation
 
@@ -89,3 +107,32 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Discord Notification
+        if: success()
+        run: |
+          if [ -z "${{ secrets.WEBHOOK }}" ]; then
+            echo "Skipping Discord notification (WEBHOOK not set)"
+            exit 0
+          fi
+          
+          PAYLOAD=$(cat <<EOF
+          {
+            "username": "Ryanlink CI",
+            "avatar_url": "https://raw.githubusercontent.com/ryanwtf7/ryanlink/master/docs/assets/ryanlink.png",
+            "embeds": [{
+              "title": "📦 Ryanlink v${{ steps.version.outputs.new_version }} Published",
+              "description": "**Successfully deployed to master and NPM.**\n\n### Changes\n\`\`\`\n${{ steps.changelog.outputs.changelog }}\n\`\`\`",
+              "color": 54015,
+              "fields": [
+                { "name": "NPM", "value": "[ryanlink@${{ steps.version.outputs.new_version }}](https://www.npmjs.com/package/ryanlink/v/${{ steps.version.outputs.new_version }})", "inline": true },
+                { "name": "Release", "value": "[View on GitHub](https://github.com/ryanwtf7/ryanlink/releases/tag/v${{ steps.version.outputs.new_version }})", "inline": true }
+              ],
+              "footer": { "text": "Automatic Release Workflow" },
+              "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            }]
+          }
+          EOF
+          )
+          
+          curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "${{ secrets.WEBHOOK }}"

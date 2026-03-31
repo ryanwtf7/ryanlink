@@ -5,7 +5,7 @@ description: Deep-dive into Ryanlink's proactive state management and high-avail
 
 import { Card, CardGrid, Steps, Badge } from '@astrojs/starlight/components';
 
-**Ryanlink** is powered by a proactive "Smart Layer" designed to handle the complexities of Discord audio automatically. This architecture ensures that your users experience zero-jitter playback and consistent sessions, even during node failures or bot restarts.
+**Ryanlink** is powered by an intelligent core infrastructure designed to handle the complexities of Discord audio automatically. This architecture ensures that your users experience zero-jitter playback and consistent sessions, even during node failures or bot restarts.
 
 ## Core Pillars
 
@@ -48,7 +48,7 @@ Load balancing is not just about player counts; it's about node health.
 
 ---
 
-## Lifecycle Hooks <Badge text="New in 2.0" variant="tip" />
+## Lifecycle Hooks
 
 You can now respond to engine-level events directly within the player options:
 
@@ -68,4 +68,4 @@ const player = manager.createPlayer({
 ---
 
 > [!TIP]
-> The  is enabled by default. To customize persistence, explore the `QueueStore` drivers in the configuration section.
+> **Persistence is enabled by default**. To customize storage behavior, explore the `QueueStore` drivers in the configuration section.

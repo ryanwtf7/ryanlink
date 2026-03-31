@@ -18,5 +18,50 @@ jobs:
       - name: Install dependencies and build
         run: bun install --no-frozen-lockfile --save-dev pkg-pr-new
 
+      - name: Create Changelog
+        id: changelog
+        run: |
+          # Get the last 10 commits for context
+          CHANGELOG=$(git log --oneline -n 10)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Publish
-        run: bun --yes pkg-pr-new publish
+        id: publish
+        run: |
+          # Capture output to extract the preview version/url
+          OUTPUT=$(bun --yes pkg-pr-new publish)
+          echo "$OUTPUT"
+          
+          # Extract version from output if possible
+          VERSION=$(echo "$OUTPUT" | grep -oE "ryanlink@[^ ]+" | head -n 1 | sed 's/ryanlink@//' || echo "preview")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Discord Notification
+        if: success()
+        run: |
+          if [ -z "${{ secrets.WEBHOOK }}" ]; then
+            echo "Skipping Discord notification (WEBHOOK not set)"
+            exit 0
+          fi
+          
+          PAYLOAD=$(cat <<EOF
+          {
+            "username": "Ryanlink CI",
+            "avatar_url": "https://raw.githubusercontent.com/ryanwtf7/ryanlink/master/docs/assets/ryanlink.png",
+            "embeds": [{
+              "title": "🧪 Ryanlink Preview v${{ steps.publish.outputs.version }}",
+              "description": "**New commit(s) published for testing.**\n\n### Latest Changes\n\`\`\`\n${{ steps.changelog.outputs.changelog }}\n\`\`\`",
+              "color": 3447003,
+              "fields": [
+                { "name": "Install Command", "value": "\`npm install ryanlink@${{ steps.publish.outputs.version }}\`", "inline": false }
+              ],
+              "footer": { "text": "Preview Deployment Workflow" },
+              "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            }]
+          }
+          EOF
+          )
+          
+          curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "${{ secrets.WEBHOOK }}"

@@ -69,9 +69,44 @@ manager.nodeManager.on('connect', (node) => {
   console.log(`Node #${node.id} is connected.`);
 });
 
-manager.on('nodeFailover', (player, oldNode, newNode) => {
-  console.log(`Atomic Migration complete for guild ${player.guildId}.`);
 });
+```
+
+---
+
+## Global Search (Intelligent)
+
+Search for tracks across multiple platforms without creating a player. Ryanlink handles the node selection and source prefixes automatically.
+
+```typescript
+// Search with an explicit platform
+const result = await manager.search('spsearch:lofi girl', interaction.user);
+
+// Search with a direct URL (Spotify, YT, SoundCloud, etc.)
+const urlResult = await manager.search('https://open.spotify.com/track/abc', interaction.user);
+
+console.log(`Found ${result.tracks.length} tracks.`);
+```
+
+---
+
+## High-Fidelity Filters
+
+Ryanlink supports non-destructive filter stacking with atomic updates.
+
+```typescript
+const player = manager.createPlayer({ guildId: '...' });
+
+// Stack multiple filters for a unique sound
+await player.filterManager.setFilters({
+  nightcore: true,
+  vaporwave: true,
+  eightD: true
+});
+
+// Or use professional presets
+await player.filterManager.setLofi();
+await player.filterManager.setRadio();
 ```
 
 ---

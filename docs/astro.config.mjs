@@ -78,7 +78,7 @@ export default defineConfig({
         },
         {
           label: 'API Reference',
-          collapsed: true,
+          collapsed: false,
           items: [
             { label: 'RyanlinkManager', autogenerate: { directory: 'api/core/Manager/classes' } },
             { label: 'Player', autogenerate: { directory: 'api/audio/Player/classes' } },
@@ -90,9 +90,16 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Types & Interfaces',
+          label: 'Data Structures (Types)',
           collapsed: true,
-          autogenerate: { directory: 'api/types' },
+          items: [
+            { label: 'Manager Types', autogenerate: { directory: 'api/types/Manager' } },
+            { label: 'Player Types', autogenerate: { directory: 'api/types/Player' } },
+            { label: 'Node Types', autogenerate: { directory: 'api/types/Node' } },
+            { label: 'Track Types', autogenerate: { directory: 'api/types/Track' } },
+            { label: 'Filter Types', autogenerate: { directory: 'api/types/Filters' } },
+            { label: 'Utility Types', autogenerate: { directory: 'api/types/Utils' } },
+          ],
         },
         {
           label: 'Enums & Utilities',
@@ -101,10 +108,12 @@ export default defineConfig({
             { label: 'Manager Events', link: '/extra/manager-events' },
             { label: 'Node Events', link: '/extra/node-events' },
             { label: 'Search Prefixes', link: '/extra/search-platforms' },
-            { label: 'All Enums', items: [
+            {
+              label: 'All Enums', items: [
                 { label: 'Constants', autogenerate: { directory: 'api/config/Constants/enumerations' } },
                 { label: 'Node Types', autogenerate: { directory: 'api/types/Node/enumerations' } },
-            ] },
+              ]
+            },
           ],
         },
         {

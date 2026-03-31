@@ -5,13 +5,13 @@ description: High-performance, flexible and feature-rich lavalink-v4 wrapper for
 
 import { Badge } from '@astrojs/starlight/components'
 
-###  <Badge text="2.0" variant="tip" />
+### Core Capabilities
 - **Zero-Config Persistence** <Badge text="Reliable" variant="success" />
   - Automated state recovery for queues and playback positions across restarts.
   - Built-in drivers for **Redis**, **Local Disk**, and **In-Memory** storage.
-- **Atomic Migration** <Badge text="Seamless" variant="note" />
-  - Automated node failover with zero-interruption playback during disconnections.
-  - Weighted load balancing scoring (CPU, Memory, Frame Deficit).
+- **Node Management & Search** <Badge text="Intelligent" variant="note" />
+  - Global `manager.search()` handles multiple sources (Spotify, YT, SC) automatically.
+  - Least-busy node selection for optimized search performance and load balancing.
 
 ### Performance & Memory
 - **Memory-Optimized TrackRegistry** <Badge text="Efficient" variant="caution" />

@@ -29,10 +29,10 @@ export type SourceSearchPlatformBase =
   | 'qbrec'
   | 'pdsearch'
   | 'pdisrc'
+  | 'jssearch'
+  | 'jsrec'
   | 'pdrec'
-export type SourceSearchPlatform = SourceSearchPlatformBase | 'ftts'
-
-export type JioSaavnSearchPlatform = 'jssearch' | 'jsrec'
+  | 'ftts'
 
 export type DuncteSearchPlatform = 'speak' | 'phsearch' | 'pornhub' | 'porn' | 'tts'
 
@@ -56,9 +56,8 @@ export type RyanlinkSearchPlatform =
   | 'ytmsearch'
   | 'scsearch'
   | 'bcsearch'
-  | SourceSearchPlatform
+  | SourceSearchPlatformBase
   | DuncteSearchPlatform
-  | JioSaavnSearchPlatform
   | ExtendedSearchPlatform
   | AudioClientSearchPlatform
 
