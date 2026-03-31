@@ -237,6 +237,19 @@ export class Queue {
     return this.tracks.length
   }
 
+  public async clear() {
+    const oldStored = typeof this.queueChanges?.tracksRemoved === 'function' ? this.utils.toJSON() : null
+    const removed = this.tracks.splice(0, this.tracks.length)
+
+    if (typeof this.queueChanges?.tracksRemoved === 'function')
+      try {
+        this.queueChanges.tracksRemoved(this.guildId, removed, 0, oldStored, this.utils.toJSON())
+      } catch {}
+
+    await this.utils.save()
+    return removed.length
+  }
+
   public async add(TrackOrTracks: Track | UnresolvedTrack | (Track | UnresolvedTrack)[], index?: number) {
     if (typeof index === 'number' && index >= 0 && index < this.tracks.length) {
       return await this.splice(
