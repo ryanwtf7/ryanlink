@@ -2,6 +2,38 @@ import { RyanlinkManager } from '../src/core/Manager'
 import { LavalinkMock } from './mocks/LavalinkMock'
 import { queueTrackEnd, applyUnresolvedData } from '../src/utils/Utils'
 
+jest.mock('ws', () => {
+  const { EventEmitter } = require('node:events')
+  class MockWebSocket extends EventEmitter {
+    public static OPEN = 1
+    public static CLOSED = 3
+    public readyState = 0
+    constructor(public url: string, public options: any) {
+      super()
+      setTimeout(() => {
+        this.readyState = 1
+        this.emit('open')
+        setTimeout(() => {
+          this.emit('message', JSON.stringify({
+            op: 'ready',
+            sessionId: 'mock-session',
+            resumed: false,
+            info: { version: { semver: '4.0.0' }, plugins: [], sourceManagers: ['youtube', 'soundcloud'] }
+          }))
+        }, 5)
+      }, 5)
+    }
+    send = jest.fn()
+    close = jest.fn(function(this: any, code: number, reason: string) {
+      this.readyState = 3
+      this.emit('close', code, reason)
+    })
+    terminate = jest.fn(function(this: any) { this.close(1006, 'term') })
+    ping = jest.fn(function(this: any) { this.emit('pong') })
+  }
+  return { __esModule: true, default: MockWebSocket, WebSocket: MockWebSocket }
+})
+
 describe('RyanlinkUtils Expanded', () => {
   let manager: RyanlinkManager
 
@@ -16,16 +48,19 @@ describe('RyanlinkUtils Expanded', () => {
         allowCustomSources: false
       }
     })
+    manager.nodeManager.on('error', () => {})
     await manager.init({ id: 'bot123' })
+    await new Promise((r) => setTimeout(r, 50))
     const node = manager.nodeManager.nodes.get('local')!
     node.sessionId = 'sess123'
-    // @ts-ignore
-    node.socket = { readyState: 1, on: jest.fn(), send: jest.fn(), close: jest.fn(), removeAllListeners: jest.fn() } as any // Mark as connected
   })
 
   afterEach(() => {
     jest.restoreAllMocks()
     LavalinkMock.clearResponses()
+    for (const node of manager.nodeManager.nodes.values()) {
+      try { node.destroy(undefined, false) } catch {}
+    }
   })
 
   it('validateSourceString throws on missing sourceManagers', async () => {
