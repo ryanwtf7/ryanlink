@@ -31,6 +31,7 @@ jobs:
         with:
           path: ./docs
           package-manager: bun
+          node-version: '22'
 
   deploy:
     needs: build
