@@ -25,7 +25,11 @@ import { Steps } from '@astrojs/starlight/components';
        autoChecks: { pluginValidations: false, sourcesValidations: false },
      }],
      sendToShard: (guildId, payload) => {
-       client.guilds.cache.get(guildId)?.shard.send(payload);
+       // For sharded bots: calculate correct shard from guildId
+       const shardId = Number((BigInt(guildId) >> 22n) % BigInt(client.options.shardCount || 1));
+       const shard = client.ws.shards.get(shardId);
+       if (shard) shard.send(payload);
+       else client.guilds.cache.get(guildId)?.shard?.send(payload);
      },
      client: { id: process.env.CLIENT_ID! },
      resuming: { enabled: true, timeout: 60000 },
@@ -60,7 +64,15 @@ import { Steps } from '@astrojs/starlight/components';
      selfDeaf: true,
    });
 
-   if (!player.connected) await player.connect();
+   if (!player.connected) {
+     await player.connect();
+     // Wait until Lavalink has received the voice server update
+     // (player.voice.token + sessionId are set once VOICE_SERVER_UPDATE is processed)
+     for (let i = 0; i < 50; i++) {
+       if (player.voice?.token && player.voice?.sessionId) break;
+       await new Promise(r => setTimeout(r, 100));
+     }
+   }
 
    const result = await manager.search({ query: 'never gonna give you up', source: 'ytsearch' }, interaction.user);
 

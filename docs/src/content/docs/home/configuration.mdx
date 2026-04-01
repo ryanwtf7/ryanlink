@@ -32,7 +32,11 @@ const manager = new RyanlinkManager({
     }
   ],
   sendToShard: (guildId, payload) => {
-    client.guilds.cache.get(guildId)?.shard.send(payload);
+    // For sharded bots: calculate the correct shard from guildId
+    const shardId = Number((BigInt(guildId) >> 22n) % BigInt(client.options.shardCount || 1));
+    const shard = client.ws.shards.get(shardId);
+    if (shard) shard.send(payload);
+    else client.guilds.cache.get(guildId)?.shard?.send(payload); // fallback
   },
   client: {
     id: 'your-bot-id',
@@ -84,14 +88,19 @@ const manager = new RyanlinkManager({
     },
 
     minAutoPlayMs: 0,
+    enforceSponsorBlockRequestForEventEnablement: true, // auto-call setSponsorBlock on player connect/changeNode
   },
 
   // ── Queue ─────────────────────────────────────────────────────────────────
   queueOptions: {
     maxPreviousTracks: 25,
     // Built-in stores: MemoryQueueStore (default), LocalDiskQueueStore, RedisQueueStore
-    queueStore: new MemoryQueueStore(),
+    queueStore: new LocalDiskQueueStore('./.ryanlink/queues'),
     queueChangesWatcher: null,
+    resuming: {
+      enabled: true,   // auto-sync queue from store on player init
+      timeout: 60000,
+    },
   },
 
   // ── Links ─────────────────────────────────────────────────────────────────

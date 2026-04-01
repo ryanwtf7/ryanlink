@@ -39,7 +39,7 @@ The `RyanlinkManager` emits events throughout the lifecycle of nodes and players
 | Event | Signature | Description |
 | :--- | :--- | :--- |
 | `playerUpdate` | `(oldJson, player)` | Node sent a position/ping update. |
-| `playerClientUpdate` | `(oldJson, player)` | Client-side position update (every `clientBasedPositionUpdateInterval` ms). |
+| `playerClientUpdate` | `(oldJson, player)` | Client-side state change (pause, resume, seek, volume, filters). Fired by `player.syncState()`. |
 | `playerPaused` | `(player, track)` | Playback paused. |
 | `playerResumed` | `(player, track)` | Playback resumed. |
 | `playerMuteChange` | `(player, selfMuted, serverMuted)` | Bot mute state changed. |

@@ -84,17 +84,42 @@ const manager = new RyanlinkManager({
 });
 ```
 
-Ryanlink also ships `LocalDiskQueueStore` and `RedisQueueStore` built-in:
+Ryanlink ships three built-in `QueueStore` implementations:
 
 ```typescript
 import { MemoryQueueStore, LocalDiskQueueStore, RedisQueueStore } from 'ryanlink';
 
-// Local disk (persists across restarts)
-new LocalDiskQueueStore('./sessions');
+// In-memory (default) — no persistence across restarts
+new MemoryQueueStore()
 
-// Redis (for sharded/clustered bots)
-new RedisQueueStore(redisClient, 'mybot:queue:');
+// Local disk — persists queue to JSON files, survives bot restarts
+new LocalDiskQueueStore('./sessions')
+
+// Redis — for sharded/clustered bots
+new RedisQueueStore(redisClient, 'mybot:queue:')
 ```
+
+### Recommended: Disk Persistence
+
+For bots that need queue state to survive restarts, use `LocalDiskQueueStore` with `queueOptions.resuming` enabled:
+
+```typescript
+import { LocalDiskQueueStore } from 'ryanlink';
+
+const manager = new RyanlinkManager({
+  resuming: { enabled: true, timeout: 60000 },
+  queueOptions: {
+    maxPreviousTracks: 25,
+    queueStore: new LocalDiskQueueStore('./.ryanlink/queues'),
+    resuming: {
+      enabled: true,
+      timeout: 60000,
+    },
+  },
+});
+```
+
+When `queueOptions.resuming.enabled` is `true`, the `Queue` constructor automatically calls `utils.sync()` on init, restoring tracks from disk. Combined with `player.autoResume()` (called automatically when `resuming.enabled` is set), the player resumes from the last saved position.
 
 ---
 

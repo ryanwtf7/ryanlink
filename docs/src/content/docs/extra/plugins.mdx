@@ -28,16 +28,35 @@ Ryanlink integrates with all major Lavalink plugins. Plugin checks use the exact
 
 Automatically skip sponsor segments, intros, outros, and more in YouTube videos.
 
-### Methods
+SponsorBlock is **auto-configured** by Ryanlink on every player's first track start and on node reconnect. You do not need to call `setSponsorBlock` manually unless you want custom segments.
+
+### Auto-Configuration
+
+Ryanlink calls `player.setSponsorBlock(['sponsor', 'selfpromo'])` automatically when:
+- A track starts playing for the first time on a player
+- A node reconnects and existing players are restored
+- A player migrates to a new node (`changeNode`)
+
+Enable this behaviour by setting `enforceSponsorBlockRequestForEventEnablement: true` in your manager options (this is the default):
 
 ```typescript
-// Set categories to skip
+const manager = new RyanlinkManager({
+  playerOptions: {
+    enforceSponsorBlockRequestForEventEnablement: true,
+  }
+});
+```
+
+### Manual Control
+
+```typescript
+// Override with custom segments
 await player.setSponsorBlock(['sponsor', 'selfpromo', 'interaction', 'intro', 'outro', 'preview', 'music_offtopic', 'filler']);
 
-// Get current categories
+// Get current active segments
 const categories = await player.getSponsorBlock();
 
-// Remove all categories
+// Disable all segment skipping
 await player.deleteSponsorBlock();
 ```
 
