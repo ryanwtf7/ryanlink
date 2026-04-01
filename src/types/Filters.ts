@@ -19,6 +19,8 @@ export interface PlayerFilters {
 
   lowPass: boolean
 
+  distortion: boolean
+
   audioOutput: AudioOutputs
 
   nodeLinkEcho: boolean

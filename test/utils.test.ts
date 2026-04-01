@@ -9,12 +9,17 @@ describe('RyanlinkUtils', () => {
     manager = new RyanlinkManager({
       nodes: [{ host: 'localhost', port: 2333, authorization: 'pw', id: 'local' }],
       client: { id: '123', username: 'bot' },
-      sendToShard: vi.fn(),
+      sendToShard: jest.fn(),
     })
     utils = new RyanlinkUtils(manager)
     const node = manager.nodeManager.nodes.get('local')!
     // @ts-ignore
-    node.socket = { readyState: 1 } 
+    // @ts-ignore
+    node.socket = { readyState: 1, on: jest.fn(), send: jest.fn(), close: jest.fn(), removeAllListeners: jest.fn() } as any 
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   describe('parseConnectionUrl', () => {
@@ -73,7 +78,7 @@ describe('RyanlinkUtils', () => {
       const ut = utils.buildUnresolvedTrack({ title: 'test' }, { id: '1' })
       const player = manager.createPlayer({ guildId: '1', voiceChannelId: '1' })
       
-      vi.spyOn(player, 'search').mockResolvedValue({
+      jest.spyOn(player, 'search').mockResolvedValue({
         loadType: 'search',
         tracks: [{ encoded: 'enc', info: { title: 'Resolved', duration: 1000 } } as any],
         playlist: null,
@@ -134,7 +139,7 @@ describe('RyanlinkUtils', () => {
       const ut = utils.buildUnresolvedTrack({ title: 'T', author: 'A', isrc: 'I123' }, { id: '1' })
       const player = manager.createPlayer({ guildId: 'gc1', voiceChannelId: 'v1' })
       
-      const searchSpy = vi.spyOn(player, 'search').mockResolvedValue({
+      const searchSpy = jest.spyOn(player, 'search').mockResolvedValue({
         loadType: 'search',
         tracks: [{ encoded: 'e1', info: { title: 'Other', author: 'Other', isrc: 'I123', duration: 1000 } } as any]
       } as any)
@@ -148,7 +153,7 @@ describe('RyanlinkUtils', () => {
       const ut = utils.buildUnresolvedTrack({ title: 'Real Title', author: 'Real Author', duration: 1000 }, { id: '1' })
       const player = manager.createPlayer({ guildId: 'gc2', voiceChannelId: 'v1' })
       
-      vi.spyOn(player, 'search').mockResolvedValue({
+      jest.spyOn(player, 'search').mockResolvedValue({
         loadType: 'search',
         tracks: [
           { encoded: 'wrong', info: { title: 'Wrong', author: 'Auth', duration: 1000 } } as any,
@@ -164,7 +169,7 @@ describe('RyanlinkUtils', () => {
       const ut = utils.buildUnresolvedTrack({ title: 'T', author: 'A', duration: 5000 }, { id: '1' })
       const player = manager.createPlayer({ guildId: 'gc3', voiceChannelId: 'v1' })
       
-      vi.spyOn(player, 'search').mockResolvedValue({
+      jest.spyOn(player, 'search').mockResolvedValue({
         loadType: 'search',
         tracks: [
           { encoded: 'far', info: { title: 'Other', author: 'Other', duration: 10000 } } as any,
@@ -180,7 +185,7 @@ describe('RyanlinkUtils', () => {
       const ut = utils.buildUnresolvedTrack({ title: 'T', uri: 'https://uri.com' }, { id: '1' })
       const player = manager.createPlayer({ guildId: 'gc4', voiceChannelId: 'v1' })
       
-      const searchSpy = vi.spyOn(player, 'search').mockResolvedValue({
+      const searchSpy = jest.spyOn(player, 'search').mockResolvedValue({
         loadType: 'track',
         tracks: [{ encoded: 'e_uri', info: { title: 'T' } } as any]
       } as any)
@@ -195,7 +200,7 @@ describe('RyanlinkUtils', () => {
       const player = manager.createPlayer({ guildId: 'gc5', voiceChannelId: 'v1' })
       
       // @ts-ignore
-      const decodeSpy = vi.spyOn(player.node.decode, 'singleTrack').mockResolvedValue({ encoded: 'e64', info: { title: 'T' } } as any)
+      const decodeSpy = jest.spyOn(player.node.decode, 'singleTrack').mockResolvedValue({ encoded: 'e64', info: { title: 'T' } } as any)
 
       const result = await utils.getClosestTrack(ut, player)
       expect(result.encoded).toBe('e64')

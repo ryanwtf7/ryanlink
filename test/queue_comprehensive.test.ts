@@ -1,6 +1,44 @@
 import { RyanlinkManager } from '../src/core/Manager'
 import { LavalinkMock } from './mocks/LavalinkMock'
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
+
+jest.mock('ws', () => {
+  const { EventEmitter } = require('node:events')
+  class MockWebSocket extends EventEmitter {
+    public static OPEN = 1
+    public static CLOSED = 3
+    public readyState = 0
+    constructor(public url: string, public options: any) {
+       super()
+       setTimeout(() => {
+         this.readyState = 1
+         this.emit('open')
+         setTimeout(() => {
+           this.emit('message', JSON.stringify({ 
+             op: 'ready', 
+             sessionId: 'mock-session', 
+             resumed: false,
+             info: {
+               version: { semver: '4.0.0' },
+               plugins: []
+             }
+           }))
+         }, 5)
+       }, 5)
+    }
+    send = jest.fn()
+    close = jest.fn((code, reason) => { 
+      this.readyState = 3
+      this.emit('close', code, reason) 
+    })
+    terminate = jest.fn(() => this.close(1006, 'term'))
+    ping = jest.fn(() => this.emit('pong'))
+  }
+  return {
+    __esModule: true,
+    default: MockWebSocket,
+    WebSocket: MockWebSocket,
+  }
+})
 
 describe('Queue Comprehensive', () => {
   let manager: RyanlinkManager
@@ -13,16 +51,18 @@ describe('Queue Comprehensive', () => {
         host: 'localhost', id: 'local', port: 2333, authorization: 'pw',
         autoChecks: { sourcesValidations: true }
       }],
-      sendToShard: vi.fn(),
+      sendToShard: jest.fn(),
     })
     await manager.init({ id: 'bot123' })
     const node = manager.nodeManager.nodes.get('local')!
     // @ts-ignore
-    node.socket = { readyState: 1 }
+    node.socket = { readyState: 1, on: jest.fn(), send: jest.fn(), close: jest.fn(), removeAllListeners: jest.fn() } as any
+    // @ts-ignore
+    node.sessionId = 'node_sess'
   })
 
   afterEach(() => {
-    vi.restoreAllMocks()
+    jest.restoreAllMocks()
     LavalinkMock.clearResponses()
   })
 
@@ -34,9 +74,9 @@ describe('Queue Comprehensive', () => {
     // Set callback that throws
     // @ts-ignore
     player.queue.queueChanges = {
-      tracksRemoved: vi.fn().mockImplementation(() => { throw new Error('Callback Error') }),
-      tracksAdd: vi.fn(),
-      shuffled: vi.fn()
+      tracksRemoved: jest.fn().mockImplementation(() => { throw new Error('Callback Error') }),
+      tracksAdd: jest.fn(),
+      shuffled: jest.fn()
     }
 
     // Splice (removes track) - should not throw
@@ -53,9 +93,9 @@ describe('Queue Comprehensive', () => {
     
     // @ts-ignore
     player.queue.queueChanges = {
-      tracksRemoved: vi.fn().mockImplementation(() => { throw new Error('Callback Error') }),
-      tracksAdd: vi.fn(),
-      shuffled: vi.fn()
+      tracksRemoved: jest.fn().mockImplementation(() => { throw new Error('Callback Error') }),
+      tracksAdd: jest.fn(),
+      shuffled: jest.fn()
     }
 
     // Remove track - should not throw
@@ -141,9 +181,9 @@ describe('Queue Comprehensive', () => {
     
     // @ts-ignore
     player.queue.queueChanges = {
-      shuffled: vi.fn(),
-      tracksAdd: vi.fn(),
-      tracksRemoved: vi.fn()
+      shuffled: jest.fn(),
+      tracksAdd: jest.fn(),
+      tracksRemoved: jest.fn()
     }
 
     await player.queue.shuffle()

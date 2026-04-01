@@ -1,4 +1,5 @@
 import type { DebugEvents } from '../config/Constants'
+import type { AutoplayConfig } from '../audio/Player'
 import type { RyanlinkManager } from '../core/Manager'
 import type { Player } from '../audio/Player'
 
@@ -140,7 +141,7 @@ export interface ManagerPlayerOptions<CustomPlayerT extends Player = Player> {
     destroyAfterMs?: number
   }
 
-  autoplayConfig?: import('../audio/Player').AutoplayConfig
+  autoplayConfig?: AutoplayConfig
 
   useUnresolvedData?: boolean
 

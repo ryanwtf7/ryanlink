@@ -1,64 +1,149 @@
 ---
 title: Session Resuming
-description: How Ryanlink ensures zero-config state recovery across system restarts.
+description: How Ryanlink handles Lavalink session resuming and queue persistence.
 ---
 
-import { Steps, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-**Ryanlink** replaces traditional "manual resuming" with a proactive session persistence layer. Instead of just resuming the WebSocket connection, the engine can now recover full player states, queues, and playback positions across entire process restarts.
+Ryanlink supports two layers of persistence: **Lavalink session resuming** (reconnects the WebSocket with the same session ID so audio continues) and **queue persistence** (stores queue state so it survives bot restarts).
 
-## Automated Persistence
+## Lavalink Session Resuming
 
-When `resume: true` is enabled in your `RyanlinkManager` configuration, the engine automatically manages state recovery without any additional code.
+Enable session resuming in your manager config:
 
 ```typescript
 const manager = new RyanlinkManager({
-  // ... rest of your config ...
-  resume: true,               // Enable automated session persistence
-  resumeTimeout: 60,          // Retry window (seconds) for same-guild connections
-  trackResolveRetryLimit: 3,  // Self-healing for unresolved tracks
+  resuming: {
+    enabled: true,
+    timeout: 60000, // 60 seconds — Lavalink holds the session this long
+  },
 });
 ```
 
-### Supported Storage Drivers <Badge text="Scalable" variant="tip" />
-
-Ryanlink supports multiple backend drivers to store your queue data.
-
-| Driver | Best For | Requirement |
-| :--- | :--- | :--- |
-| **In-Memory** | Small bots | None (Default) |
-| **Local Disk** | Medium/Large bots | Accessible filesystem |
-| **Redis** | Clustered/Sharded bots | Redis server connection |
-
----
-
-## Technical Workflow
-
-### 1. Shadow Persistence
-Whenever you interact with the player (`play()`, `pause()`, `add()`, `shuffle()`), the **Shadow Listener** Proxy detects the change and asynchronously persists the new state to your chosen `QueueStore`.
-
-### 2. Zero-Config Recovery
-If your bot process crashes or restarts:
-1. Upon creating a new player (`manager.createPlayer()`), the engine checks the `QueueStore` for an existing session.
-2. If found, it automatically **re-hydrates** the player state.
-3. The track list is restored with its exact playback position.
-
-### 3. Millisecond-Precise Resuming
-When playback restarts, Ryanlink sends the exact `startTime` to the Lavalink node, ensuring that the music resumes from the precise millisecond where it was interrupted.
-
----
-
-## Manual Resuming (Advanced)
-
-If you need full control over the resumption process, you can manually provide a `sessionId` directly to your nodes:
+When the node reconnects, ryanlink automatically calls `node.updateSession(true, 60)`. On the `resumed` event, all player states are restored from Lavalink's server-side cache.
 
 ```typescript
-manager.nodes.add({
-  host: '...',
-  port: 2333,
-  sessionId: 'your-previous-session-id', // Optional: Manual resuming
+manager.nodeManager.on('resumed', (node, payload, players) => {
+  console.log(`Node ${node.id} resumed — ${players.length} players restored`);
+  console.log(`Session ID: ${payload.sessionId}`);
 });
 ```
 
-> [!TIP]
-> For production bots, we strongly recommend using the **Redis** driver to ensure state is shared across multiple shards or containers.
+### Manual Session ID
+
+If you need to resume a specific session manually, pass `sessionId` in the node config:
+
+```typescript
+nodes: [{
+  id: 'main',
+  host: 'localhost',
+  port: 2333,
+  authorization: 'youshallnotpass',
+  sessionId: 'your-previous-session-id',
+}]
+```
+
+---
+
+## Queue Persistence
+
+Ryanlink uses a `QueueStore` to persist queue state. The default is in-memory (no persistence across restarts).
+
+```typescript
+import { RyanlinkManager, MemoryQueueStore } from 'ryanlink';
+
+const manager = new RyanlinkManager({
+  queueOptions: {
+    queueStore: new MemoryQueueStore(), // default
+    maxPreviousTracks: 25,
+  }
+});
+```
+
+### Custom Store
+
+Implement the `QueueStore` interface — requires `get`, `set`, `delete`, `stringify`, `parse`:
+
+```typescript
+class RedisQueueStore {
+  async get(guildId: string) {
+    return redis.get(`queue:${guildId}`);
+  }
+  async set(guildId: string, data: any) {
+    await redis.set(`queue:${guildId}`, this.stringify(data));
+  }
+  async delete(guildId: string) {
+    await redis.del(`queue:${guildId}`);
+  }
+  stringify(data: any) { return JSON.stringify(data); }
+  parse(data: string) { return JSON.parse(data); }
+}
+
+const manager = new RyanlinkManager({
+  queueOptions: { queueStore: new RedisQueueStore() }
+});
+```
+
+Ryanlink also ships `LocalDiskQueueStore` and `RedisQueueStore` built-in:
+
+```typescript
+import { MemoryQueueStore, LocalDiskQueueStore, RedisQueueStore } from 'ryanlink';
+
+// Local disk (persists across restarts)
+new LocalDiskQueueStore('./sessions');
+
+// Redis (for sharded/clustered bots)
+new RedisQueueStore(redisClient, 'mybot:queue:');
+```
+
+---
+
+## Auto-Resume on Player Create
+
+When `resuming.enabled: true`, creating a player automatically syncs its queue from the store and calls `player.autoResume()` to resume playback from the saved position.
+
+```typescript
+const player = manager.createPlayer({
+  guildId: '...',
+  voiceChannelId: '...',
+  selfDeaf: true,
+});
+// Queue is restored automatically if a saved state exists
+// player.autoResume() is called internally
+```
+
+---
+
+## Previous Tracks Buffer
+
+Ryanlink keeps a circular buffer of previously played tracks per player:
+
+```typescript
+queueOptions: {
+  maxPreviousTracks: 25, // default
+}
+
+// Access in your commands
+const prev = player.queue.previous; // Track[]
+```
+
+---
+
+## Track Resolve Retries
+
+For unresolved tracks (e.g. Spotify metadata resolved to YouTube), configure retry behavior:
+
+```typescript
+const manager = new RyanlinkManager({
+  trackResolveRetryLimit: 3,      // global default
+  autoSkipOnResolveError: true,   // skip to next track on failure
+});
+
+// Or per-player
+manager.createPlayer({
+  guildId: '...',
+  trackResolveRetryLimit: 5,
+});
+```
+
+When all retries are exhausted, `queueErrorReport` is emitted and the track is purged from the queue.

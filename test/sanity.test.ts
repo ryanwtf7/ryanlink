@@ -9,8 +9,7 @@ describe('Sanity Check', () => {
   })
 
   it('should access global defines', () => {
-    expect($clientName).toBeDefined()
-
-    expect($clientVersion).toBeDefined()
+    expect((globalThis as any).$clientName).toBeDefined()
+    expect((globalThis as any).$clientVersion).toBeDefined()
   })
 })

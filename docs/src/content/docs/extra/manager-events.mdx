@@ -3,52 +3,102 @@ title: Manager Events
 description: Full event emission lifecycle for the RyanlinkManager.
 ---
 
-import { Card, CardGrid, Badge } from '@astrojs/starlight/components';
+import { Badge } from '@astrojs/starlight/components';
 
-The `RyanlinkManager` emits events throughout the lifecycle of nodes and players. You can listen to these events to update your UI or handle errors proactively.
+The `RyanlinkManager` emits events throughout the lifecycle of nodes and players. Listen on the manager instance directly.
 
-## Node Events
+## Track Events
 
-| Event | Payload | Description |
+| Event | Signature | Description |
 | :--- | :--- | :--- |
-| `nodeConnect` | `(node: Node)` | Emitted when a node successfully establishes a WebSocket connection. |
-| `nodeDisconnect` | `(node: Node)` | Emitted when a node's WebSocket connection is severed. |
-| `nodeReconnect` | `(node: Node)` | Emitted when a node is attempting to reconnect. |
-| `nodeError` | `(node: Node, error: Error)` | Emitted when a node encounters a critical communication error. |
-| `nodeRaw` | `(node: Node, payload: any)` | Emitted for every raw packet received from the Lavalink node. |
+| `trackStart` | `(player, track, payload)` | Track begins playing. |
+| `trackEnd` | `(player, track, payload)` | Track finishes. `payload.reason`: `finished`, `replaced`, `stopped`, `loadFailed`, `cleanup`. |
+| `trackStuck` | `(player, track, payload)` | Track stuck for `payload.thresholdMs` ms. |
+| `trackError` | `(player, track, payload)` | Playback error. `payload.exception` contains severity and cause. |
 
----
+## Queue Events
 
-## Player Events
-
-| Event | Payload | Description |
+| Event | Signature | Description |
 | :--- | :--- | :--- |
-| `trackStart` | `(player: Player, track: Track)` | Emitted when a track begins playing. |
-| `trackEnd` | `(player: Player, track: Track, reason: string)` | Emitted when a track finishes playing. |
-| `trackStuck` | `(player: Player, track: Track, threshold: number)` | Emitted when a track gets stuck during playback. |
-| `trackError` | `(player: Player, track: Track, error: any)` | Emitted when an error occurs during track playback. |
-| `queueEnd` | `(player: Player)` | Emitted when the queue is empty and playback finishes. |
-| `playerDestroy` | `(player: Player, reason: string)` | Emitted when a player is destroyed (Kicked/Closed). |
+| `queueEnd` | `(player, track, payload)` | Queue exhausted — no more tracks. |
+| `queueErrorReport` | `(player, track, error)` | An `UnresolvedTrack` failed all resolve retries and was purged. |
 
----
+## Player Lifecycle Events
 
-## Lifecycle Events
-
-| Event | Payload | Description |
+| Event | Signature | Description |
 | :--- | :--- | :--- |
-| `queueErrorReport` | `(p: Player, track: Track, error: Error)` | Emitted when an UnresolvedTrack fails all retry attempts. |
-| `nodeFailover` | `(p: Player, oldNode: Node, newNode: Node)` | Emitted when an Atomic Migration is successfully completed. |
+| `playerCreate` | `(player)` | A new player was created. |
+| `playerDestroy` | `(player, reason?)` | Player was destroyed. |
+| `playerMove` | `(player, oldChannelId, newChannelId)` | Bot moved to a different voice channel. |
+| `playerDisconnect` | `(player, channelId)` | Bot disconnected from voice. |
+| `playerReconnect` | `(player, channelId)` | Bot reconnected to voice (autoReconnect). |
+| `playerSocketClosed` | `(player, payload)` | Discord voice WebSocket closed. `payload.code` / `payload.reason`. |
 
----
+## Player State Events
+
+| Event | Signature | Description |
+| :--- | :--- | :--- |
+| `playerUpdate` | `(oldJson, player)` | Node sent a position/ping update. |
+| `playerClientUpdate` | `(oldJson, player)` | Client-side position update (every `clientBasedPositionUpdateInterval` ms). |
+| `playerPaused` | `(player, track)` | Playback paused. |
+| `playerResumed` | `(player, track)` | Playback resumed. |
+| `playerMuteChange` | `(player, selfMuted, serverMuted)` | Bot mute state changed. |
+| `playerDeafChange` | `(player, selfDeafed, serverDeafed)` | Bot deaf state changed. |
+| `playerSuppressChange` | `(player, suppress)` | Stage channel suppress state changed. |
+| `playerVoiceJoin` | `(player, userId)` | A user joined the bot's voice channel. |
+| `playerVoiceLeave` | `(player, userId)` | A user left the bot's voice channel. |
+
+## Queue Empty Timeout Events
+
+| Event | Signature | Description |
+| :--- | :--- | :--- |
+| `playerQueueEmptyStart` | `(player, timeoutMs)` | `destroyAfterMs` countdown started. |
+| `playerQueueEmptyEnd` | `(player)` | Countdown elapsed — player about to be destroyed. |
+| `playerQueueEmptyCancel` | `(player)` | Countdown cancelled (new track added or play called). |
+
+## SponsorBlock Events <Badge text="Requires sponsorblock-plugin" variant="caution" />
+
+| Event | Signature | Description |
+| :--- | :--- | :--- |
+| `SegmentsLoaded` | `(player, track, payload)` | Segments loaded for the current track. |
+| `SegmentSkipped` | `(player, track, payload)` | A segment was skipped. `payload.segment.category`. |
+| `ChaptersLoaded` | `(player, track, payload)` | YouTube chapters loaded. |
+| `ChapterStarted` | `(player, track, payload)` | A new chapter started. |
+
+## Lyrics Events <Badge text="Requires lavalyrics-plugin or lavasrc-plugin" variant="caution" />
+
+| Event | Signature | Description |
+| :--- | :--- | :--- |
+| `LyricsFound` | `(player, track, payload)` | Lyrics found for the current track. |
+| `LyricsNotFound` | `(player, track, payload)` | No lyrics found. |
+| `LyricsLine` | `(player, track, payload)` | Real-time lyrics line. `payload.line.line`, `payload.lineIndex`, `payload.skipped`. |
+
+## Debug Event
+
+| Event | Signature | Description |
+| :--- | :--- | :--- |
+| `debug` | `(eventKey, eventData)` | Internal debug events. Only emitted when `advancedOptions.enableDebugEvents: true`. |
 
 ## Usage Example
 
 ```typescript
-manager.on('trackStart', (player, track) => {
+manager.on('trackStart', (player, track, payload) => {
   console.log(`[${player.guildId}] Now playing: ${track.info.title}`);
 });
 
+manager.on('trackEnd', (player, track, payload) => {
+  console.log(`[${player.guildId}] Ended (${payload.reason}): ${track.info.title}`);
+});
+
 manager.on('queueErrorReport', (player, track, error) => {
-  console.error(`[${player.guildId}] Failed to resolve: ${track.info.title} after 3 retries.`);
+  console.error(`[${player.guildId}] Failed to resolve: ${track.info?.title} — ${error.message}`);
+});
+
+manager.on('playerSocketClosed', (player, payload) => {
+  console.warn(`[${player.guildId}] WS closed: code=${payload.code} reason=${payload.reason}`);
+});
+
+manager.on('LyricsLine', (player, track, payload) => {
+  console.log(`[Lyrics] ${payload.line.line}`);
 });
 ```

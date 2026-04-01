@@ -6,12 +6,12 @@ declare const jest: any
 export function fn(impl?: (...args: any[]) => any): any {
   if (typeof vi !== 'undefined') return vi.fn(impl)
   if (typeof jest !== 'undefined') return jest.fn(impl)
-  // fallback: plain spy
-  const calls: any[][] = []
-  const mock = (...args: any[]) => {
-    calls.push(args)
-    return impl?.(...args)
-  }
-  ;(mock as any).mock = { calls }
-  return mock
+  return ((...args: any[]) => impl?.(...args)) as any
 }
+
+export const mock: any = (typeof vi !== 'undefined' ? vi : (globalThis as any).jest) || (typeof jest !== 'undefined' ? jest : {});
+
+export const spyOn = (obj: any, method: string) => mock.spyOn(obj, method);
+export const useFakeTimers = () => mock.useFakeTimers();
+export const advanceTimersByTime = (ms: number) => mock.advanceTimersByTime(ms);
+export const useRealTimers = () => mock.useRealTimers();

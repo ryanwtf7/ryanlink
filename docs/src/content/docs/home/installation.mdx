@@ -1,47 +1,50 @@
 ---
-title: 'ryanlink'
-description: Easy, flexible and feature-rich ryanlink@v4 Client. Both for Beginners and Proficients."
+title: Installation
+description: Install Ryanlink in your Discord bot project.
 ---
 
-import Version from '../../../components/version.astro'
-import InstallSelector from '../../../components/InstallSelector.astro'
-import { Steps, Badge, Card, CardGrid } from '@astrojs/starlight/components';
+import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-# Installation
+## Requirements
 
-Install the latest stable version of **Ryanlink** to get started with the pro-active audio engine.
+- **Node.js** v18+ (v20+ recommended) or **Bun** v1.0+
+- A running **Lavalink v4** server
 
-## Choose Your Runtime
+## Install
 
-Ryanlink is natively optimized for all modern JavaScript runtimes. Choose your favorite package manager below:
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npm install ryanlink
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    bun add ryanlink
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add ryanlink
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn add ryanlink
+    ```
+  </TabItem>
+</Tabs>
 
-<InstallSelector />
+## TypeScript
 
-<CardGrid>
-  <Card title="Node.js 18+" icon="node">
-    Full support for legacy and modern Node.js environments.
-  </Card>
-  <Card title="Bun 1.0+" icon="rocket">
-    High-performance execution with native Bun optimization.
-  </Card>
-  <Card title="Deno 2.0+" icon="seti:javascript">
-    Strictly secure and standards-compliant audio processing.
-  </Card>
-</CardGrid>
+Ryanlink ships with full TypeScript types. No `@types` package needed.
 
----
+```typescript
+import { RyanlinkManager, RyanlinkNode, Player, Track } from 'ryanlink';
+```
 
-## Technical Requirements
+## Next Steps
 
-To ensure a stable audio experience, verify that your environment meets the following baseline requirements:
-
-<Steps>
-1. **Lavalink Server**: Version **4.0.0** or higher is required for the full feature set.
-2. **TypeScript**: Version **5.4+** is recommended for standard-compliant module augmentation.
-3. **Hardware**: At least **512MB RAM** allocated for your bot process (recommended for large queues).
-</Steps>
-
----
-
-> [!TIP]
-> Always use the latest version <Badge text="Stable" variant="success" /> <Version /> to benefit from the latest performance patches and security updates.
+- [Quick Setup](/ryanlink/home/setup-ryanlink) — wire up the manager with your Discord client
+- [Configuration](/ryanlink/home/configuration) — full options reference
+- [Lavalink Hosting](/ryanlink/home/lavalink-hosting) — set up your audio server

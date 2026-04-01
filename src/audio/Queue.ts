@@ -1,6 +1,6 @@
 import type { ManagerQueueOptions, QueueChangesWatcher, QueueStoreManager, StoredQueue } from '../types/Queue'
 import type { Track, UnresolvedTrack } from '../types/Track'
-import { RyanlinkUtils, MiniMap, AudioQueueSymbol } from '../utils/Utils'
+import { RyanlinkUtils, AudioQueueSymbol } from '../utils/Utils'
 import { MemoryQueueStore, DefaultQueueStore } from './QueueStore'
 export { MemoryQueueStore, DefaultQueueStore };
 
@@ -47,10 +47,10 @@ export class Queue {
   private managerUtils = new RyanlinkUtils()
   private queueChanges: QueueChangesWatcher | null
 
-  constructor(guildId: string, data: Partial<StoredQueue> = {}, QueueSaver?: QueueSaver, queueOptions?: ManagerQueueOptions) {
+  constructor(guildId: string, data: Partial<StoredQueue> = {}, queueSaver?: QueueSaver, queueOptions?: ManagerQueueOptions) {
     this.queueChanges = queueOptions?.queueChangesWatcher || null
     this.guildId = guildId
-    this.QueueSaver = QueueSaver
+    this.QueueSaver = queueSaver
     this.position = data.position || 0
 
     this.current = this.managerUtils.isTrack(data.current) ? data.current : null
@@ -244,7 +244,9 @@ export class Queue {
     if (typeof this.queueChanges?.tracksRemoved === 'function')
       try {
         this.queueChanges.tracksRemoved(this.guildId, removed, 0, oldStored, this.utils.toJSON())
-      } catch {}
+      } catch {
+        void 0;
+      }
 
     await this.utils.save()
     return removed.length
@@ -280,7 +282,9 @@ export class Queue {
           oldStored,
           this.utils.toJSON()
         )
-      } catch {}
+      } catch {
+        void 0;
+      }
 
     await this.utils.save()
 
@@ -307,7 +311,9 @@ export class Queue {
           oldStored,
           this.utils.toJSON()
         )
-      } catch {}
+      } catch {
+        void 0;
+      }
 
     const spliced = TrackOrTracks
       ? this.tracks.splice(
@@ -322,7 +328,9 @@ export class Queue {
     if (typeof this.queueChanges?.tracksRemoved === 'function')
       try {
         this.queueChanges.tracksRemoved(this.guildId, spliced, index, oldStored, this.utils.toJSON())
-      } catch {}
+      } catch {
+        void 0;
+      }
 
     await this.utils.save()
 
@@ -346,7 +354,9 @@ export class Queue {
       if (typeof this.queueChanges?.tracksRemoved === 'function')
         try {
           this.queueChanges.tracksRemoved(this.guildId, removed, removeQueryTrack, oldStored, this.utils.toJSON())
-        } catch {}
+        } catch {
+        void 0;
+      }
 
       await this.utils.save()
 
@@ -367,7 +377,9 @@ export class Queue {
         if (typeof this.queueChanges?.tracksRemoved === 'function')
           try {
             this.queueChanges.tracksRemoved(this.guildId, removed, removeQueryTrack as number[], oldStored, this.utils.toJSON())
-          } catch {}
+          } catch {
+        void 0;
+      }
 
         await this.utils.save()
 
@@ -410,7 +422,9 @@ export class Queue {
             oldStored,
             this.utils.toJSON()
           )
-        } catch {}
+        } catch {
+        void 0;
+      }
 
       await this.utils.save()
 
@@ -433,7 +447,9 @@ export class Queue {
     if (typeof this.queueChanges?.tracksRemoved === 'function')
       try {
         this.queueChanges.tracksRemoved(this.guildId, removed, toRemove, oldStored, this.utils.toJSON())
-      } catch {}
+      } catch {
+        void 0;
+      }
 
     await this.utils.save()
 

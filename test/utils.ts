@@ -1,4 +1,3 @@
-import { expect } from 'vitest'
 import type { RyanlinkNode } from '../src/node/Node'
 import type { Player } from '../src/audio/Player'
 

@@ -1,8 +1,46 @@
 import { RyanlinkManager } from '../src/core/Manager'
 import { LavalinkMock } from './mocks/LavalinkMock'
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { RyanlinkNode } from '../src/node/Node'
 import { DestroyReasons, DisconnectReasons } from '../src/config/Constants'
+
+jest.mock('ws', () => {
+  const { EventEmitter } = require('node:events')
+  class MockWebSocket extends EventEmitter {
+    public static OPEN = 1
+    public static CLOSED = 3
+    public readyState = 0
+    constructor(public url: string, public options: any) {
+       super()
+       setTimeout(() => {
+         this.readyState = 1
+         this.emit('open')
+         setTimeout(() => {
+           this.emit('message', JSON.stringify({ 
+             op: 'ready', 
+             sessionId: 'mock-session', 
+             resumed: false,
+             info: {
+               version: { semver: '4.0.0' },
+               plugins: []
+             }
+           }))
+         }, 5)
+       }, 5)
+    }
+    send = jest.fn()
+    close = jest.fn((code, reason) => { 
+      this.readyState = 3
+      this.emit('close', code, reason) 
+    })
+    terminate = jest.fn(() => this.close(1006, 'term'))
+    ping = jest.fn(() => this.emit('pong'))
+  }
+  return {
+    __esModule: true,
+    default: MockWebSocket,
+    WebSocket: MockWebSocket,
+  }
+})
 
 describe('RyanlinkNode Comprehensive', () => {
   let manager: RyanlinkManager
@@ -13,13 +51,14 @@ describe('RyanlinkNode Comprehensive', () => {
     manager = new RyanlinkManager({
       client: { id: 'bot123' },
       nodes: [{ host: 'localhost', id: 'local', port: 2333, authorization: 'pw' }],
-      sendToShard: vi.fn(),
+      sendToShard: jest.fn(),
     })
+    manager.nodeManager.on('error', () => {}) // Prevent test runner crashes from unhandled errors
     await manager.init({ id: 'bot123' })
     node = manager.nodeManager.nodes.get('local')! as RyanlinkNode
     node.sessionId = 'sess123'
     // @ts-ignore
-    node.socket = { readyState: 1, send: vi.fn(), close: vi.fn() }
+    node.socket = { readyState: 1, send: jest.fn(), close: jest.fn(), on: jest.fn(), removeListener: jest.fn() }
     
     node.info = { 
       version: { semver: '4.0.0' },
@@ -30,14 +69,14 @@ describe('RyanlinkNode Comprehensive', () => {
   })
 
   afterEach(() => {
-    vi.restoreAllMocks()
+    jest.restoreAllMocks()
     LavalinkMock.clearResponses()
   })
 
   it('handles WebSocket "ready" message', async () => {
     const rawMessage = JSON.stringify({ op: 'ready', sessionId: 'new-sess', resumed: false })
     // @ts-ignore
-    node.message({ data: rawMessage })
+    await node.message(rawMessage)
     expect(node.sessionId).toBe('new-sess')
   })
 
@@ -49,7 +88,7 @@ describe('RyanlinkNode Comprehensive', () => {
       state: { position: 1000, time: Date.now(), connected: true, ping: 50 } 
     })
     // @ts-ignore
-    node.message({ data: rawMessage })
+    await node.message(rawMessage)
     expect(player.position).toBeGreaterThan(0)
   })
 
@@ -64,7 +103,7 @@ describe('RyanlinkNode Comprehensive', () => {
       frameStats: { sent: 1, nulled: 0, deficit: 0 }
     })
     // @ts-ignore
-    node.message({ data: rawMessage })
+    await node.message(rawMessage)
     expect(node.stats.players).toBe(10)
   })
 
@@ -101,17 +140,17 @@ describe('RyanlinkNode Comprehensive', () => {
   })
 
   it('handles REST error paths', async () => {
-    LavalinkMock.setResponse('/version', { _status: 500, data: 'Error' })
+    LavalinkMock.setResponse('version', { _status: 500, data: 'Error' })
     await expect(node.fetchVersion()).rejects.toThrow(/status 500/)
     
-    LavalinkMock.setResponse('/stats', { _status: 404, data: 'Error' })
+    LavalinkMock.setResponse('stats', { _status: 404, data: 'Error' })
     await expect(node.fetchStats()).rejects.toThrow(/status 404/)
   })
 
   it('handles queueEnd logic via track event', async () => {
     const player = manager.createPlayer({ guildId: 'qe1', voiceChannelId: 'v1' })
     // Mock autoplay function to avoid network hits
-    manager.options.playerOptions.onEmptyQueue.autoPlayFunction = vi.fn()
+    manager.options.playerOptions.onEmptyQueue.autoPlayFunction = jest.fn()
     
     const rawMessage = JSON.stringify({
       op: 'event',
@@ -122,15 +161,15 @@ describe('RyanlinkNode Comprehensive', () => {
     })
     
     // @ts-ignore
-    await node.message({ data: rawMessage })
+    await node.message(rawMessage)
     expect(manager.options.playerOptions.onEmptyQueue.autoPlayFunction).toHaveBeenCalled()
   })
 
   it('handles Lyrics events', async () => {
     const player = manager.createPlayer({ guildId: 'lyrics1', voiceChannelId: 'v1' })
     const track = { encoded: 'e', info: { title: 'T' } }
-    
-    const events: ('LyricsLine' | 'LyricsFound' | 'LyricsNotFound')[] = ['LyricsLine', 'LyricsFound', 'LyricsNotFound']
+    player.queue.current = manager.utils.buildTrack(track as any, 'user')
+    const events = ['LyricsLine', 'LyricsFound', 'LyricsNotFound'] as const
     
     for (const type of events) {
       let emitted = false
@@ -138,43 +177,41 @@ describe('RyanlinkNode Comprehensive', () => {
       
       const rawMessage = JSON.stringify({
         op: 'event',
-        type: type,
+        type: `${type}Event`,
         guildId: 'lyrics1',
         track: track,
         line: { text: 'test' }
       })
       
       // @ts-ignore
-      await node.message({ data: rawMessage })
-      expect(emitted, `Expected ${type} to be emitted`).toBe(true)
+      await node.message(rawMessage)
+      expect(emitted).toBe(true)
     }
   })
 
   it('handles queue empty destruction logic', async () => {
-    vi.useFakeTimers()
-    manager.options.playerOptions.onEmptyQueue.destroyAfterMs = 1000
+    manager.options.playerOptions.onEmptyQueue.destroyAfterMs = 0
     const player = manager.createPlayer({ guildId: 'empty1', voiceChannelId: 'v1' })
-    const destroySpy = vi.spyOn(player, 'destroy').mockResolvedValue(true as any)
+    const destroySpy = jest.spyOn(player, 'destroy').mockResolvedValue(true as any)
     
     const rawMessage = JSON.stringify({
       op: 'event',
       type: 'TrackEndEvent',
       guildId: 'empty1',
-      track: { encoded: 'e' },
+      track: { encoded: 'e', info: { title: 'T' } },
       reason: 'finished'
     })
     
     // @ts-ignore
-    await node.message({ data: rawMessage })
-    
-    vi.advanceTimersByTime(1500)
+    await node.message(rawMessage)
+    await new Promise(r => setTimeout(r, 10))
     expect(destroySpy).toHaveBeenCalledWith(DestroyReasons.QueueEmpty)
-    vi.useRealTimers()
   })
 
   it('handles SponsorBlock chapter events', async () => {
     const player = manager.createPlayer({ guildId: 'sb_chapters', voiceChannelId: 'v1' })
     const track = manager.utils.buildTrack({ encoded: 'e', info: { title: 'T' } } as any, 'user')
+    player.queue.current = track
     
     for (const type of ['ChaptersLoaded', 'ChapterStarted']) {
       let emitted = false
@@ -182,21 +219,22 @@ describe('RyanlinkNode Comprehensive', () => {
       
       const rawMessage = JSON.stringify({
         op: 'event',
-        type: type === 'ChaptersLoaded' ? 'SponsorBlockChaptersLoaded' : 'SponsorBlockChapterStarted',
+        type: type,
         guildId: 'sb_chapters',
         track: track,
         chapters: []
       })
       
       // @ts-ignore
-      await node.message({ data: rawMessage })
-      expect(emitted, `Expected ${type} to be emitted`).toBe(true)
+      await node.message(rawMessage)
+      await new Promise(r => setTimeout(r, 10))
+      expect(emitted).toBe(true)
     }
   })
 
   it('handles queueEnd autoplay spam limiter', async () => {
     const player = manager.createPlayer({ guildId: 'qe_spam', voiceChannelId: 'v1' })
-    const autoPlaySpy = vi.fn()
+    const autoPlaySpy = jest.fn()
     manager.options.playerOptions.onEmptyQueue.autoPlayFunction = autoPlaySpy
     manager.options.playerOptions.minAutoPlayMs = 5000
     
@@ -205,29 +243,27 @@ describe('RyanlinkNode Comprehensive', () => {
         op: 'event',
         type: 'TrackEndEvent',
         guildId: 'qe_spam',
-        track: manager.utils.buildTrack({ encoded: 'e' } as any, 'user'),
+        track: manager.utils.buildTrack({ encoded: 'e', info: { title: 'T' } } as any, 'user'),
         reason: 'finished'
       })
       // @ts-ignore
-      await node.message({ data: rawMessage })
+      await node.message(rawMessage)
+      await new Promise(r => setTimeout(r, 10))
     }
 
     // First call success
     await triggerQueueEnd()
     expect(autoPlaySpy).toHaveBeenCalledTimes(1)
 
-    // Second call immediate (should trigger limiter)
+    // Second call immediate (should trigger limiter because offset implies minimal duration passed)
     await triggerQueueEnd()
     expect(autoPlaySpy).toHaveBeenCalledTimes(1) // Still 1
 
     // Advance time and call again
-    vi.useFakeTimers()
-    vi.advanceTimersByTime(6000)
+    player.setData('internal_previousautoplay', Date.now() - 6000)
     await triggerQueueEnd()
-    // Wait for the async part if any, but since we are using await node.message, it should be fine.
-    // However, autoplay is async and we don't await the spy.
+    
     expect(autoPlaySpy).toHaveBeenCalledTimes(2)
-    vi.useRealTimers()
   })
 
   it('handles Lyrics event fallback resolution', async () => {
@@ -241,14 +277,15 @@ describe('RyanlinkNode Comprehensive', () => {
     // Mock getTrackOfPayload via internal node method or by providing right payload
     const rawMessage = JSON.stringify({
       op: 'event',
-      type: 'LyricsLine',
+      type: 'LyricsLineEvent',
       guildId: 'lyrics_fallback',
       track: { encoded: 'fallback_track', info: { title: 'Resolved' } },
       line: { text: 'test' }
     })
     
     // @ts-ignore
-    await node.message({ data: rawMessage })
+    await node.message(rawMessage)
+    await new Promise(r => setTimeout(r, 10))
     expect(player.queue.current?.info?.title).toBe('Resolved')
     expect(emitted).toBe(true)
   })

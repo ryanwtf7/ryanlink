@@ -2,12 +2,7 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testMatch: [
-    '**/test/filters.test.ts',
-    '**/test/lavalink.test.ts',
-    '**/test/constants.test.ts',
-    '**/test/sanity.test.ts',
-  ],
+  testMatch: ['**/test/*.test.ts'],
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',
@@ -19,5 +14,11 @@ export default {
       },
     ],
   },
-  setupFiles: ['./test/jest.setup.ts'],
+  setupFilesAfterEnv: ['./test/jest.setup.ts'],
+  collectCoverage: false,
+  collectCoverageFrom: ['src/**/*.ts'],
+  coverageDirectory: 'coverage',
+  coverageProvider: 'v8',
+  coverageReporters: ['text', 'lcov', 'clover', 'json'],
+  workerIdleMemoryLimit: '512MB',
 }

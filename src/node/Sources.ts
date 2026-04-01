@@ -128,14 +128,67 @@ export const SourceMappings: Record<SearchPlatform, RyanlinkSearchPlatform | Cli
   gn: 'gnsearch',
   gnsearch: 'gnsearch',
   gnrec: 'gnrec',
+
+  mcsearch: 'mcsearch',
+  mixcloud: 'mcsearch',
+
+  ncsearch: 'ncsearch',
+  nicovideo: 'ncsearch',
+
+  szsearch: 'shsearch', 
+
+  ebox: 'ebox',
+  jukebox: 'ebox',
+
+  slsearch: 'slsearch',
+  songlink: 'slsearch',
+  odesli: 'slsearch',
+
+  ausearch: 'ausearch',
+  audius: 'ausearch',
+
+  azsearch: 'azsearch',
+
+  agsearch: 'agsearch',
+  anghami: 'agsearch',
+
+  bksearch: 'bksearch',
+  bluesky: 'bksearch',
+
+  lmsearch: 'lmsearch',
+  letras: 'lmsearch',
+
+  pipertts: 'pipertts',
+
+  gtts: 'gtts',
+
+  gaanasearch: 'gnsearch', 
 }
 
 export const BuiltinSources = {
-  DuncteBot_Plugin: 'duncte-engine',
-  LavaSrc: 'source-engine',
-  GoogleCloudTTS: 'tts-engine',
-  LavaSearch: 'search-engine',
+
+  DuncteBot_Plugin: 'skybot-lavalink-plugin',
+
+  GoogleCloudTTS: 'tts-plugin',
+
+  LavaSrc: 'lavasrc-plugin',
+
+  LavaSearch: 'lavasearch-plugin',
+
+  LavaLyrics: 'lavalyrics-plugin',
+
+  SponsorBlock: 'sponsorblock-plugin',
+
+  LavaDSPX: 'LavaDSPX-Plugin',
+
+  JavaTimedLyrics: 'java-lyrics-plugin',
+
+  LyricsKt: 'lyrics',
+
+  LavaXM: 'lava-xm-plugin',
+
   Filter_Engine: 'filter-engine',
+
   TimedLyrics_Engine: 'lyrics-engine',
 }
 

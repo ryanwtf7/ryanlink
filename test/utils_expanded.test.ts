@@ -1,6 +1,5 @@
 import { RyanlinkManager } from '../src/core/Manager'
 import { LavalinkMock } from './mocks/LavalinkMock'
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { queueTrackEnd, applyUnresolvedData } from '../src/utils/Utils'
 
 describe('RyanlinkUtils Expanded', () => {
@@ -11,7 +10,7 @@ describe('RyanlinkUtils Expanded', () => {
     manager = new RyanlinkManager({
       client: { id: 'bot123' },
       nodes: [{ host: 'localhost', id: 'local', port: 2333, authorization: 'pw' }],
-      sendToShard: vi.fn(),
+      sendToShard: jest.fn(),
       playerOptions: {
         useUnresolvedData: true,
         allowCustomSources: false
@@ -21,11 +20,11 @@ describe('RyanlinkUtils Expanded', () => {
     const node = manager.nodeManager.nodes.get('local')!
     node.sessionId = 'sess123'
     // @ts-ignore
-    node.socket = { readyState: 1 } // Mark as connected
+    node.socket = { readyState: 1, on: jest.fn(), send: jest.fn(), close: jest.fn(), removeAllListeners: jest.fn() } as any // Mark as connected
   })
 
   afterEach(() => {
-    vi.restoreAllMocks()
+    jest.restoreAllMocks()
     LavalinkMock.clearResponses()
   })
 
@@ -34,8 +33,8 @@ describe('RyanlinkUtils Expanded', () => {
     node.info = { sourceManagers: ['youtube'] } as any
     
     expect(() => manager.utils.validateSourceString(node, 'scsearch')).toThrow("Audio Node has not 'soundcloud' enabled")
-    expect(() => manager.utils.validateSourceString(node, 'amsearch')).toThrow("Audio Node has not 'applemusic' enabled")
-    expect(() => manager.utils.validateSourceString(node, 'dzisrc')).toThrow("Audio Node has not 'deezer' enabled")
+    expect(() => manager.utils.validateSourceString(node, 'amsearch')).toThrow("Audio Node requires 'lavasrc-plugin' for source 'amsearch'")
+    expect(() => manager.utils.validateSourceString(node, 'dzisrc')).toThrow("Audio Node requires 'lavasrc-plugin' for source 'dzisrc'")
   })
 
   it('validateSourceString throws on un-cached node info', async () => {
@@ -48,8 +47,8 @@ describe('RyanlinkUtils Expanded', () => {
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
     manager.options.advancedOptions.enableDebugEvents = true
     
-    const unresolvedTrack = manager.utils.buildUnresolvedTrack({ title: 'T' }, 'u')
-    vi.spyOn(unresolvedTrack, 'resolve').mockImplementation(() => Promise.reject(new Error('Resolve error')))
+    const unresolvedTrack = manager.utils.buildUnresolvedTrack({ title: 'T' }, 'u' as any)
+    jest.spyOn(unresolvedTrack, 'resolve').mockImplementation(() => Promise.reject(new Error('Resolve error')))
     
     player.queue.tracks.push(unresolvedTrack)
     
@@ -91,30 +90,30 @@ describe('RyanlinkUtils Expanded', () => {
     const node = manager.nodeManager.nodes.get('local')!
     node.info = { sourceManagers: [], plugins: [] } as any
     // @ts-ignore
-    vi.spyOn(node, '_checkForSources', 'get').mockReturnValue(true)
+    jest.spyOn(node, '_checkForSources', 'get').mockReturnValue(true)
     
-    const testSource = (source: string, expectedError: string) => {
+    const testSource = (source: string) => {
       expect(() => manager.utils.validateQueryString(node, `test`, source as any))
         .toThrow()
     }
 
-    testSource('vksearch', 'vkmusic')
-    testSource('vkrec', 'vkmusic')
-    testSource('tdsearch', 'tidal')
-    testSource('tdrec', 'tidal')
-    testSource('ymsearch', 'yandexmusic')
-    testSource('ytmsearch', 'youtube')
-    testSource('qbsearch', 'qobuz')
-    testSource('qbisrc', 'qobuz')
-    testSource('qbrec', 'qobuz')
-    testSource('pdsearch', 'pandora')
-    testSource('pdisrc', 'pandora')
-    testSource('pdrec', 'pandora')
+    testSource('vksearch')
+    testSource('vkrec')
+    testSource('tdsearch')
+    testSource('tdrec')
+    testSource('ymsearch')
+    testSource('ytmsearch')
+    testSource('qbsearch')
+    testSource('qbisrc')
+    testSource('qbrec')
+    testSource('pdsearch')
+    testSource('pdisrc')
+    testSource('pdrec')
 
     // Plugin-based sources
     node.info.plugins = [] // No plugins
-    testSource('speak', 'speak')
-    testSource('tts', 'tts')
-    testSource('ftts', 'flowery-tts')
+    testSource('speak')
+    testSource('tts')
+    testSource('ftts')
   })
 })

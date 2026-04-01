@@ -1,6 +1,44 @@
 import { RyanlinkManager } from '../src/core/Manager'
 import { LavalinkMock } from './mocks/LavalinkMock'
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
+
+jest.mock('ws', () => {
+  const { EventEmitter } = require('node:events')
+  class MockWebSocket extends EventEmitter {
+    public static OPEN = 1
+    public static CLOSED = 3
+    public readyState = 0
+    constructor(public url: string, public options: any) {
+       super()
+       setTimeout(() => {
+         this.readyState = 1
+         this.emit('open')
+         setTimeout(() => {
+           this.emit('message', JSON.stringify({ 
+             op: 'ready', 
+             sessionId: 'mock-session', 
+             resumed: false,
+             info: {
+               version: { semver: '4.0.0' },
+               plugins: []
+             }
+           }))
+         }, 5)
+       }, 5)
+    }
+    send = jest.fn()
+    close = jest.fn((code, reason) => { 
+      this.readyState = 3
+      this.emit('close', code, reason) 
+    })
+    terminate = jest.fn(() => this.close(1006, 'term'))
+    ping = jest.fn(() => this.emit('pong'))
+  }
+  return {
+    __esModule: true,
+    default: MockWebSocket,
+    WebSocket: MockWebSocket,
+  }
+})
 import { DestroyReasons } from '../src/config/Constants'
 
 describe('Manager.provideVoiceUpdate', () => {
@@ -13,29 +51,29 @@ describe('Manager.provideVoiceUpdate', () => {
     manager = new RyanlinkManager({
       client: { id: BOT_ID },
       nodes: [{ host: 'localhost', id: 'local', port: 2333, authorization: 'pw' }],
-      sendToShard: vi.fn(),
+      sendToShard: jest.fn(),
     })
     await manager.init({ id: BOT_ID })
     const node = manager.nodeManager.nodes.get('local')!
     node.sessionId = 'sess123'
     // @ts-ignore
-    node.socket = { readyState: 1 }
+    node.socket = { readyState: 1, on: jest.fn(), send: jest.fn(), close: jest.fn(), removeAllListeners: jest.fn() } as any
   })
 
   afterEach(() => {
-    vi.restoreAllMocks()
+    jest.restoreAllMocks()
     LavalinkMock.clearResponses()
   })
 
   it('handles missing "t" in payload', async () => {
-    const debugSpy = vi.spyOn(manager as any, '_debugNoAudio')
+    const debugSpy = jest.spyOn(manager as any, '_debugNoAudio')
     // @ts-ignore
     await manager.provideVoiceUpdate({})
     expect(debugSpy).toHaveBeenCalledWith('error', expect.stringContaining('provideVoiceUpdate'), expect.objectContaining({ consoleMessage: expect.stringContaining("no 't' in payload-data") }), expect.anything())
   })
 
   it('handles missing update data (d property)', async () => {
-    const debugSpy = vi.spyOn(manager as any, '_debugNoAudio')
+    const debugSpy = jest.spyOn(manager as any, '_debugNoAudio')
     // @ts-ignore
     await manager.provideVoiceUpdate({ t: 'VOICE_SERVER_UPDATE', d: null })
     expect(debugSpy).toHaveBeenCalledWith('warn', expect.stringContaining('provideVoiceUpdate'), expect.objectContaining({ consoleMessage: expect.stringContaining('no update data') }), expect.anything())
@@ -43,7 +81,7 @@ describe('Manager.provideVoiceUpdate', () => {
 
   it('handles CHANNEL_DELETE', async () => {
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
-    const destroySpy = vi.spyOn(player, 'destroy').mockResolvedValue(true as any)
+    const destroySpy = jest.spyOn(player, 'destroy').mockResolvedValue(true as any)
     
     await manager.provideVoiceUpdate({ 
       t: 'CHANNEL_DELETE', 
@@ -54,13 +92,13 @@ describe('Manager.provideVoiceUpdate', () => {
   })
 
   it('handles missing token and session_id', async () => {
-    const debugSpy = vi.spyOn(manager as any, '_debugNoAudio')
+    const debugSpy = jest.spyOn(manager as any, '_debugNoAudio')
     await manager.provideVoiceUpdate({ t: 'VOICE_SERVER_UPDATE', d: { guild_id: 'g1', user_id: BOT_ID } } as any)
     expect(debugSpy).toHaveBeenCalledWith('error', expect.stringContaining('provideVoiceUpdate'), expect.objectContaining({ consoleMessage: expect.stringContaining("no 'token' nor 'session_id'") }), expect.anything())
   })
 
   it('handles unknown player', async () => {
-    const debugSpy = vi.spyOn(manager as any, '_debugNoAudio')
+    const debugSpy = jest.spyOn(manager as any, '_debugNoAudio')
     await manager.provideVoiceUpdate({ t: 'VOICE_SERVER_UPDATE', d: { guild_id: 'unknown', token: 't', endpoint: 'e', user_id: BOT_ID } } as any)
     expect(debugSpy).toHaveBeenCalledWith('warn', expect.stringContaining('provideVoiceUpdate'), expect.objectContaining({ consoleMessage: expect.stringContaining('No Audio Player found') }), expect.anything())
   })
@@ -68,14 +106,14 @@ describe('Manager.provideVoiceUpdate', () => {
   it('handles player in destroying state', async () => {
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
     player.setData('internal_destroystatus', true)
-    const debugSpy = vi.spyOn(manager as any, '_debugNoAudio')
+    const debugSpy = jest.spyOn(manager as any, '_debugNoAudio')
     await manager.provideVoiceUpdate({ t: 'VOICE_SERVER_UPDATE', d: { guild_id: 'g1', token: 't', endpoint: 'e', user_id: BOT_ID } } as any)
     expect(debugSpy).toHaveBeenCalledWith('warn', expect.stringContaining('provideVoiceUpdate'), expect.objectContaining({ message: expect.stringContaining('destroying state') }))
   })
 
   it('handles voice server update (missing sessionId/channelId)', async () => {
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
-    const debugSpy = vi.spyOn(manager as any, '_debugNoAudio')
+    const debugSpy = jest.spyOn(manager as any, '_debugNoAudio')
     
     // Explicitly clear sessionId to trigger failure
     // @ts-ignore
@@ -100,7 +138,7 @@ describe('Manager.provideVoiceUpdate', () => {
     player.voice.sessionId = 's1'
     player.voice.channelId = 'v1'
     LavalinkMock.setResponse('/sessions/sess123/players/g1', {})
-    const updateSpy = vi.spyOn(player.node, 'updatePlayer')
+    const updateSpy = jest.spyOn(player.node, 'updatePlayer')
     
     await manager.provideVoiceUpdate({ t: 'VOICE_SERVER_UPDATE', d: { guild_id: 'g1', token: 't', endpoint: 'e', user_id: BOT_ID, session_id: 's1' } } as any)
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
@@ -112,8 +150,8 @@ describe('Manager.provideVoiceUpdate', () => {
 
   it('handles other user voice join/leave', async () => {
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
-    const joinSpy = vi.fn()
-    const leaveSpy = vi.fn()
+    const joinSpy = jest.fn()
+    const leaveSpy = jest.fn()
     manager.on('playerVoiceJoin', joinSpy)
     manager.on('playerVoiceLeave', leaveSpy)
 
@@ -128,9 +166,9 @@ describe('Manager.provideVoiceUpdate', () => {
 
   it('handles player movement and voice state changes', async () => {
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
-    const moveSpy = vi.fn()
-    const muteSpy = vi.fn()
-    const deafSpy = vi.fn()
+    const moveSpy = jest.fn()
+    const muteSpy = jest.fn()
+    const deafSpy = jest.fn()
     manager.on('playerMove', moveSpy)
     manager.on('playerMuteChange', muteSpy)
     manager.on('playerDeafChange', deafSpy)
@@ -153,7 +191,7 @@ describe('Manager.provideVoiceUpdate', () => {
   it('handles disconnect and automatic destruction', async () => {
     manager.options.playerOptions.onDisconnect = { destroyPlayer: true }
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
-    const destroySpy = vi.spyOn(player, 'destroy').mockResolvedValue(true as any)
+    const destroySpy = jest.spyOn(player, 'destroy').mockResolvedValue(true as any)
     
     // channel_id: null means disconnect
     await manager.provideVoiceUpdate({ 
@@ -172,7 +210,7 @@ describe('Manager.provideVoiceUpdate', () => {
   it('handles manual disconnect and reset', async () => {
     manager.options.playerOptions.onDisconnect = { destroyPlayer: false, autoReconnect: false }
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
-    const disconnectSpy = vi.fn()
+    const disconnectSpy = jest.fn()
     manager.on('playerDisconnect', disconnectSpy)
     
     await manager.provideVoiceUpdate({ t: 'VOICE_STATE_UPDATE', d: { guild_id: 'g1', user_id: BOT_ID, channel_id: null, session_id: 's1' } } as any)
@@ -185,8 +223,8 @@ describe('Manager.provideVoiceUpdate', () => {
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
     player.queue.current = { encoded: 'e' } as any
     
-    vi.spyOn(player, 'connect').mockResolvedValue(player)
-    vi.spyOn(player, 'play').mockResolvedValue('local')
+    jest.spyOn(player, 'connect').mockImplementation(async () => player as any)
+    jest.spyOn(player, 'play').mockImplementation(async () => 'local' as any)
     
     await manager.provideVoiceUpdate({ t: 'VOICE_STATE_UPDATE', d: { guild_id: 'g1', user_id: BOT_ID, channel_id: null, session_id: 's1' } } as any)
     expect(player.connect).toHaveBeenCalled()
@@ -197,9 +235,9 @@ describe('Manager.provideVoiceUpdate', () => {
     manager.options.playerOptions.onDisconnect = { autoReconnect: true }
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
     
-    vi.spyOn(player, 'connect').mockImplementation(() => Promise.reject(new Error('Connect failed')))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const destroySpy = vi.spyOn(player, 'destroy').mockResolvedValue(true as any)
+    jest.spyOn(player, 'connect').mockImplementation(() => Promise.reject(new Error('Connect failed')))
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const destroySpy = jest.spyOn(player, 'destroy').mockResolvedValue(true as any)
     
     await manager.provideVoiceUpdate({ t: 'VOICE_STATE_UPDATE', d: { guild_id: 'g1', user_id: BOT_ID, channel_id: null, session_id: 's1' } } as any)
     expect(destroySpy).toHaveBeenCalledWith(DestroyReasons.PlayerReconnectFail)

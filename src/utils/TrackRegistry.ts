@@ -42,11 +42,11 @@ export class TrackEntry implements Track {
   }
 
   get info(): TrackInfo {
-    return TrackRegistry.get(this.trackId)!.info
+    return TrackRegistry.get(this.trackId)?.info || {} as any
   }
 
   get pluginInfo(): Partial<PluginInfo> {
-    return TrackRegistry.get(this.trackId)!.pluginInfo
+    return TrackRegistry.get(this.trackId)?.pluginInfo || {}
   }
 
   public toJSON(): Track {

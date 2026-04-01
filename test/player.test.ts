@@ -1,6 +1,44 @@
 import { RyanlinkManager } from '../src/core/Manager'
 import { LavalinkMock } from './mocks/LavalinkMock'
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
+
+jest.mock('ws', () => {
+  const { EventEmitter } = require('node:events')
+  class MockWebSocket extends EventEmitter {
+    public static OPEN = 1
+    public static CLOSED = 3
+    public readyState = 0
+    constructor(public url: string, public options: any) {
+       super()
+       setTimeout(() => {
+         this.readyState = 1
+         this.emit('open')
+         setTimeout(() => {
+           this.emit('message', JSON.stringify({ 
+             op: 'ready', 
+             sessionId: 'mock-session', 
+             resumed: false,
+             info: {
+               version: { semver: '4.0.0' },
+               plugins: []
+             }
+           }))
+         }, 5)
+       }, 5)
+    }
+    send = jest.fn()
+    close = jest.fn((code, reason) => { 
+      this.readyState = 3
+      this.emit('close', code, reason) 
+    })
+    terminate = jest.fn(() => this.close(1006, 'term'))
+    ping = jest.fn(() => this.emit('pong'))
+  }
+  return {
+    __esModule: true,
+    default: MockWebSocket,
+    WebSocket: MockWebSocket,
+  }
+})
 
 describe('Player', () => {
   let manager: RyanlinkManager
@@ -17,13 +55,14 @@ describe('Player', () => {
     manager = new RyanlinkManager({
       nodes: [{ host: 'localhost', port: 2333, authorization: 'pw', id: 'local' }],
       client: { id: '123' },
-      sendToShard: vi.fn(),
+      sendToShard: jest.fn(),
     })
     await manager.init({ id: '123' })
     const node = manager.nodeManager.nodes.get('local')!
     node.sessionId = 'mock-session'
     // @ts-ignore
-    node.socket = { readyState: 1 }
+    // @ts-ignore
+    node.socket = { readyState: 1, on: jest.fn(), send: jest.fn(), close: jest.fn(), removeAllListeners: jest.fn() } as any
     // Mock the info to pass pre-checks
     node.info = { 
       sourceManagers: ['ytsearch', 'youtube', 'spotify', 'soundcloud'], 
@@ -34,7 +73,7 @@ describe('Player', () => {
   })
 
   afterEach(() => {
-    vi.restoreAllMocks()
+    jest.restoreAllMocks()
     LavalinkMock.clearResponses()
   })
 
@@ -42,8 +81,14 @@ describe('Player', () => {
     const player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'v1' })
     LavalinkMock.setResponse('/sessions/mock-session/players/g1', { guildId: 'g1' })
     
-    await player.play({ track: { encoded: 'e' } as any })
-    await player.pause(true)
+    // @ts-ignore
+    await player.play({ clientTrack: { encoded: 'e', info: { title: 'T' } } as any })
+    await player.pause()
+    await player.resume().catch(() => {})
+    // @ts-ignore
+    player.queue.current.info.isSeekable = true
+    // @ts-ignore
+    player.queue.current.info.isStream = false
     await player.seek(100)
     await player.setVolume(50)
     // No 'stop' method in Player.ts, using destroy(false) to simulate stopping without disconnecting
@@ -54,11 +99,17 @@ describe('Player', () => {
     const player = manager.createPlayer({ guildId: 'ev1', voiceChannelId: 'v1' })
     const track = manager.utils.buildTrack({ encoded: 'e', info: { title: 'T' } } as any, 'u')
     
-    player.RyanlinkManager.emit('trackStart', player, track, {})
-    player.RyanlinkManager.emit('trackEnd', player, track, { reason: 'finished' })
-    player.RyanlinkManager.emit('trackError', player, track, { exception: { message: 'err' } })
-    player.RyanlinkManager.emit('trackStuck', player, track, { thresholdMs: 1000 })
-    player.RyanlinkManager.emit('playerDisconnect', player, 4006, 'Closed', true)
+    // @ts-ignore
+    player.RyanlinkManager.emit('trackStart', player, track, { op: 'event', type: 'TrackStartEvent', guildId: 'ev1', track: track.encoded })
+    // @ts-ignore
+    player.RyanlinkManager.emit('trackEnd', player, track, { op: 'event', type: 'TrackEndEvent', guildId: 'ev1', track: track.encoded, reason: 'finished' })
+    // @ts-ignore
+    player.RyanlinkManager.emit('trackError', player, track, { op: 'event', type: 'TrackExceptionEvent', guildId: 'ev1', track: track.encoded, exception: { severity: 'COMMON', message: 'err', cause: 'none', causeStackTrace: '' } })
+    // @ts-ignore
+    player.RyanlinkManager.emit('trackStuck', player, track, { op: 'event', type: 'TrackStuckEvent', guildId: 'ev1', track: track.encoded, thresholdMs: 1000 })
+    
+    // playerDisconnect only takes two arguments in ManagerEvents
+    player.RyanlinkManager.emit('playerDisconnect', player, 'v1')
   })
 
   it('handles sponsorblock methods', async () => {
@@ -90,7 +141,7 @@ describe('Player', () => {
       info: { title: 'T', author: 'A', identifier: 'i1', sourceName: 'spotify' } 
     } as any, 'u')
 
-    const searchSpy = vi.spyOn(player, 'search').mockImplementation(async (query) => {
+    const searchSpy = jest.spyOn(player, 'search').mockImplementation(async (query) => {
       const q = typeof query === 'string' ? query : query.query
       if (typeof q === 'string' && q.startsWith('sprec:')) {
         return { 
@@ -178,7 +229,7 @@ describe('Player', () => {
     }
     
     const track = manager.utils.buildTrack({ encoded: 'e', info: { title: 'T', author: 'A', sourceName: 'youtube' } } as any, 'u')
-    vi.spyOn(player, 'search').mockResolvedValue({ 
+    jest.spyOn(player, 'search').mockResolvedValue({ 
       loadType: 'playlist', 
       tracks: [{ encoded: 'e_too_short', info: { duration: 100000, title: 'S', author: 'A' } }] 
     } as any)
@@ -198,8 +249,8 @@ describe('Player', () => {
       if (String(event) === 'AutoplayError') debugEmitted = true
     })
 
-    // Force error in buildPlayedData
-    vi.spyOn(Autoplay as any, 'buildPlayedData').mockImplementation(() => {
+    // Force error in fetchCandidates
+    jest.spyOn(Autoplay as any, 'fetchCandidates').mockImplementation(() => {
       throw new Error('Forced Autoplay failure')
     })
 
@@ -216,7 +267,8 @@ describe('Player', () => {
     const node2 = manager.nodeManager.createNode({ host: 'other2', port: 2333, authorization: 'pw', id: 'other2' })
     node2.sessionId = 'other2-session'
     // @ts-ignore
-    node2.socket = { readyState: 1 }
+    // @ts-ignore
+    node2.socket = { readyState: 1, on: jest.fn(), send: jest.fn(), close: jest.fn(), removeAllListeners: jest.fn() } as any
     // Enable 'youtube' specifically to bypass the 'ytsearch' check in validateSourceString
     node2.info = { sourceManagers: ['soundcloud', 'youtube'], filters: ['volume'], version: { major: 4 }, plugins: [] } as any
 

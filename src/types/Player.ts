@@ -1,5 +1,6 @@
 import type { DestroyReasons, DisconnectReasons } from '../config/Constants'
 import type { RyanlinkNode } from '../node/Node'
+import type { FadingConfig } from './NodeLink'
 
 import type { EQBand, FilterData, AudioFilters } from './Filters'
 import type { StoredQueue } from './Queue'
@@ -136,6 +137,8 @@ export interface PlayConfiguration extends BasePlayOptions {
 
     userData?: anyObject
   }
+
+  fading?: FadingConfig
 }
 export interface PlayOptions extends PlayConfiguration {
   noReplace?: boolean

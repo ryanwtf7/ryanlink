@@ -204,7 +204,7 @@ export interface NodeManagerEvents {
 
   disconnect: (node: RyanlinkNode, reason: { code?: number; reason?: string }) => void
 
-  error: (node: RyanlinkNode, error: Error, payload?: unknown) => void
+  error: (error: Error, node: RyanlinkNode, payload?: unknown) => void
 
   raw: (node: RyanlinkNode, payload: unknown) => void
 

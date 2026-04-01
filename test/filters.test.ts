@@ -1,4 +1,3 @@
-import { fn } from './mock'
 import { FilterManager } from '../src/audio/Filters'
 import { EQList, audioOutputsData } from '../src/config/Constants'
 
@@ -11,7 +10,7 @@ function makePlayer(nodeOverrides: Record<string, any> = {}): any {
     ping: { node: 0, ws: 0 },
     queue: { current: null },
     options: { instaUpdateFiltersFix: false },
-    syncState: fn(),
+    syncState: jest.fn(),
     node: {
       sessionId: 'session123',
       _checkForSources: false,
@@ -20,8 +19,8 @@ function makePlayer(nodeOverrides: Record<string, any> = {}): any {
         filters: ['volume', 'equalizer', 'timescale', 'tremolo', 'vibrato', 'rotation', 'karaoke', 'lowPass', 'channelMix', 'echo', 'reverb'],
         plugins: [],
       },
-      updatePlayer: fn(() => Promise.resolve({})),
-      isNodeLink: fn(() => false),
+      updatePlayer: jest.fn(() => Promise.resolve({})),
+      isNodeLink: jest.fn(() => false),
       ...nodeOverrides,
     },
   }
@@ -301,6 +300,20 @@ describe('FilterManager', () => {
     })
   })
 
+  describe('toggleDistortion', () => {
+    it('enables distortion', async () => {
+      await fm.toggleDistortion(0.5, 0.5)
+      expect(fm.filters.distortion).toBe(true)
+      expect(fm.data.distortion?.sinOffset).toBe(0.5)
+    })
+
+    it('disables distortion on second call', async () => {
+      await fm.toggleDistortion()
+      await fm.toggleDistortion()
+      expect(fm.filters.distortion).toBe(false)
+    })
+  })
+
   describe('setEQ', () => {
     it('sets equalizer bands', async () => {
       await fm.setEQ([
@@ -323,6 +336,14 @@ describe('FilterManager', () => {
     it('throws for band missing gain', async () => {
       await expect(fm.setEQ([{ band: 0 } as any])).rejects.toThrow()
     })
+
+    it('handles transition between EQ bands', async () => {
+      const applySpy = jest.spyOn(fm as any, 'applyPlayerFilters')
+      await fm.setEQ([{ band: 0, gain: 1.0 }], 100)
+      
+      expect(applySpy).toHaveBeenCalled()
+      expect(fm.equalizerBands[0].gain).toBe(1.0)
+    })
   })
 
   describe('setEQPreset', () => {
@@ -334,6 +355,30 @@ describe('FilterManager', () => {
     it('applies Rock preset', async () => {
       await fm.setEQPreset('Rock')
       expect(fm.equalizerBands[0].gain).toBeCloseTo(0.3)
+    })
+  })
+
+  describe('setPreset', () => {
+    it('applies Vaporwave preset', async () => {
+      await fm.setPreset('Vaporwave')
+      expect(fm.filters.vaporwave).toBe(true)
+      expect(fm.data.timescale?.speed).toBe(0.85)
+    })
+
+    it('applies Nightcore preset', async () => {
+      await fm.setPreset('Nightcore')
+      expect(fm.filters.nightcore).toBe(true)
+    })
+
+    it('applies 8D preset', async () => {
+      await fm.setPreset('8D')
+      expect(fm.data.rotation?.rotationHz).toBe(0.2)
+    })
+
+    it('clears all filters with Clear preset', async () => {
+      fm.filters.nightcore = true
+      await fm.setPreset('Clear')
+      expect(fm.filters.nightcore).toBe(false)
     })
   })
 

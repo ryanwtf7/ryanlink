@@ -16,11 +16,20 @@ import type {
   AddMixerLayerResponse,
   ConnectionMetricsResponse,
   DirectStreamResponse,
+  EncodeTrackResponse,
+  EncodeTracksResponse,
+  FadingConfig,
   ListMixerLayersResponse,
+  LoadChaptersResponse,
+  LoadLyricsResponse,
   MeaningResponse,
   NodeLinkChapter,
+  NodeLinkDetailedStats,
+  NodeLinkInfo,
   NodeLinkLyrics,
   NodeLinkNoLyrics,
+  WorkersResponse,
+  YoutubeConfigResponse,
   YoutubeOAuthResponse,
 } from '../types/NodeLink'
 import type { Track, UnresolvedTrack } from '../types/Track'
@@ -44,7 +53,6 @@ export class NodeLinkNode extends RyanlinkNode {
     if (!nextTrack) throw new Error('No track provided')
     await this.updatePlayer({
       guildId: player.guildId,
-
       playerOptions: { nextTrack: { encoded: nextTrack.encoded, userData: nextTrack.userData || {} } },
     })
     return true
@@ -54,17 +62,16 @@ export class NodeLinkNode extends RyanlinkNode {
     if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
     await this.updatePlayer({
       guildId: player.guildId,
-
       playerOptions: { nextTrack: { encoded: null } },
     })
     return true
   }
 
-  public async getMeaning(track?: Track | UnresolvedTrack) {
+  public async getMeaning(track?: Track | UnresolvedTrack, lang: string = 'en'): Promise<MeaningResponse> {
     if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
     const encodedTrack = track?.encoded
     if (!encodedTrack) throw new Error('No track provided')
-    return (await this.request(`/meaning?encodedTrack=${encodedTrack}`, (m) => {
+    return (await this.request(`/meaning?encodedTrack=${encodeURIComponent(encodedTrack)}&lang=${lang}`, (m) => {
       m.method = 'GET'
     })) as MeaningResponse
   }
@@ -73,12 +80,9 @@ export class NodeLinkNode extends RyanlinkNode {
     if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
     return (await this.request(`/sessions/${this.sessionId}/players/${player.guildId}/mix`, (m) => {
       m.method = 'POST'
+      if (m.headers) m.headers['Content-Type'] = 'application/json'
       m.body = safeStringify({
-        track: {
-          encoded: trackToAdd.encoded,
-
-          userData: trackToAdd.userData,
-        },
+        track: { encoded: trackToAdd.encoded, userData: trackToAdd.userData },
         volume: volume / 100,
       })
     })) as AddMixerLayerResponse
@@ -95,9 +99,8 @@ export class NodeLinkNode extends RyanlinkNode {
     if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
     await this.request(`/sessions/${this.sessionId}/players/${player.guildId}/mix/${mixId}`, (m) => {
       m.method = 'PATCH'
-      m.body = safeStringify({
-        volume: volume / 100,
-      })
+      if (m.headers) m.headers['Content-Type'] = 'application/json'
+      m.body = safeStringify({ volume: volume / 100 })
     })
     return true
   }
@@ -108,6 +111,195 @@ export class NodeLinkNode extends RyanlinkNode {
       m.method = 'DELETE'
     })
     return true
+  }
+
+  public async loadLyrics(track: Track | UnresolvedTrack, lang: string = 'en'): Promise<LoadLyricsResponse> {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    const encodedTrack = track?.encoded
+    if (!encodedTrack) throw new Error('No track provided')
+    return (await this.request(`/loadlyrics?encodedTrack=${encodeURIComponent(encodedTrack)}&lang=${lang}`, (m) => {
+      m.method = 'GET'
+    })) as LoadLyricsResponse
+  }
+
+  public async loadChapters(track: Track | UnresolvedTrack): Promise<LoadChaptersResponse> {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    const encodedTrack = track?.encoded
+    if (!encodedTrack) throw new Error('No track provided')
+    return (await this.request(`/loadchapters?encodedTrack=${encodeURIComponent(encodedTrack)}`, (m) => {
+      m.method = 'GET'
+    })) as LoadChaptersResponse
+  }
+
+  public async nodeLinkLyrics(player: Player, track?: Track | UnresolvedTrack, language: string = 'en'): Promise<NodeLinkLyrics | NodeLinkNoLyrics> {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    const encodedTrack = track?.encoded || player.queue.current?.encoded
+    if (!encodedTrack) throw new Error('No track provided')
+    return (await this.request(
+      `/sessions/${this.sessionId}/players/${player.guildId}/lyrics?encodedTrack=${encodeURIComponent(encodedTrack)}&lang=${language}`,
+      (m) => { m.method = 'GET' }
+    )) as NodeLinkLyrics | NodeLinkNoLyrics
+  }
+
+  public async subscribeLyricsNodeLink(player: Player, skipTrackSource: boolean = false): Promise<void> {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    await this.request(
+      `/sessions/${this.sessionId}/players/${player.guildId}/lyrics/subscribe?skipTrackSource=${skipTrackSource}`,
+      (m) => { m.method = 'POST' }
+    )
+  }
+
+  public async unsubscribeLyricsNodeLink(player: Player): Promise<void> {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    await this.request(
+      `/sessions/${this.sessionId}/players/${player.guildId}/lyrics/subscribe`,
+      (m) => { m.method = 'DELETE' }
+    )
+  }
+
+  public async getChapters(player: Player, track?: Track | UnresolvedTrack): Promise<NodeLinkChapter[]> {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    const encodedTrack = track?.encoded || player.queue.current?.encoded
+    if (!encodedTrack) throw new Error('No track provided')
+    return (await this.request(
+      `/sessions/${this.sessionId}/players/${player.guildId}/chapters?encodedTrack=${encodeURIComponent(encodedTrack)}`,
+      (m) => { m.method = 'GET' }
+    )) as NodeLinkChapter[]
+  }
+
+  public async getConnectionMetrics(): Promise<ConnectionMetricsResponse> {
+    return (await this.request(`/connection`, (m) => { m.method = 'GET' })) as ConnectionMetricsResponse
+  }
+
+  public async getDirectStream(track: Track | UnresolvedTrack, itag?: number): Promise<DirectStreamResponse> {
+    if (!track.encoded) throw new Error('No encoded track provided')
+    let path = `/trackstream?encodedTrack=${encodeURIComponent(track.encoded)}`
+    if (itag) path += `&itag=${itag}`
+    return (await this.request(path, (m) => { m.method = 'GET' })) as DirectStreamResponse
+  }
+
+  public async loadDirectStream(
+    track: Track | UnresolvedTrack,
+    volume?: number,
+    position?: number,
+    filters?: object | string
+  ): Promise<ReadableStream> {
+    if (!track.encoded) throw new Error('No encoded track provided')
+    let path = `/loadstream?encodedTrack=${encodeURIComponent(track.encoded)}`
+    if (volume != null && volume > 0) path += `&volume=${volume}`
+    if (position != null && position > 0) path += `&position=${position}`
+    if (filters) path += `&filters=${typeof filters === 'object' ? encodeURIComponent(safeStringify(filters)) : encodeURIComponent(filters)}`
+    const res = await this.rawRequest(path, (m) => { m.method = 'GET' })
+    return res.response as unknown as ReadableStream
+  }
+
+  public async loadDirectStreamPost(
+    track: Track | UnresolvedTrack,
+    volume?: number,
+    position?: number,
+    filters?: object
+  ): Promise<ReadableStream> {
+    const res = await this.rawRequest(`/loadstream`, (m) => {
+      m.method = 'POST'
+      if (m.headers) m.headers['Content-Type'] = 'application/json'
+      m.body = safeStringify({
+        encodedTrack: track.encoded,
+        ...(volume != null ? { volume } : {}),
+        ...(position != null ? { position } : {}),
+        ...(filters ? { filters } : {}),
+      })
+    })
+    return res.response as unknown as ReadableStream
+  }
+
+  public async encodeTrack(trackInfo: Record<string, unknown>): Promise<EncodeTrackResponse> {
+    return (await this.request(
+      `/encodetrack?track=${encodeURIComponent(safeStringify(trackInfo))}`,
+      (m) => { m.method = 'GET' }
+    )) as EncodeTrackResponse
+  }
+
+  public async encodeTracks(tracks: Record<string, unknown>[]): Promise<EncodeTracksResponse> {
+    return (await this.request(`/encodedtracks`, (m) => {
+      m.method = 'POST'
+      if (m.headers) m.headers['Content-Type'] = 'application/json'
+      m.body = safeStringify(tracks)
+    })) as EncodeTracksResponse
+  }
+
+  public async getWorkers(): Promise<WorkersResponse> {
+    return (await this.request(`/workers`, (m) => { m.method = 'GET' })) as WorkersResponse
+  }
+
+  public async patchWorker(code: string, options: { id?: number; clusterId?: number; pid?: number }): Promise<void> {
+    await this.request(`/workers`, (m) => {
+      m.method = 'PATCH'
+      if (m.headers) m.headers['Content-Type'] = 'application/json'
+      m.body = safeStringify({ code, ...options })
+    })
+  }
+
+  public async setFading(player: Player, fading: FadingConfig): Promise<void> {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    await this.request(`/sessions/${this.sessionId}/players/${player.guildId}`, (m) => {
+      m.method = 'PATCH'
+      if (m.headers) m.headers['Content-Type'] = 'application/json'
+      m.body = safeStringify({ fading })
+    })
+  }
+
+  public async changeAudioTrackLanguage(player: Player, language_audioTrackId: string) {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    return await this.request(`/sessions/${this.sessionId}/players/${player.guildId}`, (r) => {
+      r.method = 'PATCH'
+      if (r.headers) r.headers['Content-Type'] = 'application/json'
+      r.body = safeStringify({
+        track: {
+          encoded: player.queue.current?.encoded,
+          position: player.position,
+          audioTrackId: language_audioTrackId,
+        },
+      })
+    })
+  }
+
+  public async updateYoutubeConfig(refreshToken?: string, visitorData?: string) {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    return await this.request(`/youtube/config`, (r) => {
+      r.method = 'PATCH'
+      if (r.headers) r.headers['Content-Type'] = 'application/json'
+      r.body = safeStringify({ refreshToken, visitorData })
+    })
+  }
+
+  public async getYoutubeConfig(validate: boolean = false): Promise<YoutubeConfigResponse> {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    return (await this.request(`/youtube/config${validate ? '?validate=true' : ''}`, (r) => {
+      r.method = 'GET'
+    })) as YoutubeConfigResponse
+  }
+
+  public async getYoutubeOAUTH(refreshToken: string): Promise<YoutubeOAuthResponse> {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    return (await this.request(`/youtube/oauth?refreshToken=${encodeURIComponent(refreshToken)}`, (m) => {
+      m.method = 'GET'
+    })) as YoutubeOAuthResponse
+  }
+
+  public async updateYoutubeOAUTH(refreshToken: string): Promise<YoutubeOAuthResponse> {
+    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
+    return (await this.request(`/youtube/oauth`, (m) => {
+      if (m.headers) m.headers['Content-Type'] = 'application/json'
+      m.body = safeStringify({ refreshToken })
+    })) as YoutubeOAuthResponse
+  }
+
+  public async getDetailedStats(): Promise<NodeLinkDetailedStats> {
+    return (await this.request(`/stats`, (m) => { m.method = 'GET' })) as NodeLinkDetailedStats
+  }
+
+  public async getNodeLinkInfo(): Promise<NodeLinkInfo> {
+    return (await this.request(`/info`, (m) => { m.method = 'GET' })) as NodeLinkInfo
   }
 
   specificFilters = {
@@ -164,118 +356,6 @@ export class NodeLinkNode extends RyanlinkNode {
       await player.filterManager.applyPlayerFilters()
       return true
     },
-  }
-
-  public async nodeLinkLyrics(player: Player, track?: Track | UnresolvedTrack, language: string = 'en'): Promise<NodeLinkLyrics | NodeLinkNoLyrics> {
-    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
-    const encodedTrack = track?.encoded || player.queue.current?.encoded
-    if (!encodedTrack) throw new Error('No track provided')
-    return (await this.request(`/sessions/${this.sessionId}/players/${player.guildId}/lyrics?encodedTrack=${encodedTrack}&lang=${language}`, (m) => {
-      m.method = 'GET'
-    })) as NodeLinkLyrics | NodeLinkNoLyrics
-  }
-
-  public async getChapters(player: Player, track?: Track | UnresolvedTrack): Promise<NodeLinkChapter[]> {
-    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
-    const encodedTrack = track?.encoded || player.queue.current?.encoded
-    if (!encodedTrack) throw new Error('No track provided')
-    return (await this.request(`/sessions/${this.sessionId}/players/${player.guildId}/chapters?encodedTrack=${encodedTrack}`, (m) => {
-      m.method = 'GET'
-    })) as NodeLinkChapter[]
-  }
-
-  public async getConnectionMetrics(): Promise<ConnectionMetricsResponse> {
-    return (await this.request(`/connection`, (m) => {
-      m.method = 'GET'
-    })) as ConnectionMetricsResponse
-  }
-
-  public async getDirectStream(track: Track | UnresolvedTrack): Promise<DirectStreamResponse> {
-    return (await this.request(`/trackstream?encodedTrack=${track.encoded}`, (m) => {
-      m.method = 'GET'
-    })) as DirectStreamResponse
-  }
-
-  public async loadDirectStream(track: Track | UnresolvedTrack, volume: number, position: number, filters: object | string): Promise<ReadableStream> {
-    let requestPath = `/loadstream?encodedTrack=${track.encoded}`
-    if (volume && volume > 0 && volume <= 100) requestPath += `&volume=${volume / 100}`
-    if (position && position > 0) requestPath += `&position=${position}`
-    if (filters) requestPath += `&filters=${typeof filters === 'object' ? safeStringify(filters) : filters}`
-    const res = await this.rawRequest(requestPath, (m) => {
-      m.method = 'GET'
-    })
-    return res.response as unknown as ReadableStream
-  }
-
-  public async changeAudioTrackLanguage(player: Player, language_audioTrackId: string) {
-    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
-
-    const res = await this.request(`/sessions/${this.sessionId}/players/${player.guildId}`, (r) => {
-      r.method = 'PATCH'
-
-      r.headers!['Content-Type'] = 'application/json'
-
-      r.body = safeStringify({
-        track: {
-          encoded: player.queue.current?.encoded,
-          position: player.position,
-          audioTrackId: language_audioTrackId,
-        },
-      })
-    })
-
-    return res
-  }
-
-  public async updateYoutubeConfig(refreshToken?: string, visitorData?: string) {
-    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
-
-    const res = await this.request(`/youtube/config`, (r) => {
-      r.method = 'PATCH'
-
-      r.headers!['Content-Type'] = 'application/json'
-
-      r.body = safeStringify({
-        refreshToken: refreshToken,
-        visitorData: visitorData,
-      })
-    })
-
-    return res
-  }
-
-  public async getYoutubeConfig(validate: boolean = false) {
-    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
-
-    const res = await this.request(`/youtube/config${validate ? '?validate=true' : ''}`, (r) => {
-      r.method = 'GET'
-    })
-
-    return res as {
-      refreshToken: string
-      visitorData: string | null
-      isConfigured: boolean
-      isValid: boolean | null
-    }
-  }
-
-  public async getYoutubeOAUTH(refreshToken: string) {
-    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
-
-    return (await this.request(`/youtube/oauth?refreshToken=${refreshToken}`, (m) => {
-      m.method = 'GET'
-    })) as YoutubeOAuthResponse
-  }
-
-  public async updateYoutubeOAUTH(refreshToken: string) {
-    if (!this.sessionId) throw new Error('The Audio Node is either not ready, or not up to date!')
-
-    return (await this.request(`/youtube/oauth`, (m) => {
-      m.method = 'POST'
-      m.body = safeStringify({
-        refreshToken: refreshToken,
-      })
-    })) as YoutubeOAuthResponse
   }
 }
 

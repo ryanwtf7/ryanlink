@@ -14,6 +14,10 @@ export const AudioTrackSymbol = Symbol('Ryanlink-Track')
 export const UnresolvedAudioTrackSymbol = Symbol('Ryanlink-Track-Unresolved')
 export const AudioQueueSymbol = Symbol('Ryanlink-Queue')
 export const AudioNodeSymbol = Symbol('Ryanlink-Node')
+export const ManagerSymbol = Symbol('Ryanlink-Manager-Internal')
+export const NodeManagerSymbol = Symbol('Ryanlink-NodeManager-Internal')
+export const NodeSymbol = Symbol('Ryanlink-Node-Internal')
+export const PlayerSymbol = Symbol('Ryanlink-Player-Internal')
 
 const escapeRegExp = (str: string): string => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -31,9 +35,11 @@ export function parseConnectionUrl(connectionUrl: string) {
 }
 
 export class RyanlinkUtils {
-  public RyanlinkManager: RyanlinkManager | undefined = undefined
+  public get RyanlinkManager(): RyanlinkManager | undefined {
+    return (this as any)[ManagerSymbol]
+  }
   constructor(RyanlinkManager?: RyanlinkManager) {
-    this.RyanlinkManager = RyanlinkManager
+    if (RyanlinkManager) (this as any)[ManagerSymbol] = RyanlinkManager
   }
 
   buildPluginInfo(data: any, clientData: any = {}) {
@@ -436,46 +442,90 @@ export class RyanlinkUtils {
 
     if (!node._checkForSources) return
 
+    const lavaSrcSources = [
+      'spsearch', 'sprec',           
+      'amsearch',                     
+      'dzsearch', 'dzisrc', 'dzrec', 
+      'ymsearch', 'ymrec',           
+      'vksearch', 'vkrec',           
+      'tdsearch', 'tdrec',           
+      'jssearch', 'jsrec',           
+      'admsearch', 'admrec',         
+      'shsearch',                    
+      'lfsearch',                    
+      'amzsearch', 'amzrec',         
+      'gnsearch', 'gnrec',           
+      'qbsearch', 'qbisrc', 'qbrec', 
+      'pdsearch', 'pdisrc', 'pdrec', 
+    ]
+    if (lavaSrcSources.includes(source) && node._checkForPlugins) {
+      const hasLavaSrc = node.info?.plugins?.some((p) =>
+        p.name === 'lavasrc-plugin' || p.name.toLowerCase().includes('lavasrc')
+      )
+      if (!hasLavaSrc)
+        throw new Error(`Audio Node requires 'lavasrc-plugin' for source '${source}'`)
+    }
+
     if (source === 'amsearch' && !node.info?.sourceManagers?.includes('applemusic')) {
       throw new Error("Audio Node has not 'applemusic' enabled, which is required to have 'amsearch' work")
     }
-    if (source === 'dzisrc' && !node.info?.sourceManagers?.includes('deezer')) {
-      throw new Error("Audio Node has not 'deezer' enabled, which is required to have 'dzisrc' work")
-    }
-    if (source === 'dzsearch' && !node.info?.sourceManagers?.includes('deezer')) {
-      throw new Error("Audio Node has not 'deezer' enabled, which is required to have 'dzsearch' work")
+    if ((source === 'dzisrc' || source === 'dzsearch' || source === 'dzrec') && !node.info?.sourceManagers?.includes('deezer')) {
+      throw new Error("Audio Node has not 'deezer' enabled, which is required to have '" + source + "' work")
     }
     if (source === 'dzisrc' && node.info?.sourceManagers?.includes('deezer') && !node.info?.sourceManagers?.includes('http')) {
       throw new Error("Audio Node has not 'http' enabled, which is required to have 'dzisrc' to work")
     }
-    if (source === 'jsrec' && !node.info?.sourceManagers?.includes('jiosaavn')) {
-      throw new Error("Audio Node has not 'jiosaavn' enabled, which is required to have 'jsrec' to work")
-    }
-    if (source === 'jssearch' && !node.info?.sourceManagers?.includes('jiosaavn')) {
-      throw new Error("Audio Node has not 'jiosaavn' enabled, which is required to have 'jssearch' to work")
+    if ((source === 'jsrec' || source === 'jssearch') && !node.info?.sourceManagers?.includes('jiosaavn')) {
+      throw new Error("Audio Node has not 'jiosaavn' enabled, which is required to have '" + source + "' work")
     }
     if (source === 'scsearch' && !node.info?.sourceManagers?.includes('soundcloud')) {
       throw new Error("Audio Node has not 'soundcloud' enabled, which is required to have 'scsearch' work")
     }
+    if ((source === 'tdsearch' || source === 'tdrec') && !node.info?.sourceManagers?.includes('tidal')) {
+      throw new Error("Audio Node has not 'tidal' enabled, which is required to have '" + source + "' work")
+    }
+    if ((source === 'ymsearch' || source === 'ymrec') && !node.info?.sourceManagers?.includes('yandexmusic')) {
+      throw new Error("Audio Node has not 'yandexmusic' enabled, which is required to have '" + source + "' work")
+    }
+    if ((source === 'ytmsearch' || source === 'ytsearch') && !node.info?.sourceManagers?.includes('youtube')) {
+      throw new Error("Audio Node has not 'youtube' enabled, which is required to have '" + source + "' work")
+    }
+    if ((source === 'vksearch' || source === 'vkrec') && !node.info?.sourceManagers?.includes('vkmusic')) {
+      throw new Error("Audio Node has not 'vkmusic' enabled, which is required to have '" + source + "' work")
+    }
+    if ((source === 'qbsearch' || source === 'qbisrc' || source === 'qbrec') && !node.info?.sourceManagers?.includes('qobuz')) {
+      throw new Error("Audio Node has not 'qobuz' enabled, which is required to have '" + source + "' work")
+    }
+    if ((source === 'pdsearch' || source === 'pdisrc' || source === 'pdrec') && !node.info?.sourceManagers?.includes('pandora')) {
+      throw new Error("Audio Node has not 'pandora' enabled, which is required to have '" + source + "' work")
+    }
+
     if (
       source === 'speak' &&
       node._checkForPlugins &&
-      !node.info?.plugins?.find((c) => c.name.toLowerCase().includes(BuiltinSources.DuncteBot_Plugin.toLowerCase()))
+      !node.info?.plugins?.find((c) =>
+        c.name === 'skybot-lavalink-plugin' ||
+        c.name.toLowerCase().includes(BuiltinSources.DuncteBot_Plugin.toLowerCase())
+      )
     ) {
-      throw new Error("Audio Node has not 'speak' enabled, which is required to have 'speak' work")
+      throw new Error("Audio Node has not 'speak' enabled — requires 'skybot-lavalink-plugin'")
     }
-    if (source === 'tdsearch' && !node.info?.sourceManagers?.includes('tidal')) {
-      throw new Error("Audio Node has not 'tidal' enabled, which is required to have 'tdsearch' work")
-    }
-    if (source === 'tdrec' && !node.info?.sourceManagers?.includes('tidal')) {
-      throw new Error("Audio Node has not 'tidal' enabled, which is required to have 'tdrec' work")
+    if (
+      source === 'phsearch' &&
+      node._checkForPlugins &&
+      !node.info?.plugins?.find((c) => c.name === 'skybot-lavalink-plugin')
+    ) {
+      throw new Error("Audio Node has not 'phsearch' enabled — requires 'skybot-lavalink-plugin'")
     }
     if (
       source === 'tts' &&
       node._checkForPlugins &&
-      !node.info?.plugins?.find((c) => c.name.toLowerCase().includes(BuiltinSources.GoogleCloudTTS.toLowerCase()))
+      !node.info?.plugins?.find((c) =>
+        c.name === 'tts-plugin' ||
+        c.name.toLowerCase().includes(BuiltinSources.GoogleCloudTTS.toLowerCase())
+      )
     ) {
-      throw new Error("Audio Node has not 'tts' enabled, which is required to have 'tts' work")
+      throw new Error("Audio Node has not 'tts' enabled — requires 'tts-plugin'")
     }
     if (
       source === 'ftts' &&
@@ -486,33 +536,6 @@ export class RyanlinkUtils {
       )
     ) {
       throw new Error("Audio Node has not 'flowery-tts' enabled, which is required to have 'ftts' work")
-    }
-    if (source === 'ymsearch' && !node.info?.sourceManagers?.includes('yandexmusic')) {
-      throw new Error("Audio Node has not 'yandexmusic' enabled, which is required to have 'ymsearch' work")
-    }
-    if (source === 'ytmsearch' && !node.info?.sourceManagers?.includes('youtube')) {
-      throw new Error("Audio Node has not 'youtube' enabled, which is required to have 'ytmsearch' work")
-    }
-    if (source === 'ytsearch' && !node.info?.sourceManagers?.includes('youtube')) {
-      throw new Error("Audio Node has not 'youtube' enabled, which is required to have 'ytsearch' work")
-    }
-    if (source === 'vksearch' && !node.info?.sourceManagers?.includes('vkmusic')) {
-      throw new Error("Audio Node has not 'vkmusic' enabled, which is required to have 'vksearch' work")
-    }
-    if (source === 'vkrec' && !node.info?.sourceManagers?.includes('vkmusic')) {
-      throw new Error("Audio Node has not 'vkmusic' enabled, which is required to have 'vkrec' work")
-    }
-    if (source === 'qbsearch' && !node.info?.sourceManagers?.includes('qobuz')) {
-      throw new Error("Audio Node has not 'qobuz' enabled, which is required to have 'qbsearch' work")
-    }
-    if (source === 'qbisrc' && !node.info?.sourceManagers?.includes('qobuz')) {
-      throw new Error("Audio Node has not 'qobuz' enabled, which is required to have 'qbisrc' work")
-    }
-    if (source === 'qbrec' && !node.info?.sourceManagers?.includes('qobuz')) {
-      throw new Error("Audio Node has not 'qobuz' enabled, which is required to have 'qbrec' work")
-    }
-    if (['pdsearch', 'pdisrc', 'pdrec'].includes(source) && !node.info?.sourceManagers?.includes('pandora')) {
-      throw new Error("Audio Node has not 'pandora' enabled, which is required to have '" + source + "' work")
     }
 
     return

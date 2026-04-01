@@ -3,55 +3,92 @@ title: Search Prefixes
 description: A comprehensive list of all supported search prefixes in Ryanlink.
 ---
 
-Ryanlink supports a vast array of search platforms and plugins. When performing a search using `manager.search()`, you can either pass a URL or a query string prefixed with one of the following identifiers.
+import { Badge } from '@astrojs/starlight/components';
+
+Ryanlink supports a vast array of search platforms. When performing a search using `manager.search()` or `player.search()`, pass a URL or a query string prefixed with one of the following identifiers.
 
 ## Standard Platforms
 
-These platforms are supported by default or via common Lavalink plugins.
-
-| Platform | Prefix | Description |
+| Platform | Prefix(es) | Notes |
 | :--- | :--- | :--- |
-| **YouTube** | `ytsearch:` | Standard YouTube search |
-| **YouTube Music** | `ytmsearch:` | YouTube Music search (Recommended for music) |
-| **SoundCloud** | `scsearch:` | SoundCloud search |
-| **Bandcamp** | `bcsearch:` | Bandcamp search |
+| **YouTube** | `ytsearch:`, `yt:`, `youtube:` | Standard video search |
+| **YouTube Music** | `ytmsearch:`, `ytm:`, `youtubemusic:` | Music-only search (recommended) |
+| **SoundCloud** | `scsearch:`, `sc:`, `soundcloud:` | Track search |
+| **Bandcamp** | `bcsearch:`, `bc:`, `bandcamp:` | Track search |
 
-## Plugin-Extended Platforms
+## LavaSrc Plugin Platforms <Badge text="Requires lavasrc-plugin" variant="caution" />
 
-The following prefixes require specific Lavalink plugins (like **LavaSrc** or **LavaSearch**) to be installed on your Node.
-
-| Platform | Search Prefix | Recommendation Prefix | ISRC Prefix |
+| Platform | Search | Recommendations | ISRC |
 | :--- | :--- | :--- | :--- |
-| **Spotify** | `spsearch:` | `sprec:` | - |
-| **Apple Music** | `amsearch:` | `amrec:` | - |
-| **Deezer** | `dzsearch:` | `dzrec:` | `dzisrc:` |
-| **Yandex Music** | `ymsearch:` | `ymrec:` | - |
-| **VK Music** | `vksearch:` | `vkrec:` | - |
-| **Tidal** | `tdsearch:` | `tdrec:` | - |
-| **Qobuz** | `qbsearch:` | `qbrec:` | `qbisrc:` |
-| **Pandora** | `pdsearch:` | `pdrec:` | `pdisrc:` |
+| **Spotify** | `spsearch:`, `sp:` | `sprec:` | — |
+| **Apple Music** | `amsearch:`, `am:` | — | — |
+| **Deezer** | `dzsearch:`, `dz:` | `dzrec:` | `dzisrc:` |
+| **Yandex Music** | `ymsearch:`, `yandex:` | `ymrec:` | — |
+| **VK Music** | `vksearch:`, `vk:` | `vkrec:` | — |
+| **Tidal** | `tdsearch:`, `td:` | `tdrec:` | — |
+| **JioSaavn** | `jssearch:`, `js:` | `jsrec:` | — |
+| **Qobuz** | `qbsearch:`, `qobuz:` | `qbrec:` | `qbisrc:` |
+| **Pandora** | `pdsearch:`, `pd:` | `pdrec:` | `pdisrc:` |
+| **Audiomack** | `admsearch:`, `adm:` | `admrec:` | — |
+| **Shazam** | `shsearch:`, `sh:` | — | — |
+| **Last.fm** | `lfsearch:`, `lf:` | — | — |
+| **Amazon Music** | `amzsearch:`, `amz:` | `amzrec:` | — |
+| **Gaana** | `gnsearch:`, `gn:` | `gnrec:` | — |
+| **Instagram** | `igsearch:`, `ig:` | — | — |
+| **Bilibili** | `blsearch:`, `bl:` | — | — |
 
-## Specialized & Custom Sources
+## NodeLink Exclusive Platforms <Badge text="Requires NodeLink" variant="tip" />
 
-| Source | Prefix | Description |
+| Platform | Prefix(es) | Description |
 | :--- | :--- | :--- |
-| **Flowery TTS** | `ftts:` | Text-to-Speech via Flowery |
-| **JioSaavn** | `jssearch:` | JioSaavn search (Region-specific) |
-| **Pornhub** | `phsearch:` | Pornhub search (Requires specific plugin) |
-| **Local File** | `local` | Play a file from the Node's local filesystem |
-| **HTTP(S) Link** | `link` / `uri` | Play via a direct web URL |
+| **Mixcloud** | `mcsearch:`, `mixcloud:` | Track search |
+| **NicoVideo** | `ncsearch:`, `nicovideo:` | Video search |
+| **Songlink / Odesli** | `slsearch:`, `songlink:` | Aggregated search |
+| **Audius** | `ausearch:`, `audius:` | Track search |
+| **Amazon Music** | `azsearch:` | NodeLink alias |
+| **Anghami** | `agsearch:`, `anghami:` | Track search |
+| **Bluesky** | `bksearch:`, `bluesky:` | Media search |
+| **Letras.mus.br** | `lmsearch:`, `letras:` | Lyrics/meaning search |
+| **Eternal Box** | `ebox:`, `jukebox:` | Infinite Jukebox search |
+| **Piper TTS** | `pipertts:` | Local text-to-speech |
+| **Google TTS** | `gtts:`, `speak:` | Google Cloud TTS |
 
-## Additional Identifiers
+## TTS & Special Sources
 
-Ryanlink also supports internal aliases for many of these platforms to allow more natural input:
+| Source | Prefix(es) | Plugin Required |
+| :--- | :--- | :--- |
+| **Flowery TTS** | `ftts:`, `flowery:` | Built-in |
+| **Google Cloud TTS** | `tts:` | `tts-plugin` (DuncteBot) |
+| **DuncteBot speak** | `speak:` | `skybot-lavalink-plugin` |
+| **PornHub** | `phsearch:`, `pornhub:` | `skybot-lavalink-plugin` |
+| **Local File** | `local:` | Node filesystem access |
+| **HTTP(S) URL** | `http:`, `https:`, `link:`, `uri:` | Direct URL playback |
 
-- **Apple**: `apple`, `applemusic`, `apple music`
-- **Spotify**: `sp`, `spotify`, `spotify.com`
-- **Deezer**: `dz`, `deezer`
-- **Tidal**: `td`, `tidal`
-- **Instagram**: `ig`, `igsearch`
-- **Bilibili**: `bl`, `blsearch`
-... and many more.
+## Setting a Default Platform
 
-> [!TIP]
-> You can set a global default search platform in your Manager options using `defaultSearchPlatform`. This prefix will be automatically applied to any query that isn't a direct link.
+```typescript
+const manager = new RyanlinkManager({
+  playerOptions: {
+    defaultSearchPlatform: 'spsearch', // Spotify as default
+  }
+});
+```
+
+Any query that isn't a direct URL will automatically use this prefix.
+
+## Source Validation
+
+When `autoChecks.sourcesValidations` is `true` (default), Ryanlink validates that the node has the required source manager enabled before sending the request. Set it to `false` to skip validation:
+
+```typescript
+nodes: [{
+  id: 'main',
+  host: 'localhost',
+  port: 2333,
+  authorization: 'youshallnotpass',
+  autoChecks: {
+    sourcesValidations: false,
+    pluginValidations: false,
+  }
+}]
+```

@@ -1,76 +1,120 @@
 ---
 title: Autoplay System
-description: How to use Ryanlink's built-in intelligent autoplay for continuous music playback.
+description: How Ryanlink's built-in intelligent autoplay works and how to configure it.
 ---
 
-import { Steps, Badge, Card, CardGrid } from '@astrojs/starlight/components';
+import { Badge } from '@astrojs/starlight/components';
 
-**Ryanlink** includes a built-in, intelligent Autoplay system that automatically finds and adds similar tracks to the queue when current playback ends. This system is designed to be zero-config but highly customizable.
+Ryanlink includes a built-in `Autoplay` class that automatically finds and queues similar tracks when the queue empties. It uses a multi-source fetch chain with weighted scoring to pick the best match.
 
-## Quick Start
+## Enabling Autoplay
 
-Enable autoplay globally in your `RyanlinkManager` configuration or per-player.
+Autoplay is triggered via the `onEmptyQueue.autoPlayFunction` option. Set `player.autoplay = true` to activate it per-player:
 
 ```typescript
 const manager = new RyanlinkManager({
-  // ... other options ...
   playerOptions: {
-    autoplay: true, // Enable autoplay by default for all players
+    onEmptyQueue: {
+      autoPlayFunction: async (player, lastTrack) => {
+        const { Autoplay } = await import('ryanlink');
+        if (!player.autoplay) return; // gate with your own DB check
+        await Autoplay.defaultAutoplay(player, lastTrack);
+      },
+      destroyAfterMs: 20000, // leave VC after 20s if queue empty and autoplay off
+    },
   }
 });
+
+// Enable per-player
+player.autoplay = true;
 ```
 
 ---
 
-## Technical Configuration <Badge text="Built-in" variant="tip" />
+## AutoplayConfig Options
 
-You can fine-tune how the engine selects new tracks using the `autoplayConfig` object.
+Fine-tune the selection algorithm via `autoplayConfig` in your manager options:
 
-| Option | Type | Description |
-| :--- | :--- | :--- |
-| `enabled` | `boolean` | Whether the system is active. |
-| `limit` | `number` | Max number of similar tracks to fetch (Default: 5). |
-| `minDuration` | `number` | Minimum track duration (Default: 20,000ms). |
-| `maxDuration` | `number` | Maximum track duration (Default: 900,000ms). |
-| `defaultSource` | `string` | The search platform to use for discovery (ytmsearch, spsearch). |
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `enabled` | `boolean` | `true` | Whether the built-in `Autoplay` class is active. |
+| `limit` | `number` | `1` | Tracks to add per autoplay trigger. |
+| `minDuration` | `number` | `20000` | Minimum track duration in ms. |
+| `maxDuration` | `number` | `900000` | Maximum track duration in ms. |
+| `durationTolerance` | `number` | `90000` | Max delta (ms) between last track and candidate. Candidates outside this window lose score points. |
+| `historyLimit` | `number` | `20` | Circular buffer size — tracks in this buffer are never re-queued. |
+| `prefetchThreshold` | `number` | `1` | Trigger autoplay early when queue drops to this many tracks remaining. |
+| `excludeKeywords` | `string[]` | See below | Keyword blacklist applied to track titles. |
+| `defaultSource` | `string` | `'ytsearch'` | Fallback search source. |
 
-### Example Optimization
+Default excluded keywords: `nightcore`, `bass boosted`, `8d audio`, `slowed`, `reverb`, `bass boost`, `pitch shift`, `speed up`, `sped up`.
 
 ```typescript
-manager.createPlayer({
-  guildId: '...',
-  autoplay: true,
-  autoplayConfig: {
-    limit: 10,
-    minDuration: 30000,
-    excludeKeywords: ['remix', 'slowed', '8d'],
-    defaultSource: 'ytmsearch'
+const manager = new RyanlinkManager({
+  playerOptions: {
+    autoplayConfig: {
+      limit: 1,
+      durationTolerance: 90000,
+      historyLimit: 20,
+      prefetchThreshold: 1,
+      excludeKeywords: ['nightcore', 'slowed', 'reverb', '8d'],
+    }
   }
 });
 ```
 
 ---
 
-## Intelligence Layers
+## How Selection Works
 
-Ryanlink uses a multi-layered discovery process to ensure high-quality recommendations:
+### 1. Multi-Source Fetch Chain
 
-<CardGrid staggered>
-  <Card title="Spotify Recommendations" icon="star">
-    If the last track was from Spotify, the engine uses the `sprec:` source with the track's ISRC or identifier as a seed.
-  </Card>
-  <Card title="YouTube Music Similar" icon="random">
-    For YouTube tracks, the engine leverages the `RD` (Radio) algorithm to find stylistically identical music.
-  </Card>
-  <Card title="Artist Discovery" icon="rocket">
-    As a fallback, the engine searches the artist's discography on your `defaultSource` to keep the music flowing.
-  </Card>
-  <Card title="Duplicate Prevention" icon="shieldCheck">
-    The engine maintains a high-resolution history to ensure that recently played tracks are never automatically re-added.
-  </Card>
-</CardGrid>
+The engine tries sources in order until enough candidates are found:
+
+1. **Source-native recommendations** — `sprec:` for Spotify, `scsearch:` for SoundCloud, YouTube mix URL for YouTube, `dzsearch:` for Deezer
+2. **Same-artist search** on the native source
+3. **Title+artist search** on the native source
+4. **Final fallback** — `ytsearch:` artist search
+
+### 2. Weighted Scoring
+
+Each candidate is scored (higher = better):
+
+| Factor | Points |
+| :--- | :--- |
+| Duration within `durationTolerance` | 0–40 |
+| Same artist (exact match) | +30 |
+| Partial artist match | +15 |
+| Random jitter | 0–10 |
+
+### 3. Circular History Buffer
+
+Track identifiers are stored in a per-player buffer (`autoplay_history_buf`). Any track in this buffer is hard-excluded from selection. The buffer is capped at `historyLimit` entries and synced with ryanlink's built-in `recentHistory`.
+
+### 4. Pre-fetch
+
+When `queue.tracks.length <= prefetchThreshold`, autoplay triggers early — the next track is resolved and queued before the current one ends, eliminating the silence gap.
 
 ---
 
-> [!TIP]
-> You can toggle autoplay during runtime using `player.setAutoplay(true|false)`. To immediately trigger discovery, use `player.autoplay()`.
+## Keyword Exclusion
+
+Keywords are matched case-insensitively using a compiled regex. If the **original** track's title contains a keyword (e.g. it's a slowed remix), that keyword is allowed through for candidates too.
+
+```typescript
+autoplayConfig: {
+  excludeKeywords: ['nightcore', 'bass boosted', '8d audio', 'slowed', 'reverb']
+}
+```
+
+---
+
+## Runtime Toggle
+
+```typescript
+// Enable autoplay for a player
+player.autoplay = true;
+
+// Disable
+player.autoplay = false;
+```

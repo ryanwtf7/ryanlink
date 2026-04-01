@@ -48,6 +48,18 @@ export type ExtendedSearchPlatform =
   | 'gnsearch'
   | 'gnrec'
 
+  | 'mcsearch'
+  | 'ncsearch'
+  | 'ebox'
+  | 'slsearch'
+  | 'ausearch'
+  | 'azsearch'
+  | 'agsearch'
+  | 'bksearch'
+  | 'lmsearch'
+  | 'pipertts'
+  | 'gtts'
+
 export type AudioClientSearchPlatform = 'bcsearch'
 export type AudioClientSearchPlatformResolve = 'bandcamp' | 'bc'
 
@@ -136,6 +148,29 @@ export type ClientSearchPlatform =
   | 'td'
   | 'tidal'
   | 'tdrec'
+
+  | 'mcsearch'
+  | 'mixcloud'
+  | 'ncsearch'
+  | 'nicovideo'
+  | 'ebox'
+  | 'jukebox'
+  | 'slsearch'
+  | 'songlink'
+  | 'odesli'
+  | 'ausearch'
+  | 'audius'
+  | 'azsearch'
+  | 'agsearch'
+  | 'anghami'
+  | 'bksearch'
+  | 'bluesky'
+  | 'lmsearch'
+  | 'letras'
+  | 'pipertts'
+  | 'gtts'
+  | 'szsearch'
+  | 'gaanasearch'
 
 export type SearchPlatform = RyanlinkSearchPlatform | ClientSearchPlatform
 
@@ -254,6 +289,7 @@ export interface PlayerEvent {
 export interface TrackStartEvent extends PlayerEvent {
   type: 'TrackStartEvent'
   track: AudioTrack
+  playingQuality?: number | null
 }
 
 export interface TrackEndEvent extends PlayerEvent {

@@ -1,78 +1,218 @@
 ---
 title: Plugin Integrations
-description: Learn how to use advanced plugins with Ryanlink.
+description: How to use Lavalink plugins with Ryanlink — exact plugin names, events, and methods.
 ---
 
-Ryanlink is a feature-rich wrapper designed to seamlessly integrate with popular Lavalink plugins.
+import { Badge } from '@astrojs/starlight/components';
 
-## SponsorBlock
+Ryanlink integrates with all major Lavalink plugins. Plugin checks use the exact names reported by `/v4/info`.
 
-The [**SponsorBlock plugin**](https://github.com/lavalink-devs/sponsorblock-plugin) allows you to automatically skip specific track segments (e.g., sponsors, intros, music-only sections).
+## Plugin Name Reference
+
+| Plugin | Registers as | Artifact |
+| :--- | :--- | :--- |
+| LavaSrc | `lavasrc-plugin` | `com.github.topi314.lavasrc:lavasrc-plugin` |
+| LavaSearch | `lavasearch-plugin` | `com.github.topi314.lavasearch:lavasearch-plugin` |
+| LavaLyrics | `lavalyrics-plugin` | `com.github.topi314.lavalyrics:lavalyrics-plugin` |
+| SponsorBlock | `sponsorblock-plugin` | `com.github.topi314.sponsorblock:sponsorblock-plugin` |
+| LavaDSPX | `LavaDSPX-Plugin` | `com.github.Devoxin:LavaDSPX-Plugin` (jitpack) |
+| DuncteBot Skybot | `skybot-lavalink-plugin` | `com.dunctebot:skybot-lavalink-plugin` |
+| DuncteBot TTS | `tts-plugin` | `com.dunctebot:tts-plugin` |
+| java-timed-lyrics | `java-lyrics-plugin` | `me.duncte123:java-lyrics-plugin` |
+| lyrics.kt | `lyrics` | `dev.schlaubi.lyrics:lavalink` |
+| lava-xm-plugin | `lava-xm-plugin` | `net.esmbot:lava-xm-plugin` |
+
+---
+
+## SponsorBlock <Badge text="sponsorblock-plugin" variant="caution" />
+
+Automatically skip sponsor segments, intros, outros, and more in YouTube videos.
+
+### Methods
+
+```typescript
+// Set categories to skip
+await player.setSponsorBlock(['sponsor', 'selfpromo', 'interaction', 'intro', 'outro', 'preview', 'music_offtopic', 'filler']);
+
+// Get current categories
+const categories = await player.getSponsorBlock();
+
+// Remove all categories
+await player.deleteSponsorBlock();
+```
 
 ### Events
 
-Ryanlink provides high-level events to monitor SponsorBlock activities:
+```typescript
+manager.on('SegmentsLoaded', (player, track, payload) => {
+  console.log(`Segments loaded: ${payload.segments.map(s => s.category).join(', ')}`);
+});
 
-- **`SegmentsLoaded`**: Triggered when all defined segments for the current track are loaded.
-- **`SegmentSkipped`**: Emitted when the plugin successfully skips a segment.
-- **`ChaptersLoaded`**: Triggered when YouTube chapters are successfully loaded.
-- **`ChapterStarted`**: Emitted at the start of each new chapter.
-
-```ts
 manager.on('SegmentSkipped', (player, track, payload) => {
-    console.log(`Skipped segment in ${track.info.title}: ${payload.segment.category}`);
+  console.log(`Skipped: ${payload.segment.category} (${payload.segment.start}–${payload.segment.end}ms)`);
+});
+
+manager.on('ChaptersLoaded', (player, track, payload) => {
+  console.log(`${payload.chapters.length} chapters loaded`);
+});
+
+manager.on('ChapterStarted', (player, track, payload) => {
+  console.log(`Chapter: ${payload.chapter.name}`);
 });
 ```
 
-## LavaLyrics
+---
 
-The [**LavaLyrics plugin**](https://github.com/topi314/LavaLyrics) provides real-time, time-synced lyrics for the current track.
+## LavaLyrics <Badge text="lavalyrics-plugin" variant="caution" />
+
+Lyrics API hub — aggregates from LavaSrc, java-timed-lyrics, and other sources.
+
+### Methods
+
+```typescript
+// Get lyrics for the current track (uses player session)
+const lyrics = await player.node.lyrics.getCurrent(player.guildId);
+const lyrics2 = await player.node.lyrics.getCurrent(player.guildId, true); // skipTrackSource
+
+// Get lyrics for a specific encoded track
+const lyrics3 = await player.node.lyrics.get(track, false);
+
+// Subscribe to real-time lyrics lines
+await player.node.lyrics.subscribe(player.guildId);
+await player.node.lyrics.unsubscribe(player.guildId);
+
+// Convenience methods on the player
+const lyrics4 = await player.getCurrentLyrics();
+const lyrics5 = await player.getLyrics(track);
+player.subscribeLyrics();
+player.unsubscribeLyrics();
+```
 
 ### Events
 
-- **`LyricsFound`**: Triggered when lyrics for the current track are successfully identified.
-- **`LyricsNotFound`**: Emitted when no lyrics can be found.
-- **`LyricsLine`**: Triggered for every new line of lyrics during playback, allowing for real-time display in your bot.
+```typescript
+manager.on('LyricsFound', (player, track, payload) => {
+  console.log(`Lyrics found via ${payload.lyrics.sourceName}`);
+});
 
-```ts
 manager.on('LyricsLine', (player, track, payload) => {
-    console.log(`[${track.info.title}] Lyrics: ${payload.line.text}`);
+  console.log(`[${payload.lineIndex}] ${payload.line.line}`);
+});
+
+manager.on('LyricsNotFound', (player, track, payload) => {
+  console.log('No lyrics available');
 });
 ```
 
-## Gapless Audio (NodeLink)
+---
 
-For users running [**NodeLink**](https://github.com/lavalink-devs/nodelink), Ryanlink supports advanced gapless playback features.
+## java-timed-lyrics / lyrics.kt <Badge text="java-lyrics-plugin / lyrics" variant="caution" />
 
-### Implementation
+These plugins expose a different API from LavaLyrics. Use `node.timedLyrics`:
 
-To ensure smooth transitions between tracks, you should use the `updateNextTrackGapLess` pattern within a `QueueChangesWatcher`.
+```typescript
+// Get lyrics for the current player
+const result = await player.node.timedLyrics.getCurrent(player.guildId);
 
-```ts
-function updateNextTrackGapLess(guildId: string) {
-  const player = manager.players.get(guildId);
-  if (!player || !player.node.isNodeLink()) return;
-  // Pre-load the next track on the NodeLink server
-  return player.node.removeNextTrackGapLess(player);
-}
+// Get by YouTube video ID
+const result2 = await player.node.timedLyrics.getByVideoId('dQw4w9WgXcQ');
 
-class myCustomWatcher implements QueueChangesWatcher {
-  tracksAdd(guildId, tracks, ...args) {
-    updateNextTrackGapLess(guildId);
+// Search for lyrics
+const results = await player.node.timedLyrics.search('never gonna give you up');
+const genius = await player.node.timedLyrics.search('never gonna give you up', 'genius');
+```
+
+---
+
+## LavaDSPX Filters <Badge text="LavaDSPX-Plugin" variant="caution" />
+
+Additional audio filters: high-pass, low-pass, normalization, echo.
+
+```typescript
+// Low-pass filter (cuts high frequencies)
+await player.filterManager.dspxPlugin.toggleLowPass(1.0, 80);
+
+// High-pass filter (cuts low frequencies)
+await player.filterManager.dspxPlugin.toggleHighPass(1.0, 80);
+
+// Normalization (prevents clipping)
+await player.filterManager.dspxPlugin.toggleNormalization(0.75, true);
+
+// Echo effect
+await player.filterManager.dspxPlugin.toggleEcho(0.5, 0.5);
+```
+
+---
+
+## LavaSearch <Badge text="lavasearch-plugin" variant="caution" />
+
+Advanced search returning albums, artists, playlists, and text results.
+
+```typescript
+// Use audioSearch for rich results
+const results = await player.audioSearch({
+  query: 'daft punk',
+  source: 'spsearch',
+  types: ['track', 'album', 'artist', 'playlist']
+});
+
+console.log(results.tracks);   // Track[]
+console.log(results.albums);   // Album[]
+console.log(results.artists);  // Artist[]
+console.log(results.playlists); // Playlist[]
+```
+
+---
+
+## NodeLink Gapless Playback <Badge text="NodeLink only" variant="tip" />
+
+Pre-load the next track for zero-silence transitions.
+
+```typescript
+// Pre-load next track while current is playing
+await player.node.setNextTrackGapLess(player);
+
+// Or specify a track explicitly
+await player.node.setNextTrackGapLess(player, nextTrack);
+
+// Remove the preloaded track
+await player.node.removeNextTrackGapLess(player);
+```
+
+---
+
+## NodeLink Audio Mixer <Badge text="NodeLink only" variant="tip" />
+
+Overlay TTS, SFX, or background music on top of the main track.
+
+```typescript
+// Add a mix layer (volume is 0.0–1.0)
+const layer = await player.node.addMixerLayer(player, ttsTrack, 0.9);
+console.log(layer.id); // mixId
+
+// List active layers
+const layers = await player.node.listMixerLayers(player);
+
+// Update volume of a layer
+await player.node.updateMixerLayerVolume(player, layer.id, 0.5);
+
+// Remove a layer
+await player.node.removeMixerLayer(player, layer.id);
+```
+
+### Mixer Events
+
+```typescript
+manager.nodeManager.on('nodeLinkEvent', (node, eventType, player, track, payload) => {
+  if (eventType === 'MixStartedEvent') {
+    console.log(`Mix started: ${payload.mixId} — ${payload.track.info.title}`);
   }
-}
-```
-
-### NodeLink Events
-
-NodeLink emits specialized events that you can catch using the `nodeLinkEvent` listener:
-
-```ts
-manager.nodeManager.on('nodeLinkEvent', (node, event, player, track, payload) => {
-    // Handle NodeLink specialized events (e.g. metadata, state updates)
-    console.log(`NodeLink Event: ${event} on ${node.id}`);
+  if (eventType === 'MixEndedEvent') {
+    console.log(`Mix ended: ${payload.mixId} — reason: ${payload.reason}`);
+  }
 });
 ```
 
-> [!IMPORTANT]
-> Ensure your Lavalink Node has the corresponding plugins installed in its `plugins` directory and configured in `application.yml`.
+---
+
+> Ensure your Lavalink node has the corresponding plugins installed in its `plugins` directory and configured in `application.yml`.

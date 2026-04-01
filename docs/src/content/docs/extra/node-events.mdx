@@ -1,63 +1,83 @@
 ---
 title: Node Events
-description: Comprehensive list of all Lavalink Node lifecycle events in Ryanlink.
+description: All Lavalink node lifecycle events emitted by the NodeManager.
 ---
 
-import { Steps, Badge } from '@astrojs/starlight/components';
+import { Badge } from '@astrojs/starlight/components';
 
-The `RyanlinkNode` emits events that allow you to monitor the health and connectivity of your audio infrastructure. You can listen to these events on the global `manager.nodeManager` instance.
+The `NodeManager` emits events for node connectivity and lifecycle. Listen on `manager.nodeManager`.
 
-## Global Node Events
+## Core Node Events
 
-| Event | Payload | Description |
+| Event | Signature | Description |
 | :--- | :--- | :--- |
-| `connect` | `(node: Node)` | Triggered when a WebSocket connection is established. |
-| `disconnect` | `(node: Node, reason: string)` | Triggered when a connection is severed. |
-| `reconnecting` | `(node: Node)` | Triggered when the manager initiates a reconnection attempt. |
-| `error` | `(node: Node, err: Error)` | Triggered when a node encounters a critical REST or WS error. |
-| `raw` | `(node: Node, payload: any)` | Triggered for every raw packet received from the node. |
+| `create` | `(node)` | A new node was added to the manager. |
+| `connect` | `(node)` | Node WebSocket connected successfully. |
+| `disconnect` | `(node, reason)` | Node WebSocket disconnected. `reason.code` and `reason.reason`. |
+| `reconnecting` | `(node)` | Manager is about to attempt reconnection. |
+| `reconnectinprogress` | `(node)` | Reconnection attempt is in progress. |
+| `error` | `(node, error, payload?)` | Node encountered a REST or WebSocket error. |
+| `destroy` | `(node, destroyReason?)` | Node was destroyed and removed from the manager. |
+| `raw` | `(node, payload)` | Every raw WebSocket payload received from the node. |
+| `resumed` | `(node, payload, players)` | Node session resumed. `players` is the array of restored player states. |
 
----
+## NodeLink Exclusive Events <Badge text="NodeLink only" variant="tip" />
 
-##  Lifecycle
-
-These events are specifically triggered by the core infrastructure to ensure high-availability and state recovery.
-
-### `resumed`
-Triggered when a node successfully recovers its session.
+NodeLink emits additional specialized events. These are dispatched via the `nodeLinkEvent` listener on the `NodeManager`:
 
 ```typescript
-manager.nodeManager.on('resumed', (node, payload, fetchedPlayers) => {
-  console.log(`Node ${node.id} successfully resumed with ${fetchedPlayers.length} players.`);
+manager.nodeManager.on('nodeLinkEvent', (node, eventType, player, track, payload) => {
+  // eventType is one of the NodeLinkEventTypes
 });
 ```
 
-### `nodeFailover`
-Triggered when an Atomic Migration starts because a node went offline.
+| Event Type | Description |
+| :--- | :--- |
+| `PlayerCreatedEvent` | Player created on NodeLink. `payload.player` contains the initial state. |
+| `PlayerDestroyedEvent` | Player destroyed on NodeLink. |
+| `PlayerConnectedEvent` | Player connected to voice. `payload.voice` contains session details. |
+| `PlayerReconnectingEvent` | Player reconnecting to voice. |
+| `VolumeChangedEvent` | Volume changed. `payload.volume` (0–1000). |
+| `FiltersChangedEvent` | Filters updated. `payload.filters` contains the new filter state. |
+| `SeekEvent` | Seek performed. `payload.position` in ms. |
+| `PauseEvent` | Pause/resume toggled. `payload.paused`. |
+| `ConnectionStatusEvent` | Voice connection status changed. `payload.status`: `connected`, `unstable`, `disconnected`. |
+| `MixStartedEvent` | Audio mixer layer started. `payload.mixId`, `payload.track`, `payload.volume`. |
+| `MixEndedEvent` | Audio mixer layer ended. `payload.mixId`, `payload.reason`: `FINISHED`, `REMOVED`, `ERROR`, `MAIN_ENDED`. |
+| `WorkerFailedEvent` | Cluster worker failed. `payload.affectedGuilds[]`, `payload.message`. |
+| `StreamMetadataEvent` | ICY radio metadata received. `payload.stream.metadata`. |
+| `EternalBoxInfoEvent` | Eternal Box beat analysis ready. |
+| `EternalBoxJumpEvent` | Eternal Box seamless jump. `payload.fromBeat`, `payload.toBeat`, `payload.jumpType`. |
+
+## Usage Examples
 
 ```typescript
-manager.on('nodeFailover', (player, oldNode, newNode) => {
-  console.log(`Successfully migrated player ${player.guildId} from ${oldNode.id} to ${newNode.id}.`);
+// Standard node events
+manager.nodeManager.on('connect', (node) => {
+  console.log(`[Node] ${node.id} connected | Session: ${node.sessionId}`);
+});
+
+manager.nodeManager.on('disconnect', (node, reason) => {
+  console.warn(`[Node] ${node.id} disconnected: ${reason.reason} (${reason.code})`);
+});
+
+manager.nodeManager.on('resumed', (node, payload, players) => {
+  console.log(`[Node] ${node.id} resumed — restored ${players.length} players`);
+});
+
+manager.nodeManager.on('error', (node, error) => {
+  console.error(`[Node] ${node.id} error: ${error.message}`);
+});
+
+// NodeLink exclusive
+manager.nodeManager.on('nodeLinkEvent', (node, eventType, player, track, payload) => {
+  if (eventType === 'ConnectionStatusEvent') {
+    console.log(`[NodeLink] ${player?.guildId} connection: ${payload.status}`);
+  }
+  if (eventType === 'WorkerFailedEvent') {
+    console.error(`[NodeLink] Worker failed — affected guilds: ${payload.affectedGuilds.join(', ')}`);
+  }
 });
 ```
 
----
-
-## Technical Example
-
-```typescript
-import { RyanlinkManager, Node } from 'ryanlink';
-
-manager.nodeManager.on('connect', (node: Node) => {
-    console.log(`[NODE] ${node.id} is online and ready for playback.`);
-});
-
-manager.nodeManager.on('error', (node: Node, error: Error) => {
-    console.error(`[NODE] ${node.id} reported an error: ${error.message}`);
-});
-```
-
----
-
-> [!TIP]
-> Use the `raw` event with caution, as it can be extremely verbose in high-concurrency environments.
+> Use the `raw` event with caution — it fires for every WebSocket message and can be extremely verbose in high-concurrency environments.

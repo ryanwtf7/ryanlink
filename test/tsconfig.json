@@ -1,7 +1,7 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "types": ["node", "ws", "jest", "vitest/globals"],
+    "types": ["node", "ws", "jest"],
     "noEmit": true,
     "rootDir": ".."
   },

@@ -63,7 +63,7 @@ export interface TrackInfo {
 }
 
 export interface PluginInfo {
-  type?: 'album' | 'playlist' | 'artist' | 'recommendations' | string
+  type?: 'album' | 'playlist' | 'artist' | 'recommendations' | 'holo' | string
 
   albumName?: string
 
@@ -91,11 +91,44 @@ export interface PluginInfo {
 
   uri?: string
 
+  authors?: { name: string; url?: string }[]
+
+  artistName?: string
+
+  audioTracks?: {
+    id: string
+    name: string
+    isDefault: boolean
+    isAutoDubbed: boolean
+  }[]
+
+  holo?: {
+    channel?: {
+      name: string
+      id: string
+      subscribers?: string
+      verified?: boolean
+      url?: string
+      externalLinks?: { title: string; url: string }[]
+    }
+    views?: string
+    publishDate?: string
+    keywords?: string[]
+    thumbnails?: { url: string; width: number; height: number }[]
+    qualityOptions?: {
+      itag: number
+      mimeType: string
+      qualityLabel: string
+      bitrate: number
+    }[]
+  }
+
   clientData?: {
     previousTrack?: boolean
-
     [key: string]: any
   }
+
+  [key: string]: any
 }
 
 export interface AudioTrack {

@@ -1,84 +1,55 @@
 ---
 title: Ryanlink
-description: A modern, high-performance, and proactive audio engine for Discord bots.
+description: A modern, high-performance Lavalink v4 wrapper for Discord bots.
 template: splash
 hero:
-  tagline: The pro-active audio engine for Discord. Zero-config persistence, atomic migration, and memory-optimized track management.
+  tagline: High-performance Lavalink v4 wrapper. Multi-source search, intelligent autoplay, NodeLink support, and full plugin integration.
   image:
     file: ../../assets/ryanlink.png
   actions:
-    - text: Getting Started
+    - text: Get Started
       link: /ryanlink/home/installation
       icon: right-arrow
-    - text: Discover Ryanlink
-      link: /ryanlink/home/architecture
-      icon: star
+    - text: Configuration
+      link: /ryanlink/home/configuration
+      icon: setting
       variant: secondary
-    - text: Support Discord
+    - text: Discord
       link: https://discord.gg/W2GheK3F9m
       icon: discord
-      variant: secondary
+      variant: minimal
 ---
 
 import { LinkCard, CardGrid, Card } from '@astrojs/starlight/components';
-import ReadMeMD from '../../../../README.md'
 
 ## Why Ryanlink?
 
 <CardGrid stagger>
-  <Card title="Proactive Management" icon="rocket">
-    Automates node failover, session recovery, and voice state synchronization with zero developer boilerplate.
+  <Card title="Full Lavalink v4 Support" icon="rocket">
+    Complete implementation of the Lavalink v4 REST and WebSocket API — players, filters, sessions, route planner, and all plugin endpoints.
   </Card>
-  <Card title="Memory Performance" icon="seti:db">
-    The unique **TrackRegistry** allows for massive queues (10k+ tracks) with industry-leading RAM efficiency.
+  <Card title="50+ Search Sources" icon="magnifier">
+    YouTube, Spotify, Apple Music, Deezer, Tidal, SoundCloud, JioSaavn, Yandex Music, VK Music, Qobuz, Pandora, and many more via LavaSrc and LavaSearch.
   </Card>
-  <Card title="Professional Filters" icon="random">
-    Built-in, non-destructive filter stacking with presets for 8D, Lofi, Radio, Nightcore, and more.
+  <Card title="Intelligent Autoplay" icon="random">
+    Multi-source fetch chain with weighted scoring, circular history buffer, pre-fetch, and keyword exclusion — all built-in.
   </Card>
-  <Card title="Cross-Runtime" icon="seti:javascript">
-    Natively optimized for **Node.js**, **Bun**, and **Deno** environments.
+  <Card title="NodeLink Ready" icon="star">
+    Full NodeLink support: Audio Mixer, Fading, Gapless preloading, Direct streaming, Eternal Box, YouTube config, and cluster workers.
   </Card>
 </CardGrid>
 
 ---
 
-## Quick Start
+## Quick Links
 
 <CardGrid stagger>
-  <LinkCard
-    title="Installation"
-    description="Install ryanlink"
-    href="/ryanlink/home/installation"
-  />
-  <LinkCard
-    title="Lavalink Node Setup"
-    description="How to setup a locally hosted Lavalink Node"
-    href="/ryanlink/home/setup-ryanlink"
-  />
-  <LinkCard
-    title="Configuration Example"
-    description="List of all possible configuration with example + extension classes"
-    href="/ryanlink/home/configuration"
-  />
-  <LinkCard
-    title="Example Usage Guides"
-    description="See Several examples of multiple ryanlink features"
-    href="/ryanlink/home/example"
-  />
-  <LinkCard
-    title="Features-list"
-    description="View a beautiful list of features from ryanlink"
-    href="/ryanlink/home/features"
-  />
-  <LinkCard
-    title="Get Started with the Docs (Manager Class)"
-    description="See how to use the Manager"
-    href="/ryanlink/api/core/manager/classes/ryanlinkmanager"
-  />
+  <LinkCard title="Installation" description="Install ryanlink via npm, bun, pnpm, or yarn" href="/ryanlink/home/installation" />
+  <LinkCard title="Quick Setup" description="Wire up the manager with Discord.js in minutes" href="/ryanlink/home/setup-ryanlink" />
+  <LinkCard title="Configuration" description="Full RyanlinkManager and node options reference" href="/ryanlink/home/configuration" />
+  <LinkCard title="Features" description="Complete feature list" href="/ryanlink/home/features" />
+  <LinkCard title="Manager Events" description="All events emitted by RyanlinkManager" href="/ryanlink/extra/manager-events" />
+  <LinkCard title="Plugin Integrations" description="SponsorBlock, LavaLyrics, LavaDSPX, NodeLink, and more" href="/ryanlink/extra/plugins" />
+  <LinkCard title="Search Prefixes" description="All 50+ supported search prefixes" href="/ryanlink/extra/search-platforms" />
+  <LinkCard title="Autoplay System" description="How the built-in autoplay works" href="/ryanlink/extra/autoplay-system" />
 </CardGrid>
-
----
-
-## Overview
-
-<ReadMeMD />

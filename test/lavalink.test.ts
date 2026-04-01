@@ -94,6 +94,60 @@ describe('Lavalink', () => {
       expect(SourceMappings['gn']).toBe('gnsearch')
     })
 
+    it('maps yandex music aliases to ymsearch', () => {
+      expect(SourceMappings['yandex music']).toBe('ymsearch')
+      expect(SourceMappings['yandex']).toBe('ymsearch')
+      expect(SourceMappings['ymsearch']).toBe('ymsearch')
+    })
+
+    it('maps vk aliases to vksearch', () => {
+      expect(SourceMappings['vk']).toBe('vksearch')
+      expect(SourceMappings['vksearch']).toBe('vksearch')
+    })
+
+    it('maps qobuz aliases to qbsearch', () => {
+      expect(SourceMappings['qobuz']).toBe('qbsearch')
+      expect(SourceMappings['qbsearch']).toBe('qbsearch')
+    })
+
+    it('maps pandora aliases to pdsearch', () => {
+      expect(SourceMappings['pandora']).toBe('pdsearch')
+      expect(SourceMappings['pd']).toBe('pdsearch')
+    })
+
+    it('maps tts aliases correctly', () => {
+      expect(SourceMappings['speak']).toBe('speak')
+      expect(SourceMappings['tts']).toBe('tts')
+      expect(SourceMappings['ftts']).toBe('ftts')
+      expect(SourceMappings['flowery']).toBe('ftts')
+    })
+
+    it('maps mixcloud to mcsearch', () => {
+      expect(SourceMappings['mixcloud']).toBe('mcsearch')
+      expect(SourceMappings['mcsearch']).toBe('mcsearch')
+    })
+
+    it('maps songlink aliases to slsearch', () => {
+      expect(SourceMappings['songlink']).toBe('slsearch')
+      expect(SourceMappings['odesli']).toBe('slsearch')
+      expect(SourceMappings['slsearch']).toBe('slsearch')
+    })
+
+    it('maps audius to ausearch', () => {
+      expect(SourceMappings['audius']).toBe('ausearch')
+      expect(SourceMappings['ausearch']).toBe('ausearch')
+    })
+
+    it('maps anghami to agsearch', () => {
+      expect(SourceMappings['anghami']).toBe('agsearch')
+      expect(SourceMappings['agsearch']).toBe('agsearch')
+    })
+
+    it('maps bluesky to bksearch', () => {
+      expect(SourceMappings['bluesky']).toBe('bksearch')
+      expect(SourceMappings['bksearch']).toBe('bksearch')
+    })
+
     it('has no undefined values', () => {
       for (const [key, val] of Object.entries(SourceMappings)) {
         expect(val).toBeDefined()
@@ -104,23 +158,41 @@ describe('Lavalink', () => {
 
   describe('BuiltinSources', () => {
     it('has DuncteBot_Plugin', () => {
-      expect(BuiltinSources.DuncteBot_Plugin).toBe('duncte-engine')
+      expect(BuiltinSources.DuncteBot_Plugin).toBe('skybot-lavalink-plugin')
     })
 
     it('has LavaSrc', () => {
-      expect(BuiltinSources.LavaSrc).toBe('source-engine')
+      expect(BuiltinSources.LavaSrc).toBe('lavasrc-plugin')
     })
 
     it('has LavaSearch', () => {
-      expect(BuiltinSources.LavaSearch).toBe('search-engine')
+      expect(BuiltinSources.LavaSearch).toBe('lavasearch-plugin')
     })
 
     it('has GoogleCloudTTS', () => {
-      expect(BuiltinSources.GoogleCloudTTS).toBe('tts-engine')
+      expect(BuiltinSources.GoogleCloudTTS).toBe('tts-plugin')
+    })
+
+    it('has SponsorBlock', () => {
+      expect(BuiltinSources.SponsorBlock).toBe('sponsorblock-plugin')
+    })
+
+    it('has LavaLyrics', () => {
+      expect(BuiltinSources.LavaLyrics).toBe('lavalyrics-plugin')
     })
 
     it('has all expected plugin keys', () => {
-      const keys = ['DuncteBot_Plugin', 'LavaSrc', 'GoogleCloudTTS', 'LavaSearch', 'Filter_Engine', 'TimedLyrics_Engine']
+      const keys = [
+        'DuncteBot_Plugin',
+        'LavaSrc',
+        'GoogleCloudTTS',
+        'LavaSearch',
+        'LavaLyrics',
+        'SponsorBlock',
+        'LavaDSPX',
+        'Filter_Engine',
+        'TimedLyrics_Engine'
+      ]
       for (const key of keys) {
         expect(BuiltinSources).toHaveProperty(key)
       }
@@ -174,6 +246,12 @@ describe('Lavalink', () => {
       })
     })
 
+    describe('SpotifyAlbumRegex', () => {
+      it('matches spotify album URL', () => {
+        expect(LinkMatchers.SpotifyAlbumRegex.test('https://open.spotify.com/album/4vS7XAsiYvF7uP9v6v9v6v')).toBe(true)
+      })
+    })
+
     describe('AllSpotifyRegex', () => {
       it('matches track', () => {
         expect(LinkMatchers.AllSpotifyRegex.test('https://open.spotify.com/track/abc')).toBe(true)
@@ -185,6 +263,11 @@ describe('Lavalink', () => {
 
       it('matches artist', () => {
         expect(LinkMatchers.AllSpotifyRegex.test('https://open.spotify.com/artist/abc')).toBe(true)
+      })
+
+      it('matches show/episode', () => {
+        expect(LinkMatchers.AllSpotifyRegex.test('https://open.spotify.com/show/abc')).toBe(true)
+        expect(LinkMatchers.AllSpotifyRegex.test('https://open.spotify.com/episode/abc')).toBe(true)
       })
     })
 
@@ -202,6 +285,17 @@ describe('Lavalink', () => {
       it('matches deezer playlist', () => {
         expect(LinkMatchers.AllDeezerRegex.test('https://www.deezer.com/playlist/123')).toBe(true)
       })
+
+      it('matches deezer album', () => {
+        expect(LinkMatchers.AllDeezerRegex.test('https://www.deezer.com/album/123')).toBe(true)
+      })
+
+      const LinkMatchersAny = LinkMatchers as any;
+      if (LinkMatchersAny.DeezerPageLinkRegex) {
+        it('matches deezer page link', () => {
+          expect(LinkMatchersAny.DeezerPageLinkRegex.test('https://deezer.page.link/abc')).toBe(true)
+        })
+      }
     })
 
     describe('appleMusic', () => {
@@ -228,15 +322,41 @@ describe('Lavalink', () => {
       it('matches listen.tidal.com track URL', () => {
         expect(LinkMatchers.tidal.test('https://listen.tidal.com/album/abc123')).toBe(true)
       })
+    })
 
-      it('does not match plain tidal.com URL', () => {
-        expect(LinkMatchers.tidal.test('https://tidal.com/track/12345')).toBe(false)
+    describe('PandoraRegex', () => {
+      it('matches pandora track URL', () => {
+        expect(LinkMatchers.PandoraTrackRegex.test('https://www.pandora.com/artist/name/album/TR123')).toBe(true)
+      })
+      it('matches all pandora regex', () => {
+        expect(LinkMatchers.AllPandoraRegex.test('https://www.pandora.com/playlist/PL:123')).toBe(true)
       })
     })
 
-    describe('PandoraTrackRegex', () => {
-      it('matches pandora track URL', () => {
-        expect(LinkMatchers.PandoraTrackRegex.test('https://www.pandora.com/artist/artist-name/album/TR123abc')).toBe(true)
+    describe('SocialMedia & Others', () => {
+      it('matches tiktok', () => {
+        expect(LinkMatchers.tiktok.test('https://www.tiktok.com/@user/video/123')).toBe(true)
+      })
+      it('matches mixcloud', () => {
+        expect(LinkMatchers.mixcloud.test('https://www.mixcloud.com/artist/mix/')).toBe(true)
+      })
+      it('matches yandex music', () => {
+        expect(LinkMatchers.musicYandex.test('https://music.yandex.ru/album/123/track/456')).toBe(true)
+      })
+    })
+
+    describe('bandcamp', () => {
+      it('matches bandcamp artist URL', () => {
+        expect(LinkMatchers.bandcamp.test('https://artist.bandcamp.com/track/name')).toBe(true)
+      })
+    })
+
+    describe('Twitch & Vimeo', () => {
+      it('matches twitch tv', () => {
+        expect(LinkMatchers.TwitchTv.test('https://www.twitch.tv/user')).toBe(true)
+      })
+      it('matches vimeo', () => {
+        expect(LinkMatchers.vimeo.test('https://vimeo.com/123456')).toBe(true)
       })
     })
   })

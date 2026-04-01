@@ -5,7 +5,7 @@ import type { RyanlinkManager } from '../core/Manager'
 import { RyanlinkNode } from './Node'
 import { NodeLinkNode } from './NodeLink'
 import type { RyanlinkNodeIdentifier, NodeConfiguration, NodeManagerEvents } from '../types/Node'
-import { MiniMap } from '../utils/Utils'
+import { MiniMap, ManagerSymbol } from '../utils/Utils'
 
 export class NodeManager extends EventEmitter {
   emit<Event extends keyof NodeManagerEvents>(event: Event, ...args: Parameters<NodeManagerEvents[Event]>): boolean {
@@ -28,13 +28,15 @@ export class NodeManager extends EventEmitter {
     return super.removeListener(event, listener)
   }
 
-  public RyanlinkManager: RyanlinkManager
+  public get RyanlinkManager(): RyanlinkManager {
+    return (this as any)[ManagerSymbol]
+  }
 
   public nodes = new MiniMap<string, RyanlinkNode | NodeLinkNode>()
 
-  constructor(RyanlinkManager: RyanlinkManager) {
+  constructor(manager: RyanlinkManager) {
     super()
-    this.RyanlinkManager = RyanlinkManager
+    ;(this as any)[ManagerSymbol] = manager
 
     if (this.RyanlinkManager.options.nodes)
       this.RyanlinkManager.options.nodes.forEach((node) => {
@@ -123,13 +125,11 @@ export class NodeManager extends EventEmitter {
         {
           return (connectedNodes as RyanlinkNode[]).sort((a, b) => a.weightedScore - b.weightedScore)
         }
-        break
       case 'players':
       default:
         {
           return connectedNodes.sort((a, b) => (a.stats?.players || 0) - (b.stats?.players || 0))
         }
-        break
     }
   }
 
@@ -147,5 +147,12 @@ export class NodeManager extends EventEmitter {
     if (!decodeNode) return undefined
     if (decodeNode.nodeType === 'NodeLink') return decodeNode as NodeLinkNode
     return decodeNode as RyanlinkNode
+  }
+
+  public toJSON() {
+    return {
+      nodeCount: this.nodes.size,
+      nodes: Array.from(this.nodes.keys()),
+    }
   }
 }

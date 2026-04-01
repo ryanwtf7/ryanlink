@@ -458,4 +458,8 @@ export const NodeLinkExclusiveEvents: NodeLinkEventTypes[] = [
   'LyricsFoundEvent',
   'LyricsLineEvent',
   'LyricsNotFoundEvent',
+  'WorkerFailedEvent',
+  'StreamMetadataEvent',
+  'EternalBoxInfoEvent',
+  'EternalBoxJumpEvent',
 ]

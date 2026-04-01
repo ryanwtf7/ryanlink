@@ -9,6 +9,7 @@ import { DebugEvents, DestroyReasons, validSponsorBlocks, RecommendationsStrings
 import type { NodeLinkNode } from './NodeLink'
 import type { NodeManager } from './NodeManager'
 import type { Player } from '../audio/Player'
+import type { RyanlinkManager } from '../core/Manager'
 import { ReconnectionState } from '../types/Node'
 import type {
   BaseNodeStats,
@@ -60,7 +61,7 @@ import type {
   TrackStuckEvent,
   WebSocketClosedEvent,
 } from '../types/Utils'
-import { AudioNodeSymbol, queueTrackEnd, safeStringify } from '../utils/Utils'
+import { AudioNodeSymbol, queueTrackEnd, safeStringify, NodeManagerSymbol, ManagerSymbol } from '../utils/Utils'
 
 export class RyanlinkNode {
   private heartBeatPingTimestamp: number = 0
@@ -83,7 +84,7 @@ export class RyanlinkNode {
     if (!this.connected || !this.stats) return Infinity
     const cpuScore = (this.stats.cpu.systemLoad || 0) * 0.7
     const memScore = ((this.stats.memory.used || 0) / (this.stats.memory.allocated || 1)) * 0.2
-    const playerScore = (this.stats.players / 100) * 0.1 // Normalized to 100 players
+    const playerScore = (this.stats.players / 100) * 0.1 
     return cpuScore + memScore + playerScore
   }
 
@@ -128,7 +129,9 @@ export class RyanlinkNode {
 
   public reconnectionState: ReconnectionState = ReconnectionState.IDLE
 
-  private NodeManager: NodeManager | null = null
+  private get NodeManager(): NodeManager {
+    return (this as any)[NodeManagerSymbol]
+  }
 
   private reconnectTimeout?: NodeJS.Timeout = undefined
 
@@ -138,8 +141,8 @@ export class RyanlinkNode {
 
   private version = 'v4'
 
-  private get _LManager() {
-    return this.NodeManager.RyanlinkManager
+  private get _LManager(): RyanlinkManager<any> {
+    return (this as any)[ManagerSymbol]
   }
 
   public get heartBeatPing() {
@@ -155,17 +158,14 @@ export class RyanlinkNode {
     return !!this.options?.autoChecks?.sourcesValidations
   }
 
-  private dispatchDebug(
-    name: DebugEvents,
-    eventData: {
-      message: string
-      state: 'log' | 'warn' | 'error'
-      error?: Error | string
-      functionLayer: string
-    }
-  ) {
+  private dispatchDebug(name: DebugEvents, eventData: any) {
     if (!this._LManager.options?.advancedOptions?.enableDebugEvents) return
-    this._LManager.emit('debug', name, eventData)
+    try {
+      const sanitizedData = JSON.parse(safeStringify(eventData))
+      this._LManager.emit('debug', name, sanitizedData)
+    } catch {
+      this._LManager.emit('debug', name, { state: eventData.state, message: 'Serialization failed during debug dispatch', functionLayer: eventData.functionLayer })
+    }
   }
 
   public get connected(): boolean {
@@ -178,6 +178,8 @@ export class RyanlinkNode {
   }
 
   constructor(options: NodeConfiguration, manager: NodeManager) {
+    ;(this as any)[NodeManagerSymbol] = manager
+    ;(this as any)[ManagerSymbol] = manager.RyanlinkManager
     this.options = {
       secure: false,
       retryAmount: 5,
@@ -200,7 +202,6 @@ export class RyanlinkNode {
 
     this.nodeType = this.options.nodeType || 'Core'
 
-    this.NodeManager = manager
     this.validate()
     if (this.options.secure && this.options.port !== 443) throw new SyntaxError('If secure is true, then the port must be 443')
     this.options.regions = (this.options.regions || []).map((a) => a.toLowerCase())
@@ -239,7 +240,7 @@ export class RyanlinkNode {
 
     const urlToUse = url.toString()
 
-    const { path, extraQueryUrlParams, ...fetchOptions } = options
+    const { path: _path, extraQueryUrlParams: _extraQueryUrlParams, ...fetchOptions } = options
 
     const response = await fetch(urlToUse, fetchOptions)
 
@@ -269,10 +270,10 @@ export class RyanlinkNode {
   }
 
   public async search(query: SearchQuery, requestUser: unknown, throwOnEmpty: boolean = false): Promise<SearchResult> {
-    const Query = this._LManager.utils.transformQuery(query)
+    const Query = this.NodeManager.RyanlinkManager.utils.transformQuery(query)
 
-    this._LManager.utils.validateQueryString(this, Query.query, Query.source)
-    if (Query.source) this._LManager.utils.validateSourceString(this, Query.source)
+    this.NodeManager.RyanlinkManager.utils.validateQueryString(this, Query.query, Query.source)
+    if (Query.source) this.NodeManager.RyanlinkManager.utils.validateSourceString(this, Query.source)
 
     if (['bcsearch', 'bandcamp'].includes(Query.source) && this._checkForSources && !this.info.sourceManagers.includes('bandcamp')) {
       throw new Error('Bandcamp Search only works on the player (audio-engine version < 2.2.0!')
@@ -352,7 +353,7 @@ export class RyanlinkNode {
                 typeof res.data?.info?.selectedTrack !== 'number' || res.data?.info?.selectedTrack === -1
                   ? null
                   : resTracks[res.data?.info?.selectedTrack]
-                    ? this._LManager.utils.buildTrack(resTracks[res.data?.info?.selectedTrack], requestUser)
+                    ? this.NodeManager.RyanlinkManager.utils.buildTrack(resTracks[res.data?.info?.selectedTrack], requestUser)
                     : null,
               duration: resTracks.length
                 ? resTracks.reduce(
@@ -363,25 +364,45 @@ export class RyanlinkNode {
                 : 0,
             }
           : null,
-      tracks: (resTracks.length ? resTracks.map((t) => this._LManager.utils.buildTrack(t, requestUser)) : []) as Track[],
+      tracks: (resTracks.length ? resTracks.map((t) => this.NodeManager.RyanlinkManager.utils.buildTrack(t, requestUser)) : []) as Track[],
     }
   }
 
   async audioSearch(query: AudioSearchQuery, requestUser: unknown, throwOnEmpty: boolean = false): Promise<AudioSearchResponse | SearchResult> {
-    const Query = this._LManager.utils.transformAudioSearchQuery(query)
+    const Query = this.NodeManager.RyanlinkManager.utils.transformAudioSearchQuery(query)
 
-    if (Query.source) this._LManager.utils.validateSourceString(this, Query.source)
+    if (Query.source) this.NodeManager.RyanlinkManager.utils.validateSourceString(this, Query.source)
     if (/^https?:\/\//.test(Query.query)) return this.search({ query: Query.query, source: Query.source }, requestUser)
 
-    if (!['spsearch', 'sprec', 'amsearch', 'dzsearch', 'dzisrc', 'ytmsearch', 'ytsearch'].includes(Query.source))
+    const lavaSearchSources = [
+      'spsearch', 'sprec', 'amsearch', 'dzsearch', 'dzisrc', 'ytmsearch', 'ytsearch',
+      'scsearch', 'ymsearch', 'ymrec', 'vksearch', 'vkrec', 'tdsearch', 'tdrec',
+      'jssearch', 'jsrec', 'admsearch', 'admrec', 'shsearch', 'lfsearch', 'amzsearch',
+      'amzrec', 'gnsearch', 'gnrec', 'qbsearch', 'qbisrc', 'qbrec', 'pdsearch', 'pdisrc', 'pdrec',
+    ]
+    if (!lavaSearchSources.includes(Query.source))
       throw new SyntaxError(
-        `Query.source must be a source from LavaSrc: "spsearch" | "sprec" | "amsearch" | "dzsearch" | "dzisrc" | "ytmsearch" | "ytsearch"`
+        `Query.source "${Query.source}" is not supported by LavaSearch. Supported: ${lavaSearchSources.join(', ')}`
       )
 
-    if (this._checkForPlugins && !this.info?.plugins?.find?.((v) => v.name === 'search-engine'))
-      throw new RangeError(`there is no search-engine available in the ryanlink node: ${this.id}`)
-    if (this._checkForPlugins && !this.info?.plugins?.find?.((v) => v.name === 'source-engine'))
-      throw new RangeError(`there is no source-engine available in the ryanlink node: ${this.id}`)
+    if (this._checkForPlugins) {
+
+      const hasLavaSearch = this.info?.plugins?.some((v) =>
+        v.name === 'lavasearch-plugin' ||
+        v.name === 'search-engine' ||
+        v.name.toLowerCase().includes('lavasearch')
+      )
+      if (!hasLavaSearch)
+        throw new RangeError(`there is no LavaSearch (lavasearch-plugin) available in the ryanlink node: ${this.id}`)
+
+      const hasLavaSrc = this.info?.plugins?.some((v) =>
+        v.name === 'lavasrc-plugin' ||
+        v.name === 'source-engine' ||
+        v.name.toLowerCase().includes('lavasrc')
+      )
+      if (!hasLavaSrc)
+        throw new RangeError(`there is no LavaSrc (lavasrc-plugin) available in the ryanlink node: ${this.id}`)
+    }
 
     const { response } = await this.rawRequest(
       `/loadsearch?query=${Query.source ? `${Query.source}:` : ''}${encodeURIComponent(Query.query)}${Query.types?.length ? `&types=${Query.types.join(',')}` : ''}`
@@ -399,29 +420,29 @@ export class RyanlinkNode {
     }
 
     return {
-      tracks: res.tracks?.map((v) => this._LManager.utils.buildTrack(v, requestUser)) || [],
+      tracks: res.tracks?.map((v) => this.NodeManager.RyanlinkManager.utils.buildTrack(v, requestUser)) || [],
       albums:
-        res.albums?.map((v) => ({
-          info: v.info,
-          pluginInfo: (v as unknown as { plugin: unknown })?.plugin || v.pluginInfo,
-          tracks: v.tracks.map((v) => this._LManager.utils.buildTrack(v, requestUser)),
+        res.albums?.map((album) => ({
+          info: album.info,
+          pluginInfo: (album as unknown as { plugin: unknown })?.plugin || album.pluginInfo,
+          tracks: album.tracks.map((track) => this.NodeManager.RyanlinkManager.utils.buildTrack(track, requestUser)),
         })) || [],
       artists:
-        res.artists?.map((v) => ({
-          info: v.info,
-          pluginInfo: (v as unknown as { plugin: unknown })?.plugin || v.pluginInfo,
-          tracks: v.tracks.map((v) => this._LManager.utils.buildTrack(v, requestUser)),
+        res.artists?.map((artist) => ({
+          info: artist.info,
+          pluginInfo: (artist as unknown as { plugin: unknown })?.plugin || artist.pluginInfo,
+          tracks: artist.tracks.map((track) => this.NodeManager.RyanlinkManager.utils.buildTrack(track, requestUser)),
         })) || [],
       playlists:
-        res.playlists?.map((v) => ({
-          info: v.info,
-          pluginInfo: (v as unknown as { plugin: unknown })?.plugin || v.pluginInfo,
-          tracks: v.tracks.map((v) => this._LManager.utils.buildTrack(v, requestUser)),
+        res.playlists?.map((playlist) => ({
+          info: playlist.info,
+          pluginInfo: (playlist as unknown as { plugin: unknown })?.plugin || playlist.pluginInfo,
+          tracks: playlist.tracks.map((track) => this.NodeManager.RyanlinkManager.utils.buildTrack(track, requestUser)),
         })) || [],
       texts:
-        res.texts?.map((v) => ({
-          text: v.text,
-          pluginInfo: (v as unknown as { plugin: unknown })?.plugin || v.pluginInfo,
+        res.texts?.map((text) => ({
+          text: text.text,
+          pluginInfo: (text as unknown as { plugin: unknown })?.plugin || text.pluginInfo,
         })) || [],
       pluginInfo: res.pluginInfo || (res as unknown as { plugin: unknown })?.plugin,
     }
@@ -435,8 +456,7 @@ export class RyanlinkNode {
     const res = (await this.request(`/sessions/${this.sessionId}/players/${data.guildId}`, (r) => {
       r.method = 'PATCH'
 
-      r.headers!['Content-Type'] = 'application/json'
-
+      if (r.headers) r.headers['Content-Type'] = 'application/json'
       r.body = safeStringify(data.playerOptions)
 
       if (data.noReplace) {
@@ -457,7 +477,7 @@ export class RyanlinkNode {
     return res
   }
 
-  public async destroyPlayer(guildId): Promise<void> {
+  public async destroyPlayer(guildId: string): Promise<void> {
     if (!this.sessionId) throw new Error('The Ryanlink-Node is either not ready, or not up to date!')
 
     return this.request(`/sessions/${this.sessionId}/players/${guildId}`, (r) => {
@@ -477,7 +497,7 @@ export class RyanlinkNode {
 
     const headers = {
       Authorization: this.options.authorization,
-      'User-Id': this._LManager.options.client.id,
+      'User-Id': this.NodeManager.RyanlinkManager.options.client.id,
       'Client-Name': `${$clientName}/${$clientVersion}`,
     }
 
@@ -553,7 +573,7 @@ export class RyanlinkNode {
     const handlePlayerOperations = () => {
       if (!movePlayers) {
         return Promise.allSettled(
-          Array.from(players.values()).map((player) =>
+          Array.from(players.values()).map((player: Player) =>
             player.destroy(destroyReason || DestroyReasons.NodeDestroy).catch((error) => {
               this.dispatchDebug(DebugEvents.PlayerDestroyFail, {
                 state: 'error',
@@ -569,7 +589,7 @@ export class RyanlinkNode {
 
       if (!nodeToMove) {
         return Promise.allSettled(
-          Array.from(players.values()).map((player) =>
+          Array.from(players.values()).map((player: Player) =>
             player.destroy(DestroyReasons.PlayerChangeNodeFailNoEligibleNode).catch((error) => {
               this.dispatchDebug(DebugEvents.PlayerChangeNodeFailNoEligibleNode, {
                 state: 'error',
@@ -582,15 +602,16 @@ export class RyanlinkNode {
         )
       }
       return Promise.allSettled(
-        Array.from(players.values()).map((player) =>
-          player.changeNode(nodeToMove.options.id).catch((error) => {
+        Array.from(players.values()).map((player: Player) =>
+          nodeToMove.updatePlayer({ guildId: player.guildId, playerOptions: (player as Player).toJSON() }).catch((error) => {
             this.dispatchDebug(DebugEvents.PlayerChangeNodeFail, {
               state: 'error',
               message: `Failed to move player ${player.guildId}: ${error.message}`,
               error,
               functionLayer: 'Node > destroy() > movePlayers',
             })
-            return player.destroy(error.message ?? DestroyReasons.PlayerChangeNodeFail).catch((destroyError) => {
+
+            return (player as Player).destroy(error.message ?? DestroyReasons.PlayerChangeNodeFail).catch((destroyError) => {
               this.dispatchDebug(DebugEvents.PlayerDestroyFail, {
                 state: 'error',
                 message: `Failed to destroy player ${player.guildId} after move failure: ${destroyError.message}`,
@@ -681,7 +702,7 @@ export class RyanlinkNode {
         r.method = 'POST'
         r.body = safeStringify(encodeds)
 
-        r.headers!['Content-Type'] = 'application/json'
+        if (r.headers) r.headers['Content-Type'] = 'application/json'
       }).then((r: AudioTrack[]) => r.map((track) => this._LManager.utils.buildTrack(track, requester)))
     },
   }
@@ -690,18 +711,18 @@ export class RyanlinkNode {
     get: async (track: Track, skipTrackSource: boolean = false): Promise<LyricsResult | null> => {
       if (!this.sessionId) throw new Error('the Ryanlink-Node is either not ready, or not up to date!')
 
-      if (this._checkForPlugins && !this.info?.plugins?.find?.((v) => v.name === 'lavalyrics-plugin'))
-        throw new RangeError(`there is no lavalyrics-plugin available in the ryanlink node (required for lyrics): ${this.id}`)
+      if (this._checkForPlugins) {
+        const plugins = this.info?.plugins ?? []
 
-      if (
-        this._checkForPlugins &&
-        !this.info?.plugins?.find?.((v) => v.name === 'source-engine') &&
-        this._checkForPlugins &&
-        !this.info?.plugins?.find?.((v) => v.name === 'lyrics-engine')
-      )
-        throw new RangeError(
-          `there is no lyrics source (via source-engine / lyrics-engine) available in the ryanlink node (required for lyrics): ${this.id}`
+        const hasLyricsPlugin = plugins.some((v) =>
+          v.name === 'lavalyrics-plugin' ||
+          v.name === 'java-lyrics-plugin' ||
+          v.name === 'lyrics' ||
+          v.name === 'lavasrc-plugin' 
         )
+        if (!hasLyricsPlugin)
+          throw new RangeError(`No lyrics plugin found on node ${this.id}. Expected: lavalyrics-plugin, java-lyrics-plugin, lyrics, or lavasrc-plugin.`)
+      }
 
       const url = `/lyrics?track=${track.encoded}&skipTrackSource=${skipTrackSource}`
       return (await this.request(url)) as LyricsResult | null
@@ -710,18 +731,17 @@ export class RyanlinkNode {
     getCurrent: async (guildId: string, skipTrackSource: boolean = false): Promise<LyricsResult | null> => {
       if (!this.sessionId) throw new Error('the Ryanlink-Node is either not ready, or not up to date!')
 
-      if (this._checkForPlugins && !this.info?.plugins?.find?.((v) => v.name === 'lavalyrics-plugin'))
-        throw new RangeError(`there is no lavalyrics-plugin available in the ryanlink node (required for lyrics): ${this.id}`)
-
-      if (
-        this._checkForPlugins &&
-        !this.info?.plugins?.find?.((v) => v.name === 'source-engine') &&
-        this._checkForPlugins &&
-        !this.info?.plugins?.find?.((v) => v.name === 'lyrics-engine')
-      )
-        throw new RangeError(
-          `there is no lyrics source (via source-engine / lyrics-engine) available in the ryanlink node (required for lyrics): ${this.id}`
+      if (this._checkForPlugins) {
+        const plugins = this.info?.plugins ?? []
+        const hasLyricsPlugin = plugins.some((v) =>
+          v.name === 'lavalyrics-plugin' ||
+          v.name === 'java-lyrics-plugin' ||
+          v.name === 'lyrics' ||
+          v.name === 'lavasrc-plugin'
         )
+        if (!hasLyricsPlugin)
+          throw new RangeError(`No lyrics plugin found on node ${this.id}. Expected: lavalyrics-plugin, java-lyrics-plugin, lyrics, or lavasrc-plugin.`)
+      }
 
       const url = `/sessions/${this.sessionId}/players/${guildId}/track/lyrics?skipTrackSource=${skipTrackSource}`
       return (await this.request(url)) as LyricsResult | null
@@ -730,8 +750,17 @@ export class RyanlinkNode {
     subscribe: async (guildId: string, skipTrackSource?: boolean): Promise<unknown> => {
       if (!this.sessionId) throw new Error('the Ryanlink-Node is either not ready, or not up to date!')
 
-      if (this._checkForPlugins && !this.info?.plugins?.find?.((v) => v.name === 'lavalyrics-plugin'))
-        throw new RangeError(`there is no lavalyrics-plugin available in the ryanlink node (required for lyrics): ${this.id}`)
+      if (this._checkForPlugins) {
+        const plugins = this.info?.plugins ?? []
+        const hasLyricsPlugin = plugins.some((v) =>
+          v.name === 'lavalyrics-plugin' ||
+          v.name === 'java-lyrics-plugin' ||
+          v.name === 'lyrics' ||
+          v.name === 'lavasrc-plugin'
+        )
+        if (!hasLyricsPlugin)
+          throw new RangeError(`No lyrics plugin found on node ${this.id}.`)
+      }
 
       return await this.request(
         `/sessions/${this.sessionId}/players/${guildId}/lyrics/subscribe?skipTrackSource=${skipTrackSource ?? false}`,
@@ -744,13 +773,66 @@ export class RyanlinkNode {
     unsubscribe: async (guildId: string): Promise<void> => {
       if (!this.sessionId) throw new Error('the Ryanlink-Node is either not ready, or not up to date!')
 
-      if (this._checkForPlugins && !this.info?.plugins?.find?.((v) => v.name === 'lavalyrics-plugin'))
-        throw new RangeError(`there is no lavalyrics-plugin available in the ryanlink node (required for lyrics): ${this.id}`)
+      if (this._checkForPlugins) {
+        const plugins = this.info?.plugins ?? []
+        const hasLyricsPlugin = plugins.some((v) =>
+          v.name === 'lavalyrics-plugin' ||
+          v.name === 'java-lyrics-plugin' ||
+          v.name === 'lyrics' ||
+          v.name === 'lavasrc-plugin'
+        )
+        if (!hasLyricsPlugin)
+          throw new RangeError(`No lyrics plugin found on node ${this.id}.`)
+      }
 
       return await this.request(`/sessions/${this.sessionId}/players/${guildId}/lyrics/subscribe`, (options) => {
         options.method = 'DELETE'
       })
     },
+  }
+
+  timedLyrics = {
+    getCurrent: async (guildId: string): Promise<any | null> => {
+      if (!this.sessionId) throw new Error('the Ryanlink-Node is either not ready, or not up to date!')
+      if (this._checkForPlugins) {
+        const hasPlugin = this.info?.plugins?.some((v) =>
+          v.name === 'lyrics' || v.name === 'java-lyrics-plugin'
+        )
+        if (!hasPlugin)
+          throw new RangeError(`No timed-lyrics plugin found on node ${this.id}. Expected: 'lyrics' (lyrics.kt) or 'java-lyrics-plugin' (java-timed-lyrics).`)
+      }
+      return (await this.request(`/sessions/${this.sessionId}/players/${guildId}/lyrics`)) as any | null
+    },
+
+    getByVideoId: async (videoId: string): Promise<any | null> => {
+      if (!this.sessionId) throw new Error('the Ryanlink-Node is either not ready, or not up to date!')
+      if (this._checkForPlugins) {
+        const hasPlugin = this.info?.plugins?.some((v) =>
+          v.name === 'lyrics' || v.name === 'java-lyrics-plugin'
+        )
+        if (!hasPlugin)
+          throw new RangeError(`No timed-lyrics plugin found on node ${this.id}.`)
+      }
+      return (await this.request(`/lyrics/${encodeURIComponent(videoId)}`)) as any | null
+    },
+
+    search: async (query: string, source?: 'youtube' | 'genius'): Promise<any[]> => {
+      if (!this.sessionId) throw new Error('the Ryanlink-Node is either not ready, or not up to date!')
+      if (this._checkForPlugins) {
+        const hasPlugin = this.info?.plugins?.some((v) =>
+          v.name === 'lyrics' || v.name === 'java-lyrics-plugin'
+        )
+        if (!hasPlugin)
+          throw new RangeError(`No timed-lyrics plugin found on node ${this.id}.`)
+      }
+      const params = new URLSearchParams({ query })
+      if (source) params.set('source', source)
+      return ((await this.request(`/lyrics/search?${params.toString()}`)) ?? []) as any[]
+    },
+  }
+
+  public hasXMPlugin(): boolean {
+    return !!this.info?.plugins?.some((v) => v.name === 'lava-xm-plugin')
   }
 
   public async fetchStats(): Promise<BaseNodeStats> {
@@ -944,7 +1026,7 @@ export class RyanlinkNode {
       return await this.request(`/routeplanner/free/address`, (r) => {
         r.method = 'POST'
 
-        r.headers!['Content-Type'] = 'application/json'
+        if (r.headers) r.headers['Content-Type'] = 'application/json'
         r.body = safeStringify({ address })
       })
     },
@@ -954,7 +1036,7 @@ export class RyanlinkNode {
       return await this.request(`/routeplanner/free/all`, (r) => {
         r.method = 'POST'
 
-        r.headers!['Content-Type'] = 'application/json'
+        if (r.headers) r.headers['Content-Type'] = 'application/json'
       })
     },
   }
@@ -1033,6 +1115,7 @@ export class RyanlinkNode {
         Object.freeze(oldFilterTimescale)
         if (data.playerOptions.filters.timescale) player.filterManager.data.timescale = data.playerOptions.filters.timescale
         if (data.playerOptions.filters.distortion) player.filterManager.data.distortion = data.playerOptions.filters.distortion
+        if (data.playerOptions.filters.channelMix) player.filterManager.data.channelMix = data.playerOptions.filters.channelMix
         if (data.playerOptions.filters.pluginFilters) player.filterManager.data.pluginFilters = data.playerOptions.filters.pluginFilters
         if (data.playerOptions.filters.vibrato) player.filterManager.data.vibrato = data.playerOptions.filters.vibrato
         if (data.playerOptions.filters.volume) player.filterManager.data.volume = data.playerOptions.filters.volume
@@ -1041,6 +1124,13 @@ export class RyanlinkNode {
         if (data.playerOptions.filters.lowPass) player.filterManager.data.lowPass = data.playerOptions.filters.lowPass
         if (data.playerOptions.filters.rotation) player.filterManager.data.rotation = data.playerOptions.filters.rotation
         if (data.playerOptions.filters.tremolo) player.filterManager.data.tremolo = data.playerOptions.filters.tremolo
+
+        if (data.playerOptions.filters.echo) player.filterManager.data.echo = data.playerOptions.filters.echo
+        if (data.playerOptions.filters.chorus) player.filterManager.data.chorus = data.playerOptions.filters.chorus
+        if (data.playerOptions.filters.compressor) player.filterManager.data.compressor = data.playerOptions.filters.compressor
+        if (data.playerOptions.filters.highPass) player.filterManager.data.highPass = data.playerOptions.filters.highPass
+        if (data.playerOptions.filters.phaser) player.filterManager.data.phaser = data.playerOptions.filters.phaser
+        if (data.playerOptions.filters.spatial) player.filterManager.data.spatial = data.playerOptions.filters.spatial
         player.filterManager.checkFiltersState(oldFilterTimescale)
       }
     }
@@ -1105,7 +1195,7 @@ export class RyanlinkNode {
 
       this.reconnectionState = ReconnectionState.DESTROYING
 
-      this.NodeManager.emit('error', this, error)
+      this.NodeManager.emit('error', error, this)
       this.destroy(DestroyReasons.NodeReconnectFail)
 
       return
@@ -1174,10 +1264,12 @@ export class RyanlinkNode {
       if (this.heartBeatInterval) clearInterval(this.heartBeatInterval)
 
       if (this.options.heartBeatInterval > 0) {
-        this.socket.on('pong', () => {
-          this.heartBeatPongTimestamp = performance.now()
-          this.isAlive = true
-        })
+        if (typeof this.socket?.on === 'function') {
+          this.socket.on('pong', () => {
+            this.heartBeatPongTimestamp = performance.now()
+            this.isAlive = true
+          })
+        }
 
         this.heartBeatInterval = setInterval(() => {
           if (!this.socket) return console.error('Node-Heartbeat-Interval - Socket not available - maybe reconnecting?')
@@ -1185,7 +1277,9 @@ export class RyanlinkNode {
 
           this.isAlive = false
           this.heartBeatPingTimestamp = performance.now()
-          this.socket?.ping?.()
+          if (typeof this.socket?.ping === 'function') {
+            this.socket.ping()
+          }
         }, this.options.heartBeatInterval || 30_000)
       }
     }
@@ -1256,7 +1350,7 @@ export class RyanlinkNode {
 
   private error(error: Error): void {
     if (!error) return
-    this.NodeManager.emit('error', this, error)
+    this.NodeManager.emit('error', error, this)
     this.reconnectionState = ReconnectionState.IDLE
     if (this.options.closeOnError) {
       if (this.heartBeatInterval) clearInterval(this.heartBeatInterval)
@@ -1275,7 +1369,7 @@ export class RyanlinkNode {
     try {
       payload = JSON.parse(d.toString())
     } catch (e) {
-      this.NodeManager.emit('error', this, e)
+      this.NodeManager.emit('error', e, this)
       return
     }
 
@@ -1352,7 +1446,7 @@ export class RyanlinkNode {
         }
         break
       default:
-        this.NodeManager.emit('error', this, new Error(`Unexpected op "${payload.op}" with data`), payload)
+        this.NodeManager.emit('error', new Error(`Unexpected op "${payload.op}" with data`), this, payload)
         return
     }
   }
@@ -1413,8 +1507,8 @@ export class RyanlinkNode {
       default:
         this.NodeManager.emit(
           'error',
-          this,
           new Error(`Node#event unknown event '${(payload as PlayerEventType & PlayerEvents).type}'.`),
+          this,
           payload as PlayerEventType & PlayerEvents
         )
         break
@@ -1621,14 +1715,21 @@ export class RyanlinkNode {
   }
 
   public async getSponsorBlock(player: Player): Promise<SponsorBlockSegment[]> {
-    if (this._checkForPlugins && !this.info?.plugins?.find?.((v) => v.name === 'sponsorblock-plugin'))
+
+    if (this._checkForPlugins && !this.info?.plugins?.find?.((v) =>
+      v.name === 'sponsorblock-plugin' ||
+      v.name.toLowerCase() === 'sponsorblock'
+    ))
       throw new RangeError(`there is no sponsorblock-plugin available in the ryanlink node: ${this.id}`)
 
     return (await this.request(`/sessions/${this.sessionId}/players/${player.guildId}/sponsorblock/categories`)) as SponsorBlockSegment[]
   }
 
   public async setSponsorBlock(player: Player, segments: SponsorBlockSegment[] = ['sponsor', 'selfpromo']): Promise<void> {
-    if (this._checkForPlugins && !this.info?.plugins?.find?.((v) => v.name === 'sponsorblock-plugin'))
+    if (this._checkForPlugins && !this.info?.plugins?.find?.((v) =>
+      v.name === 'sponsorblock-plugin' ||
+      v.name.toLowerCase() === 'sponsorblock'
+    ))
       throw new RangeError(`there is no sponsorblock-plugin available in the ryanlink node: ${this.id}`)
 
     if (!segments.length) throw new RangeError("No Segments provided. Did you ment to use 'deleteSponsorBlock'?")
@@ -1660,7 +1761,10 @@ export class RyanlinkNode {
   }
 
   public async deleteSponsorBlock(player: Player): Promise<void> {
-    if (this._checkForPlugins && !this.info?.plugins?.find?.((v) => v.name === 'sponsorblock-plugin'))
+    if (this._checkForPlugins && !this.info?.plugins?.find?.((v) =>
+      v.name === 'sponsorblock-plugin' ||
+      v.name.toLowerCase() === 'sponsorblock'
+    ))
       throw new RangeError(`there is no sponsorblock-plugin available in the ryanlink node: ${this.id}`)
 
     await this.request(`/sessions/${this.sessionId}/players/${player.guildId}/sponsorblock/categories`, (r) => {
@@ -1839,5 +1943,15 @@ export class RyanlinkNode {
 
     this._LManager.emit('LyricsNotFound', player, track, payload)
     return
+  }
+
+  public toJSON() {
+    return {
+      options: this.options,
+      stats: this.stats,
+      sessionId: this.sessionId,
+      connected: this.connected,
+      version: this.version,
+    }
   }
 }

@@ -3,7 +3,7 @@ import { waitForNode } from './utils'
 import type { Player } from '../src/audio/Player'
 import type { NodeLinkNode } from '../src/node/NodeLink'
 
-vi.mock('ws', () => {
+jest.mock('ws', () => {
   const { EventEmitter } = require('node:events')
   class MockWebSocket extends EventEmitter {
     public static OPEN = 1
@@ -28,11 +28,12 @@ vi.mock('ws', () => {
         }, 10)
       }, 5)
     }
-    send = vi.fn()
-    close = vi.fn()
-    terminate = vi.fn()
+    send = jest.fn()
+    close = jest.fn()
+    terminate = jest.fn()
   }
   return {
+    __esModule: true,
     default: MockWebSocket,
     WebSocket: MockWebSocket,
   }
@@ -45,7 +46,7 @@ describe('NodeLinkNode', () => {
 
   beforeEach(async () => {
     // Mock fetch
-    globalThis.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
+    globalThis.fetch = jest.fn().mockImplementation(async (url: string, options: any) => {
       const urlObj = new URL(url)
       const path = urlObj.pathname
 
@@ -53,7 +54,7 @@ describe('NodeLinkNode', () => {
         status,
         ok: status < 400,
         json: async () => data,
-        text: async () => JSON.stringify(data),
+        text: async () => typeof data === 'string' ? data : JSON.stringify(data),
       })
 
       if (path.includes('info')) return createResponse({ version: { semver: '4.0.0' }, sourceManagers: ['youtube'], plugins: [], isNodelink: true })
@@ -61,16 +62,20 @@ describe('NodeLinkNode', () => {
       if (path.includes('meaning')) return createResponse({ loadType: 'meaning', data: { title: 'test', description: 'desc', paragraphs: [], url: 'u', provider: 'p', type: 't' } })
       if (path.includes('mix')) {
         if (options?.method === 'GET') return createResponse({ mixes: [] })
-        if (options?.method === 'POST') return createResponse({ id: 'm1', track: {}, volume: 50 })
+        if (options?.method === 'POST') return createResponse({ id: 'm1', track: { encoded: 'e' }, volume: 0.5 })
         return createResponse({})
       }
-      if (path.includes('lyrics')) return createResponse({ loadType: 'synced', data: { synced: true, lang: 'en', source: 's', lines: [] } })
-      if (path.includes('chapters')) return createResponse([])
+      if (path.includes('loadlyrics') || (path.includes('lyrics') && options?.method === 'GET')) return createResponse({ loadType: 'synced', data: { synced: true, lang: 'en', source: 's', lines: [] } })
+      if (path.includes('loadchapters') || (path.includes('chapters') && options?.method === 'GET')) return createResponse([])
       if (path.includes('connection')) return createResponse({ status: 'ok', metrics: {} })
       if (path.includes('trackstream')) return createResponse({ url: 'stream' })
-      if (path.includes('loadstream')) return createResponse({})
+      if (path.includes('loadstream')) return createResponse({ response: {} })
       if (path.includes('youtube/config')) return createResponse({ isConfigured: true })
       if (path.includes('youtube/oauth')) return createResponse({ access_token: 't', expires_in: 3600, scope: 's', token_type: 't' })
+      if (path.includes('encodetrack')) return createResponse({ encoded: 'enc' })
+      if (path.includes('encodedtracks')) return createResponse({ encodedTracks: ['enc'] })
+      if (path.includes('workers')) return createResponse({ workers: [] })
+      if (path.includes('stats')) return createResponse({ detailedStats: {} })
       if (path.includes('players')) return createResponse({})
 
       return createResponse({}, 404)
@@ -79,7 +84,7 @@ describe('NodeLinkNode', () => {
     manager = new RyanlinkManager({
       nodes: [{ host: 'localhost', port: 2333, authorization: 'pw', id: 'local', nodeType: 'NodeLink' }],
       client: { id: '123' },
-      sendToShard: vi.fn(),
+      sendToShard: jest.fn(),
     })
 
     node = manager.nodeManager.nodes.get('local') as NodeLinkNode
@@ -89,10 +94,14 @@ describe('NodeLinkNode', () => {
     player = manager.createPlayer({ guildId: 'g1', voiceChannelId: 'vc1', node: 'local' })
   })
 
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
   it('handles gapless playback methods', async () => {
     const track = manager.utils.buildTrack({ encoded: 't', info: {} } as any, 'u')
     await node.setNextTrackGapLess(player, track)
-    await node.removeNextTrackGapLess(player)
+    expect(await node.removeNextTrackGapLess(player)).toBe(true)
   })
 
   it('gets meaning of a track', async () => {
@@ -109,8 +118,8 @@ describe('NodeLinkNode', () => {
     const listRes = await node.listMixerLayers(player)
     expect(listRes.mixes).toBeDefined()
 
-    await node.updateMixerLayerVolume(player, 'm1', 75)
-    await node.removeMixerLayer(player, 'm1')
+    expect(await node.updateMixerLayerVolume(player, 'm1', 75)).toBe(true)
+    expect(await node.removeMixerLayer(player, 'm1')).toBe(true)
   })
 
   it('applies specific filters', async () => {
@@ -120,25 +129,46 @@ describe('NodeLinkNode', () => {
     await node.specificFilters.highPass(player, { smoothing: 100 })
     await node.specificFilters.phaser(player, { rate: 1 })
     await node.specificFilters.spatial(player, { depth: 1, rate: 1 })
-    await node.specificFilters.resetNodeLinkFilters(player)
+    expect(await node.specificFilters.resetNodeLinkFilters(player)).toBe(true)
   })
 
-  it('fetches lyrics and chapters', async () => {
+  it('fetches lyrics and chapters (standard and NodeLink specific)', async () => {
     const track = manager.utils.buildTrack({ encoded: 't', info: {} } as any, 'u')
     player.queue.current = track
+
+    expect(await node.loadLyrics(track)).toBeDefined()
+    expect(await node.loadChapters(track)).toBeDefined()
+
     const lyrics = await node.nodeLinkLyrics(player)
     expect(lyrics).toBeDefined()
 
     const chapters = await node.getChapters(player)
     expect(Array.isArray(chapters)).toBe(true)
+
+    await node.subscribeLyricsNodeLink(player, true)
+    await node.unsubscribeLyricsNodeLink(player)
   })
 
-  it('gets connection metrics and streams', async () => {
+  it('gets connection metrics and streams (GET and POST)', async () => {
     const track = manager.utils.buildTrack({ encoded: 't', info: {} } as any, 'u')
     await node.getConnectionMetrics()
     await node.getDirectStream(track)
-    // loadDirectStream returns a mock response
+    
+    // GET loadstream
     await node.loadDirectStream(track, 100, 0, {})
+    
+    // POST loadstream
+    await node.loadDirectStreamPost(track, 100, 0, {})
+  })
+
+  it('handles track encoding', async () => {
+    expect(await node.encodeTrack({ title: 'test' })).toBeDefined()
+    expect(await node.encodeTracks([{ title: 'test' }])).toBeDefined()
+  })
+
+  it('handles worker management', async () => {
+    expect(await node.getWorkers()).toBeDefined()
+    await node.patchWorker('123', { id: 1 })
   })
 
   it('handles youtube config and oauth', async () => {
@@ -148,7 +178,13 @@ describe('NodeLinkNode', () => {
     await node.updateYoutubeOAUTH('r')
   })
 
-  it('changes audio track language', async () => {
+  it('handles fading and player language', async () => {
+    await node.setFading(player, { enabled: true, trackStart: { duration: 1000 } })
     await node.changeAudioTrackLanguage(player, 'lang-1')
+  })
+
+  it('handles extended stats and info', async () => {
+    expect(await node.getDetailedStats()).toBeDefined()
+    expect(await node.getNodeLinkInfo()).toBeDefined()
   })
 })

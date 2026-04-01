@@ -1,44 +1,98 @@
 ---
-title: 'Features'
-description: High-performance, flexible and feature-rich lavalink-v4 wrapper for Discord bots.
+title: Features
+description: Complete feature list for Ryanlink — a high-performance Lavalink v4 wrapper.
 ---
 
-import { Badge } from '@astrojs/starlight/components'
+import { Badge } from '@astrojs/starlight/components';
 
-### Core Capabilities
-- **Zero-Config Persistence** <Badge text="Reliable" variant="success" />
-  - Automated state recovery for queues and playback positions across restarts.
-  - Built-in drivers for **Redis**, **Local Disk**, and **In-Memory** storage.
-- **Node Management & Search** <Badge text="Intelligent" variant="note" />
-  - Global `manager.search()` handles multiple sources (Spotify, YT, SC) automatically.
-  - Least-busy node selection for optimized search performance and load balancing.
+## Core
 
-### Performance & Memory
-- **Memory-Optimized TrackRegistry** <Badge text="Efficient" variant="caution" />
-  - High-performance reference mapping for queues with **10,000+ tracks**.
-  - Minimized RAM footprint by deferring track metadata resolution.
-- **Fisher-Yates Shuffle** <Badge text="Fair" variant="note" />
-  - Statistically unbiased randomization for high-fidelity audio shuffling.
+- **RyanlinkManager** — central hub for nodes, players, voice state, and search
+- **Multi-node support** — weighted load balancing (`memory`, `cpuLavalink`, `cpuSystem`, `calls`, `playingPlayers`, `players`, `weighted`)
+- **Atomic node migration** — seamless player failover when a node disconnects
+- **Session resuming** — Lavalink session persistence across reconnects
+- **Queue persistence** — pluggable `QueueStore` (in-memory by default, custom Redis/disk supported)
+- **Track resolve retries** — configurable retry limit with `autoSkipOnResolveError`
+- **Voice state sync** — automatic `VOICE_STATE_UPDATE` / `VOICE_SERVER_UPDATE` handling
 
-### Extensive Sources
-- **Unified Connectivity** <Badge text="20+ Platforms" variant="tip" />
-  - Native support for **Spotify**, **Apple Music**, **Deezer**, **Tidal**, **JioSaavn**, and more.
-  - Seamless integration for **YouTube**, **SoundCloud**, **TikTok**, **Instagram**, and **Amazon Music**.
-  - Optimized for **Regional Platforms** including **VK Music**, **Gaana**, and **Audiomack**.
-  - Built-in support for **TTS Engine** (**Flowery**, **Google Cloud**) and **Local/HTTP** files.
+## Player
 
-### Audio Intelligence
-- **High-Fidelity Filters** <Badge text="Professional" variant="tip" />
-  - Non-destructive filter stacking with atomic updates.
-  - Professional presets including **8D**, **Lofi**, **Radio**, **Nightcore**, and **Vaporwave**.
-- **Automated Self-Healing** <Badge text="Robust" variant="danger" />
-  - Integrated track resolve retries (3 attempts) before auto-purging flaky sources.
-  - Lifecycle hooks for `onTrackStart`, `onQueueEnd`, and `onNodeFailover`.
+- **Full playback control** — `play`, `pause`, `resume`, `seek`, `skip`, `stop`, `setVolume`, `setRepeatMode`
+- **Repeat modes** — `off`, `track`, `queue`
+- **Gapless preloading** (NodeLink) — `nextTrack` field for zero-silence transitions
+- **Auto-reconnect** — configurable `onDisconnect.autoReconnect`
+- **Smart leave** — destroy player when voice channel is empty (`smartLeave`)
+- **Auto-pause** — pause when channel empties, resume when users rejoin (`autoPause`)
+- **Client-based position tracking** — configurable `clientBasedPositionUpdateInterval`
+- **Volume decrementer** — scale internal volume independently of reported volume
+- **Lifecycle hooks** — `onTrackStart`, `onQueueEnd`, `onNodeFailover` per-player
 
-### Plugin Ecosystem
-- **SponsorBlock** <Badge text="Integrated" variant="tip" />
-  - Automatic detection and skipping of sponsors, intros, and music-only segments.
-- **LavaLyrics** <Badge text="Real-time" variant="note" />
-  - Time-synced lyrics support with specialized event tracking for immersive UI.
-- **NodeLink Gapless** <Badge text="Perfect" variant="success" />
-  - Zero-silence playback between consecutive tracks for a seamless listening experience.
+## Queue
+
+- **TrackRegistry** — memory-efficient track reference mapping for large queues
+- **Previous tracks buffer** — configurable `maxPreviousTracks` (default 25)
+- **Queue operations** — `add`, `remove`, `splice`, `move`, `shuffle`, `clear`
+- **Fisher-Yates shuffle** — statistically unbiased randomization
+- **Queue changes watcher** — `QueueChangesWatcher` interface for custom side effects
+- **Unresolved tracks** — lazy resolution with `useUnresolvedData` support
+
+## Filters <Badge text="All non-destructive" variant="tip" />
+
+**Standard Lavalink filters:**
+`equalizer` (15-band), `karaoke`, `timescale`, `tremolo`, `vibrato`, `rotation`, `distortion`, `channelMix`, `lowPass`
+
+**Built-in presets:**
+`Nightcore`, `Vaporwave`, `8D`, `Slowmo`, `DoubleTime`, `Radio`, `Lofi`, `Tremolo`, `Vibrato`, `BassBoost`, `Pop`, `Rock`, `Classic`, `Electronic`, `Gaming`, `Soft`, `TV`, `TrebleBass`
+
+**NodeLink exclusive filters:**
+`echo`, `chorus`, `compressor`, `highpass`, `phaser`, `spatial`
+
+**LavaDSPX plugin filters:**
+`low-pass`, `high-pass`, `normalization`, `echo`
+
+**filter-engine / lava-xm-plugin filters:**
+`echo` (with delay/decay), `reverb`
+
+## Search
+
+- **50+ search prefixes** — YouTube, Spotify, Apple Music, Deezer, Tidal, SoundCloud, JioSaavn, Yandex Music, VK Music, Qobuz, Pandora, Audiomack, Shazam, Last.fm, Amazon Music, Gaana, Instagram, Bilibili, Bandcamp, and more
+- **NodeLink exclusive** — Mixcloud, NicoVideo, Songlink, Audius, Anghami, Bluesky, Letras, Eternal Box, Piper TTS, Google TTS
+- **LavaSearch** — `audioSearch()` for albums, artists, playlists, text results
+- **Source validation** — configurable `autoChecks.sourcesValidations` and `autoChecks.pluginValidations`
+- **Link matchers** — automatic source detection for direct URLs
+
+## Autoplay
+
+- **Multi-source fetch chain** — Spotify rec → SoundCloud → YouTube mix → Deezer → artist search → title search → ytsearch fallback
+- **Weighted scoring** — duration similarity (40pts) + same artist (30pts) + partial match (15pts) + jitter (10pts)
+- **Circular history buffer** — configurable `historyLimit` (default 20), prevents re-queuing recent tracks
+- **Pre-fetch** — triggers early when queue drops to `prefetchThreshold` tracks
+- **Keyword exclusion** — regex-based blacklist with modifier-aware logic
+- **Duration tolerance** — soft window, not hard exclusion
+
+## Plugin Support
+
+| Plugin | Registered Name | Features |
+| :--- | :--- | :--- |
+| LavaSrc | `lavasrc-plugin` | Spotify, Apple Music, Deezer, Tidal, Yandex, VK, JioSaavn, Qobuz, Pandora, lyrics |
+| LavaSearch | `lavasearch-plugin` | Advanced search (albums, artists, playlists) |
+| LavaLyrics | `lavalyrics-plugin` | Lyrics API hub, real-time line events |
+| SponsorBlock | `sponsorblock-plugin` | Segment skipping, chapter events |
+| LavaDSPX | `LavaDSPX-Plugin` | DSP filters |
+| DuncteBot Skybot | `skybot-lavalink-plugin` | speak:, phsearch:, mixcloud, etc. |
+| DuncteBot TTS | `tts-plugin` | Google Cloud TTS |
+| java-timed-lyrics | `java-lyrics-plugin` | YouTube + Genius lyrics |
+| lyrics.kt | `lyrics` | YouTube lyrics |
+| lava-xm-plugin | `lava-xm-plugin` | Tracker module formats (MOD, XM, IT, S3M) |
+
+## NodeLink Exclusive
+
+- **Audio Mixer** — overlay TTS/SFX on main track (`addMixerLayer`, `listMixerLayers`, `updateMixerLayerVolume`, `removeMixerLayer`)
+- **Fading** — smooth volume transitions (`trackStart`, `trackEnd`, `stop`, `seek`, `ducking`) with `linear`, `exponential`, `logarithmic`, `s-curve`
+- **Gapless preloading** — `setNextTrackGapLess`, `removeNextTrackGapLess`
+- **Direct streaming** — `getDirectStream`, `loadDirectStream`, `loadDirectStreamPost`
+- **Lyrics** — `loadLyrics`, `loadChapters`, `getMeaning`, `timedLyrics.*`
+- **YouTube config** — `updateYoutubeConfig`, `getYoutubeConfig`, `getYoutubeOAUTH`, `updateYoutubeOAUTH`
+- **Workers** — `getWorkers`, `patchWorker`
+- **Track encoding** — `encodeTrack`, `encodeTracks`
+- **Extended stats** — `getDetailedStats` with per-source and per-endpoint tracking

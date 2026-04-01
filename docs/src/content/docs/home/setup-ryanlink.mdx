@@ -1,53 +1,92 @@
 ---
-title: Setup Lavalink
-description: Learn how to setup a Lavalink Server for Ryanlink.
+title: Quick Setup
+description: Wire up RyanlinkManager with your Discord.js bot in minutes.
 ---
 
-import { LinkCard, Card, CardGrid, Steps, Badge } from '@astrojs/starlight/components';
+import { Steps } from '@astrojs/starlight/components';
 
-# Setup Lavalink
-
-To use **Ryanlink**, you need a Lavalink Server. Whether you choose to host it locally or use a premium provider, our engine is designed for absolute technical compatibility.
-
-## Hosting Options
-
-<CardGrid>
-  <Card title="Managed Hosting" icon="rocket">
-    Avoid the hassle of manual configuration. Use **HeavenCloud** forAMD Ryzen 9 9950X performance.
-    <LinkCard
-      title="HeavenCloud Lavalink"
-      description="60 Gbps Network, 120 Tbps DDoS Shield. Global Regions."
-      href="/ryanlink/home/lavalink-hosting"
-    />
-  </Card>
-  <Card title="Self-Hosted Node" icon="seti:javascript">
-    Follow the [**Official Lavalink Guide**](https://lavalink.dev/getting-started/index.html) to get started on your own server.
-  </Card>
-</CardGrid>
-
----
-
-## Technical Prerequisites
+## Minimal Setup (Discord.js)
 
 <Steps>
-1. **Lavalink v4.0+**: Native support for v4 filters and plugin architectures.
-2. **Plugins**: For features like Spotify, Lyrics, and SponsorBlock, ensure [**plugins**](https://lavalink.dev/plugins.html) are installed.
-3. **Intelligent Management**: Review the [**Architecture Overview**](/ryanlink/home/architecture) to understand how Ryanlink manages node health.
+1. **Create the manager**
+
+   ```typescript
+   import { Client, GatewayIntentBits } from 'discord.js';
+   import { RyanlinkManager } from 'ryanlink';
+
+   const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+
+   const manager = new RyanlinkManager({
+     nodes: [{
+       id: 'main',
+       host: 'localhost',
+       port: 2333,
+       authorization: 'youshallnotpass',
+       autoChecks: { pluginValidations: false, sourcesValidations: false },
+     }],
+     sendToShard: (guildId, payload) => {
+       client.guilds.cache.get(guildId)?.shard.send(payload);
+     },
+     client: { id: process.env.CLIENT_ID! },
+     resuming: { enabled: true, timeout: 60000 },
+   });
+   ```
+
+2. **Forward voice events**
+
+   ```typescript
+   client.on('raw', (packet) => {
+     manager.provideVoiceUpdate(packet);
+   });
+   ```
+
+3. **Initialize on ready**
+
+   ```typescript
+   client.once('ready', async () => {
+     await manager.init({ id: client.user!.id, username: client.user!.username });
+     console.log('Ryanlink ready');
+   });
+   ```
+
+4. **Play a track**
+
+   ```typescript
+   // In your slash command handler
+   const player = manager.createPlayer({
+     guildId: interaction.guildId!,
+     voiceChannelId: interaction.member.voice.channelId!,
+     textChannelId: interaction.channelId,
+     selfDeaf: true,
+   });
+
+   if (!player.connected) await player.connect();
+
+   const result = await manager.search({ query: 'never gonna give you up', source: 'ytsearch' }, interaction.user);
+
+   if (!result.tracks.length) return interaction.reply('No results found.');
+
+   const track = result.tracks[0];
+   track.requester = interaction.user;
+   await player.queue.add(track);
+
+   if (!player.playing) await player.play();
+   ```
 </Steps>
 
 ---
-## Sample Configuration (application.yaml)
 
-This sample configuration enables several plugins for additional sources, filters and lyrics
+## Lavalink application.yml
 
 ```yaml
 server:
   port: 2333
   address: 0.0.0.0
+
 lavalink:
   server:
     sources:
-      youtube: false # Using Youtube nativly on lavalink is deprecated, disable it and use https://github.com/lavalink-devs/youtube-source instead.
+      youtube: false # Using Youtube natively on lavalink is deprecated, disable it and use https://github.com/lavalink-devs/youtube-source instead.
     password: 'youshallnotpass'
     bufferDurationMs: 225
     frameBufferDurationMs: 5000
@@ -69,6 +108,7 @@ lavalink:
       repository: 'https://jitpack.io'
     - dependency: 'com.github.topi314.lavalyrics:lavalyrics-plugin:1.1.0' # https://github.com/topi314/LavaLyrics
     - dependency: 'me.duncte123:java-lyrics-plugin:1.6.6' # https://github.com/DuncteBot/java-timed-lyrics
+
 plugins:
   lyrics:
     countryCode: de
@@ -83,17 +123,16 @@ plugins:
   youtube:
     enabled: true
     # YouTube's cipher changes are becoming more frequent and complex, making it harder to keep up.
-    # To simplify signature deciphering, you can use a remote cipher server like yt-cipher, a lightweight Deno server with a REST API. More details are available at https://github.com/kikkia/yt-cipher
-    remoteCipher:
-      userAgent: 'your_service_name'
-      url: 'http://localhost:8001' # The base URL of your remote cipher server.
+    # To simplify signature deciphering, you can use a remote cipher server like yt-cipher.
+    # remoteCipher:
+    #   userAgent: 'your_service_name'
+    #   url: 'http://localhost:8001'
     oauth:
       enabled: false
-      # refreshToken: "Insert your refresh token here" # For more details, please refer to https://github.com/lavalink-devs/youtube-source?tab=readme-ov-file#using-oauth-tokens
+      # refreshToken: "Insert your refresh token here"
     allowSearch: true
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
-    # For more details about client setup, refer to https://github.com/lavalink-devs/youtube-source?tab=readme-ov-file#available-clients
     clients:
       - 'ANDROID_MUSIC'
       - 'MUSIC'
@@ -119,7 +158,6 @@ plugins:
     providers:
       - 'ytsearch:"%ISRC%"'
       - 'dzisrc:%ISRC%'
-
       - 'ytsearch:%QUERY%'
       - 'dzsearch:%QUERY%'
       - 'jssearch:%QUERY%'
@@ -127,113 +165,107 @@ plugins:
       - 'scsearch:%QUERY%'
       - 'tdsearch:%QUERY%'
     sources:
-      spotify: true # Enable Spotify source
-      applemusic: true # Enable Apple Music source
-      deezer: true # Enable Deezer source
-      jiosaavn: true # Enabled JioSaavn source
-      pandora: true # Enable Pandora source
-      yandexmusic: true # Enable Yandex Music source
-      flowerytts: true # Enable Flowery TTS source
-      youtube: true # Enable YouTube search source (https://github.com/topi314/LavaSearch)
-      tidal: true # Enable Tidal source
-      vkmusic: true # Enable Vk Music source
-      qobuz: true # Enabled qobuz source
-      ytdlp: true # Enable yt-dlp source
+      spotify: true
+      applemusic: true
+      deezer: true
+      jiosaavn: true
+      pandora: true
+      yandexmusic: true
+      flowerytts: true
+      youtube: true
+      tidal: true
+      vkmusic: true
+      qobuz: true
+      ytdlp: true
     lyrics-sources:
-      spotify: true # Enable Spotify lyrics source
-      deezer: true # Enable Deezer lyrics source
-      youtube: true # Enable YouTube lyrics source
-      yandexmusic: true # Enable Yandex Music lyrics source
-      vkmusic: true # Enable Vk Music lyrics source
-      lrcLib: true # Enable LRC Library lyrics source (https://lrclib.net)
+      spotify: true
+      deezer: true
+      youtube: true
+      yandexmusic: true
+      vkmusic: true
+      lrcLib: true
     spotify:
-      # clientId & clientSecret are required for using spsearch
       # clientId: "<insert>"
       # clientSecret: "<insert>"
-      # spDc: "<insert>" # the sp dc cookie used for accessing the spotify lyrics api
-      preferAnonymousToken: true # Use this to generate and cache anonymous Spotify access tokens from your own endpoint, as Spotify recently updated their implementation.
-      customTokenEndpoint: 'http://localhost:8080/api/token' # For more details, please refer to https://github.com/topi314/spotify-tokener
+      # spDc: "<insert>"
+      preferAnonymousToken: true
+      customTokenEndpoint: 'http://localhost:8080/api/token'
       resolveArtistsInSearch: true
-      albumLoadLimit: 2 # The number of pages at 50 tracks each
+      albumLoadLimit: 2
       countryCode: 'US'
-      playlistLoadLimit: 3 # The number of pages at 100 tracks each
+      playlistLoadLimit: 3
       localFiles: true
     applemusic:
       countryCode: 'US'
       mediaAPIToken: '<insert>'
-      playlistLoadLimit: 3 # The number of pages at 300 tracks each
-      albumLoadLimit: 3 # The number of pages at 300 tracks each
+      playlistLoadLimit: 3
+      albumLoadLimit: 3
     deezer:
-      masterDecryptionKey: 'your master decryption key' # the master key used for decrypting the deezer tracks. (you need to get it from somewhere)
-      arl: 'your deezer arl' # the arl cookie used for accessing the deezer api this is not optional anymore
-      formats: ['FLAC', 'MP3_320', 'MP3_256', 'MP3_128', 'MP3_64', 'AAC_64'] # the formats you want to use for the deezer tracks. "FLAC", "MP3_320", "MP3_256" & "AAC_64" are only available for premium users and require a valid arl
+      masterDecryptionKey: 'your master decryption key'
+      arl: 'your deezer arl'
+      formats: ['FLAC', 'MP3_320', 'MP3_256', 'MP3_128', 'MP3_64', 'AAC_64']
     youtube:
       countryCode: 'US'
-      playlistLoadLimit: 1 # The number of pages at 100 tracks each
-      albumLoadLimit: 1 # The number of pages at 50 tracks each
-      artistLoadLimit: 1 # The number of pages at 10 tracks each
+      playlistLoadLimit: 1
+      albumLoadLimit: 1
+      artistLoadLimit: 1
     yandexmusic:
       accessToken: '<insert>'
     tidal:
-      countryCode: 'US' # the country code for accessing region-specific content on Tidal (ISO 3166-1 alpha-2).
-      searchLimit: 6 # How many search results should be returned
-      token: 'your tidal token' # the token used for accessing the tidal api. See https://github.com/topi314/LavaSrc#tidal
+      countryCode: 'US'
+      searchLimit: 6
+      token: 'your tidal token'
     qobuz:
-      userOauthToken: 'your user oauth token' # This token is needed for authorization in the api. Guide: https://github.com/topi314/LavaSrc#qobuz
-      #      appId : optional (Only pass it when you are using an old userOauthToken)
-      #      appSecret : optional (Only pass it when you are using an old userOauthToken)
+      userOauthToken: 'your user oauth token'
     ytdlp:
-      path: 'yt-dlp' # the path to the yt-dlp executable.
-      searchLimit: 10 # How many search results should be returned
-      # customLoadArgs: ["-q", "--no-warnings", "--flat-playlist", "--skip-download", "-J"] # Custom arguments to pass to yt-dlp
-      # customPlaybackArgs: ["-q", "--no-warnings", "-f", "bestaudio", "-J"] # Custom arguments for yt-dlp
+      path: 'yt-dlp'
+      searchLimit: 10
     jiosaavn:
-      decryption: # The decryption configuration for the JioSaavn tracks
-        secretKey: 'your_key' # The required secret key used for decryption (Find your own secret key)
-        algorithm: 'DES' # The algorithm used for decryption (Default "DES")
-        transformation: 'DES/ECB/PKCS5Padding' # The transformation used for decryption (Default "DES/ECB/PKCS5Padding")
-      # proxy: # If defined, JioSaavn HTTP requests will be proxied through here. JioSaavn uses region blocking
-      #   url: "https://example.org" # The HTTP proxy to use
-      #   username: "my-bot" # Optional username to authenticate with the proxy
-      #   password: "youshallpass" # Optional password to authenticate with the proxy
+      decryption:
+        secretKey: 'your_key'
+        algorithm: 'DES'
+        transformation: 'DES/ECB/PKCS5Padding'
     pandora:
-      csrfToken: 'your csrf token' # X-CsrfToken header from your browser session to pandora.com
-      searchLimit: 6 # How many search results should be returned
+      csrfToken: 'your csrf token'
+      searchLimit: 6
     vkmusic:
-      userToken: 'your user token' # This token is needed for authorization in the api. Guide: https://github.com/topi314/LavaSrc#vk-music
-      playlistLoadLimit: 1 # The number of pages at 50 tracks each
-      artistLoadLimit: 1 # The number of pages at 10 tracks each
-      recommendationsLoadLimit: 10 # Number of tracks
+      userToken: 'your user token'
+      playlistLoadLimit: 1
+      artistLoadLimit: 1
+      recommendationsLoadLimit: 10
     flowerytts:
-      voice: 'Olivia' # (case-sensitive) get default voice from here https://api.flowery.pw/v1/tts/voices
-      translate: false # whether to translate the text to the native language of voice
-      silence: 0 # the silence parameter is in milliseconds. Range is 0 to 10000. The default is 0.
-      speed: 1.0 # the speed parameter is a float between 0.5 and 10. The default is 1.0. (0.5 is half speed, 2.0 is double speed, etc.)
-      audioFormat: 'mp3' # supported formats are: mp3, ogg_opus, ogg_vorbis, aac, wav, and flac. Default format is mp3
+      voice: 'Olivia'
+      translate: false
+      silence: 0
+      speed: 1.0
+      audioFormat: 'mp3'
   dunctebot:
     ttsLanguage: 'en-US'
     sources:
-      getyarn: true # www.getyarn.io
-      clypit: true # www.clyp.it
-      tts: true # speak:Words to speak
-      pornhub: true # should be self-explanatory
-      reddit: true # should be self-explanatory
-      ocremix: true # www.ocremix.org
-      tiktok: true # tiktok.com
-      mixcloud: true # mixcloud.com
-      soundgasm: true # soundgasm.net
+      getyarn: true
+      clypit: true
+      tts: true
+      pornhub: true
+      reddit: true
+      ocremix: true
+      tiktok: true
+      mixcloud: true
+      soundgasm: true
+
 metrics:
   prometheus:
     enabled: false
     endpoint: /metrics
+
 sentry:
   dsn: ''
   environment: ''
+
 logging:
   file:
     max-history: 5
     max-size: 10MB
-  path: ./logs/
+    path: ./logs/
   level:
     root: DEBUG
     lavalink: DEBUG
@@ -248,4 +280,61 @@ logging:
     rollingpolicy:
       max-file-size: 10MB
       max-history: 5
+```
+
+---
+
+## Key Patterns
+
+### Searching
+
+```typescript
+// Direct URL
+const result = await manager.search({ query: 'https://open.spotify.com/track/...' }, user);
+
+// Search with prefix
+const result2 = await manager.search({ query: 'spsearch:daft punk', source: 'spsearch' }, user);
+
+// Via player (supports bandcamp local engine)
+const result3 = await player.search('ytmsearch:lofi beats', user);
+```
+
+### Queue Management
+
+```typescript
+// Add tracks
+await player.queue.add(track);
+await player.queue.add(track, 0); // add at position 0 (play next)
+
+// Shuffle
+await player.queue.shuffle();
+
+// Move
+await player.queue.move(fromIndex, toIndex);
+
+// Remove
+await player.queue.remove(index);
+// or
+await player.queue.splice(index, 1);
+```
+
+### Filters
+
+```typescript
+import { FilterManager } from 'ryanlink';
+
+// Nightcore
+await player.filterManager.toggleNightcore();
+
+// 8D audio
+await player.filterManager.toggleRotation(0.2);
+
+// Bass boost
+await player.filterManager.setEQ(FilterManager.EQList.BassBoostHigh);
+
+// Volume
+await player.filterManager.setVolume(1.5); // 150%
+
+// Reset all
+await player.filterManager.resetFilters();
 ```

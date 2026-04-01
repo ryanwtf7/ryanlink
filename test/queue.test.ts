@@ -1,4 +1,3 @@
-import { fn } from './mock'
 import { Queue, QueueSaver, DefaultQueueStore } from '../src/audio/Queue'
 import { AudioTrackSymbol, UnresolvedAudioTrackSymbol } from '../src/utils/Utils'
 
@@ -31,7 +30,7 @@ function makeUnresolved(title: string): any {
   const t: any = {
     info: { title, author: 'Unknown' },
     requester: { id: 'user1' },
-    resolve: fn(),
+    resolve: jest.fn(),
   }
   Object.defineProperty(t, UnresolvedAudioTrackSymbol, { configurable: true, value: true })
   return t
@@ -496,9 +495,9 @@ describe('Queue', () => {
   describe('utils.sync / destroy', () => {
     it('syncs and destroys with QueueSaver', async () => {
       const store = {
-        get: vi.fn(),
-        set: vi.fn(),
-        delete: vi.fn(),
+        get: jest.fn(),
+        set: jest.fn(),
+        delete: jest.fn(),
         stringify: (v: any) => v,
         parse: (v: any) => v
       }
@@ -510,7 +509,7 @@ describe('Queue', () => {
         tracks: [{ encoded: 't1', info: { title: 'T1' } }],
         previous: [{ encoded: 'p1', info: { title: 'P1' } }]
       }
-      store.get.mockResolvedValue(mockData)
+      ;(store.get as jest.Mock).mockResolvedValue(mockData)
       
       await queue.utils.sync(true, false)
       expect(queue.current?.encoded).toBe('curr')

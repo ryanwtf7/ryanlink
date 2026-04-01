@@ -1,0 +1,241 @@
+---
+title: NodeLink Support
+description: Complete guide to NodeLink-exclusive features in Ryanlink.
+---
+
+import { Badge } from '@astrojs/starlight/components';
+
+[NodeLink](https://github.com/PerformanC/NodeLink) is a Node.js-based Lavalink alternative. Ryanlink has full NodeLink support via the `NodeLinkNode` class, which extends `RyanlinkNode` with all NodeLink-exclusive endpoints.
+
+## Detecting NodeLink
+
+```typescript
+if (player.node.isNodeLink()) {
+  // node is a NodeLinkNode instance
+  const nodeLinkNode = player.node as NodeLinkNode;
+}
+```
+
+## Audio Mixer <Badge text="NodeLink only" variant="tip" />
+
+Overlay TTS, SFX, or background music on top of the main track.
+
+```typescript
+const node = player.node as NodeLinkNode;
+
+// Add a mix layer (volume 0.0–1.0)
+const layer = await node.addMixerLayer(player, ttsTrack, 0.9);
+
+// List active layers
+const layers = await node.listMixerLayers(player);
+
+// Update volume
+await node.updateMixerLayerVolume(player, layer.id, 0.5);
+
+// Remove
+await node.removeMixerLayer(player, layer.id);
+```
+
+Events: `MixStartedEvent`, `MixEndedEvent` (via `nodeLinkEvent` on `nodeManager`).
+
+## Fading <Badge text="NodeLink only" variant="tip" />
+
+Smooth volume transitions for track changes, seeking, and pausing.
+
+```typescript
+await node.setFading(player, {
+  enabled: true,
+  trackStart: { duration: 1500, curve: 's-curve' },
+  trackEnd: { duration: 1000, curve: 'linear' },
+  seek: { duration: 500, curve: 'linear' },
+  ducking: { volume: 0.3, duration: 300, curve: 'exponential' },
+});
+```
+
+Supported curves: `linear`, `exponential`, `logarithmic`, `s-curve`.
+
+Or pass `fading` directly in `updatePlayer`:
+
+```typescript
+await node.updatePlayer({
+  guildId: player.guildId,
+  playerOptions: {
+    fading: { enabled: true, trackStart: { duration: 1000, curve: 'linear' } }
+  }
+});
+```
+
+## Gapless Preloading <Badge text="NodeLink only" variant="tip" />
+
+Pre-load the next track while the current one is still playing.
+
+```typescript
+// Pre-load next track from queue
+await node.setNextTrackGapLess(player);
+
+// Or specify a track explicitly
+await node.setNextTrackGapLess(player, specificTrack);
+
+// Remove preloaded track
+await node.removeNextTrackGapLess(player);
+```
+
+## Lyrics <Badge text="NodeLink only" variant="tip" />
+
+### loadLyrics — `/v4/loadlyrics`
+
+```typescript
+const lyrics = await node.loadLyrics(track, 'en');
+// Returns NodeLinkLyrics | NodeLinkNoLyrics
+// lyrics.data.synced — boolean
+// lyrics.data.lines[] — { text, time, duration }
+// lyrics.data.source — provider name
+```
+
+### loadChapters — `/v4/loadchapters`
+
+```typescript
+const chapters = await node.loadChapters(track);
+// Returns NodeLinkChapter[] | { loadType: 'empty' }
+// chapter.title, chapter.startTime, chapter.endTime, chapter.duration
+```
+
+### timedLyrics (lyrics.kt / java-timed-lyrics)
+
+```typescript
+// Current player lyrics
+const result = await node.timedLyrics.getCurrent(player.guildId);
+
+// By YouTube video ID
+const result2 = await node.timedLyrics.getByVideoId('dQw4w9WgXcQ');
+
+// Search
+const results = await node.timedLyrics.search('never gonna give you up');
+const genius = await node.timedLyrics.search('never gonna give you up', 'genius');
+```
+
+### nodeLinkLyrics (player session endpoint)
+
+```typescript
+const lyrics = await node.nodeLinkLyrics(player, track, 'en');
+```
+
+### Subscribe to real-time lyrics
+
+```typescript
+await node.subscribeLyricsNodeLink(player, false);
+await node.unsubscribeLyricsNodeLink(player);
+```
+
+## Meaning — `/v4/meaning` <Badge text="NodeLink only" variant="tip" />
+
+Wikipedia/Letras background info for a track or artist.
+
+```typescript
+const meaning = await node.getMeaning(track, 'en');
+// meaning.data.title, .description, .paragraphs[], .url, .provider
+```
+
+## Direct Streaming <Badge text="NodeLink only" variant="tip" />
+
+### trackstream — `/v4/trackstream`
+
+```typescript
+const stream = await node.getDirectStream(track);
+// stream.url — direct audio URL
+// stream.formats[] — { itag, mimeType, qualityLabel, bitrate }
+
+// With specific itag
+const stream2 = await node.getDirectStream(track, 251);
+```
+
+### loadstream — `/v4/loadstream`
+
+```typescript
+// GET (query params)
+const pcmStream = await node.loadDirectStream(track, 100, 30000, { equalizer: [] });
+
+// POST (body)
+const pcmStream2 = await node.loadDirectStreamPost(track, 100, 30000, { equalizer: [] });
+```
+
+## Track Encoding <Badge text="NodeLink only" variant="tip" />
+
+```typescript
+// Encode a single track object to base64
+const encoded = await node.encodeTrack({ identifier: 'dQw4w9WgXcQ', title: '...', ... });
+
+// Encode multiple tracks
+const encodedList = await node.encodeTracks([track1Info, track2Info]);
+```
+
+## YouTube Config <Badge text="NodeLink only" variant="tip" />
+
+```typescript
+// Update OAuth/visitorData live (no restart needed)
+await node.updateYoutubeConfig('1//0gN...refreshToken', 'Cgt...visitorData');
+
+// Get current config
+const config = await node.getYoutubeConfig();
+const validated = await node.getYoutubeConfig(true); // validates token with Google
+
+// Exchange refresh token for access token
+const oauth = await node.getYoutubeOAUTH(refreshToken);
+const oauth2 = await node.updateYoutubeOAUTH(refreshToken); // POST variant
+```
+
+## Cluster Workers <Badge text="NodeLink only" variant="tip" />
+
+```typescript
+// Get all worker metrics
+const workers = await node.getWorkers();
+// workers.workers[] — { id, clusterId, pid, status, players, uptime, memory }
+
+// Terminate a worker
+await node.patchWorker('ADMIN_CODE', { id: 1 });
+await node.patchWorker('ADMIN_CODE', { pid: 24560 });
+```
+
+## Multi-Audio Track (Dubs) <Badge text="NodeLink only" variant="tip" />
+
+When loading a track, `pluginInfo.audioTracks` contains available audio streams:
+
+```typescript
+const result = await manager.search({ query: 'https://youtube.com/...' }, user);
+const track = result.tracks[0];
+
+// Check available audio tracks
+console.log(track.pluginInfo.audioTracks);
+// [{ id: 'en', name: 'English (Original)', isDefault: true, isAutoDubbed: false }, ...]
+
+// Select a specific audio track
+await node.changeAudioTrackLanguage(player, 'pt-br');
+```
+
+## NodeLink Events
+
+All NodeLink-exclusive events are dispatched via `nodeLinkEvent` on the `nodeManager`:
+
+```typescript
+manager.nodeManager.on('nodeLinkEvent', (node, eventType, player, track, payload) => {
+  switch (eventType) {
+    case 'PlayerCreatedEvent':
+      console.log('Player created:', payload.player.guildId);
+      break;
+    case 'ConnectionStatusEvent':
+      console.log('Connection:', payload.status, payload.metrics);
+      break;
+    case 'WorkerFailedEvent':
+      console.error('Worker failed:', payload.affectedGuilds, payload.message);
+      break;
+    case 'MixStartedEvent':
+      console.log('Mix started:', payload.mixId);
+      break;
+    case 'EternalBoxJumpEvent':
+      console.log(`Jump: beat ${payload.fromBeat} → ${payload.toBeat}`);
+      break;
+  }
+});
+```
+
+Full event list: `PlayerCreatedEvent`, `PlayerDestroyedEvent`, `PlayerConnectedEvent`, `PlayerReconnectingEvent`, `VolumeChangedEvent`, `FiltersChangedEvent`, `SeekEvent`, `PauseEvent`, `ConnectionStatusEvent`, `MixStartedEvent`, `MixEndedEvent`, `WorkerFailedEvent`, `StreamMetadataEvent`, `EternalBoxInfoEvent`, `EternalBoxJumpEvent`.

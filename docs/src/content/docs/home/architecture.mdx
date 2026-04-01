@@ -1,71 +1,131 @@
 ---
-title: ''
-description: Deep-dive into Ryanlink's proactive state management and high-availability architecture.
+title: Architecture Overview
+description: How Ryanlink's core systems work — node management, queue persistence, and player lifecycle.
 ---
 
-import { Card, CardGrid, Steps, Badge } from '@astrojs/starlight/components';
+import { Card, CardGrid, Steps } from '@astrojs/starlight/components';
 
-**Ryanlink** is powered by an intelligent core infrastructure designed to handle the complexities of Discord audio automatically. This architecture ensures that your users experience zero-jitter playback and consistent sessions, even during node failures or bot restarts.
+Ryanlink is a Lavalink v4 wrapper built around four core systems: **node management**, **player lifecycle**, **queue persistence**, and **filter management**.
 
-## Core Pillars
+## Core Systems
 
 <CardGrid stagger>
-  <Card title="Zero-Config Persistence" icon="save">
-    Every queue mutation and playback position is saved in real-time. Whether using **Redis**, **Local Disk**, or **In-Memory** storage, your sessions are always recoverable.
+  <Card title="NodeManager" icon="random">
+    Manages all Lavalink nodes. Handles WebSocket connections, reconnection, session resuming, and weighted load balancing. Nodes are scored by CPU, memory, and player count.
   </Card>
-  <Card title="Atomic Migration" icon="random">
-    When a Lavalink node goes offline, Ryanlink initiates a seamless failover. Players are moved to the healthiest standby node with millisecond precision, maintaining filters and exact timestamps.
+  <Card title="Player" icon="rocket">
+    Per-guild audio player. Tracks voice state, playback position, filters, and queue. Supports auto-reconnect, smart-leave, auto-pause, and lifecycle hooks.
   </Card>
-  <Card title="Memory Efficiency" icon="rocket">
-    The **TrackRegistry** system maps tracks to lightweight references, allowing you to handle queues with **10,000+ tracks** while maintaining a minimal RAM footprint.
+  <Card title="Queue + QueueStore" icon="save">
+    Each player has a `Queue` backed by a `QueueStore`. The default is in-memory. Implement the `QueueStore` interface to persist to Redis, disk, or any other backend.
   </Card>
-  <Card title="Self-Healing" icon="shieldCheck">
-    Automated resolve retries ensure that flaky external sources don't break your playback. Tracks are retried up to 3 times before being safely purged from the queue.
+  <Card title="FilterManager" icon="seti:db">
+    Non-destructive filter stacking. All standard Lavalink filters plus NodeLink-exclusive filters (echo, chorus, compressor, highpass, phaser, spatial) and plugin filters (LavaDSPX, filter-engine).
   </Card>
 </CardGrid>
 
 ---
 
-## Technical Overview
-
-### Session Persistence & Resuming
-
-Ryanlink uses high-resolution timestamp tracking to ensure that when a player is recreated, it starts at the exact millisecond where it left off.
+## Node Lifecycle
 
 <Steps>
-1. **Shadow Listeners**: A Proxy-based system monitors your queue for any changes.
-2. **Auto-Save**: On any mutation (`push`, `shift`, `shuffle`), the state is pushed to the `QueueStore`.
-3. **Session Verification**: Upon instantiation, the Player checks for existing saved states.
-4. **Millisecond Sync**: The `play()` command is issued with the precise `startTime`.
+1. **Create** — `nodeManager.createNode(options)` adds a node and connects its WebSocket.
+2. **Connect** — `connect` event fires. `updateSession(true, timeout)` is called to register session resuming.
+3. **Stats** — Lavalink sends stats every 30s. Node scores are updated for load balancing.
+4. **Disconnect** — `disconnect` event fires. Reconnection begins with exponential backoff.
+5. **Resume** — If session is still valid, `resumed` event fires and player states are restored.
+6. **Destroy** — `destroy` event fires. Players are either destroyed or migrated to another node.
 </Steps>
-
-### High-Availability Failover
-
-Load balancing is not just about player counts; it's about node health.
-
-- **Weighted Scoring**: Nodes are scored based on CPU usage, memory availability, and frame deficits.
-- **Failover Logic**: If a node disconnects, the Manager automatically selects the node with the lowest weighted score and migrates all active players atomically.
 
 ---
 
-## Lifecycle Hooks
+## Player Lifecycle
 
-You can now respond to engine-level events directly within the player options:
+<Steps>
+1. **Create** — `manager.createPlayer(options)` creates a player and emits `playerCreate`.
+2. **Connect** — `player.connect()` sends a voice state update to Discord.
+3. **Voice sync** — `manager.provideVoiceUpdate(payload)` handles `VOICE_STATE_UPDATE` and `VOICE_SERVER_UPDATE`.
+4. **Play** — `player.play()` sends a PATCH to Lavalink's player endpoint.
+5. **Track events** — `trackStart`, `trackEnd`, `trackStuck`, `trackError` are emitted as Lavalink sends them.
+6. **Queue end** — When no more tracks, `queueEnd` fires. `destroyAfterMs` countdown starts if configured.
+7. **Destroy** — `player.destroy()` disconnects from voice, clears the queue store, and emits `playerDestroy`.
+</Steps>
+
+---
+
+## Node Failover
+
+When a node disconnects, Ryanlink can automatically migrate players:
 
 ```typescript
-const player = manager.createPlayer({
-  guildId: '...',
-  voiceChannelId: '...',
-  // Triggered when a track starts
-  onTrackStart: (p, track) => { ... },
-  // Triggered when the queue is naturally exhausted
-  onQueueEnd: (p) => { ... },
-  // Triggered after a successful node migration
-  onNodeFailover: (p, oldNode, targetNode) => { ... }
+// In node config
+autoChecks: { pluginValidations: false, sourcesValidations: false }
+
+// In manager config — autoMove is not a built-in option
+// Use the disconnect event to trigger migration manually:
+manager.nodeManager.on('disconnect', async (node) => {
+  const bestNode = manager.nodeManager.leastUsedNodes('weighted')[0];
+  if (!bestNode) return;
+  for (const player of manager.players.values()) {
+    if (player.node.id === node.id) {
+      await player.changeNode(bestNode.id).catch(() => {});
+    }
+  }
+});
+```
+
+Or use `node.destroy(reason, deleteNode, movePlayers: true)` which automatically migrates players to the least-used node.
+
+---
+
+## Weighted Load Balancing
+
+Nodes are scored using:
+
+```
+score = (cpu.systemLoad × 0.7) + (memory.used / memory.allocated × 0.2) + (players / 100 × 0.1)
+```
+
+Lower score = healthier node. Use `nodeManager.leastUsedNodes(metric)` with:
+- `'weighted'` — composite score (recommended)
+- `'memory'` — least memory used
+- `'cpuLavalink'` — least audio CPU load
+- `'cpuSystem'` — least system CPU load
+- `'calls'` — fewest REST calls
+- `'playingPlayers'` — fewest playing players
+- `'players'` — fewest total players
+
+---
+
+## Voice State Flow
+
+```
+Discord VOICE_STATE_UPDATE  ──┐
+                               ├──► manager.provideVoiceUpdate(payload)
+Discord VOICE_SERVER_UPDATE ──┘         │
+                                         ├── Updates player.voice (token, endpoint, sessionId)
+                                         └── Sends PATCH to Lavalink /sessions/{id}/players/{guildId}
+```
+
+Always call `manager.provideVoiceUpdate` from your Discord library's raw event handler:
+
+```typescript
+client.on('raw', (packet) => {
+  manager.provideVoiceUpdate(packet);
 });
 ```
 
 ---
 
-> [!TIP]
-> **Persistence is enabled by default**. To customize storage behavior, explore the `QueueStore` drivers in the configuration section.
+## TrackRegistry
+
+Ryanlink uses a `TrackEntry` class (extending `Track`) that stores track data efficiently. The `AudioTrackSymbol` and `UnresolvedAudioTrackSymbol` symbols are used to distinguish resolved from unresolved tracks without `instanceof` checks.
+
+```typescript
+import { AudioTrackSymbol } from 'ryanlink';
+
+// Check if a track is resolved
+if (track[AudioTrackSymbol] === true) {
+  // fully resolved Track
+}
+```

@@ -9,7 +9,7 @@ import type { SponsorBlockSegment } from '../types/Node'
 import type { anyObject, PlayConfiguration, PlayerJson, PlayerOptions, PlayOptions, RepeatMode } from '../types/Player'
 import type { Track, UnresolvedTrack } from '../types/Track'
 import type { VoiceConnectionOptions, AudioSearchQuery, SearchQuery, UnresolvedSearchResult } from '../types/Utils'
-import { queueTrackEnd } from '../utils/Utils'
+import { queueTrackEnd, safeStringify, ManagerSymbol, NodeSymbol } from '../utils/Utils'
 
 interface BandCampAutocompleteTrackObject {
   url?: string
@@ -33,15 +33,28 @@ export interface AutoplayConfig {
   maxDuration?: number
 
   excludeKeywords?: string[]
+
+  durationTolerance?: number
+
+  historyLimit?: number
+
+  prefetchThreshold?: number
 }
 export class Player {
   public filterManager: FilterManager
 
-  public RyanlinkManager: RyanlinkManager
+  public get RyanlinkManager(): RyanlinkManager {
+    return (this as any)[ManagerSymbol]
+  }
 
   public options: PlayerOptions
 
-  public node: RyanlinkNode | NodeLinkNode
+  public get node(): RyanlinkNode | NodeLinkNode {
+    return (this as any)[NodeSymbol]
+  }
+  public set node(node: RyanlinkNode | NodeLinkNode) {
+    ;(this as any)[NodeSymbol] = node
+  }
 
   public queue: Queue
 
@@ -112,25 +125,23 @@ export class Player {
 
   private readonly data: Record<string, unknown> = {}
 
-  private dispatchDebug(
-    name: DebugEvents,
-    eventData: {
-      message: string
-      state: 'log' | 'warn' | 'error'
-      error?: Error | string
-      functionLayer: string
-    }
-  ) {
+  private dispatchDebug(name: DebugEvents, eventData: any) {
     if (!this.RyanlinkManager.options?.advancedOptions?.enableDebugEvents) return
-    this.RyanlinkManager.emit('debug', name, eventData)
+    try {
+      const sanitizedData = JSON.parse(safeStringify(eventData))
+      this.RyanlinkManager.emit('debug', name, sanitizedData)
+    } catch {
+      this.RyanlinkManager.emit('debug', name, { state: eventData.state, message: 'Serialization failed during debug dispatch', functionLayer: eventData.functionLayer })
+    }
   }
 
-  constructor(options: PlayerOptions, RyanlinkManager: RyanlinkManager, dontEmitPlayerCreateEvent?: boolean) {
+  constructor(options: PlayerOptions, manager: RyanlinkManager, _dontEmitPlayerCreateEvent?: boolean) {
+    ;(this as any)[ManagerSymbol] = manager
+    this.options = options
+    
     if (typeof options?.customData === 'object') for (const [key, value] of Object.entries(options.customData)) this.setData(key, value)
 
-    this.options = options
     this.filterManager = new FilterManager(this)
-    this.RyanlinkManager = RyanlinkManager
 
     if (typeof this.options.autoplay === 'boolean') {
       this.autoplay = this.options.autoplay
@@ -143,7 +154,7 @@ export class Player {
     this.voiceChannelId = this.options.voiceChannelId
     this.textChannelId = this.options.textChannelId || null
 
-    this.node = typeof this.options.node === 'string' ? this.RyanlinkManager.nodeManager.nodes.get(this.options.node) : this.options.node
+    this.node = typeof this.options.node === 'string' ? manager.nodeManager.nodes.get(this.options.node) : this.options.node
 
     if (!this.node || typeof this.node.request !== 'function') {
       if (typeof this.options.node === 'string') {
@@ -154,7 +165,7 @@ export class Player {
         })
       }
 
-      const least = this.RyanlinkManager.nodeManager.leastUsedNodes()
+      const least = manager.nodeManager.leastUsedNodes()
       this.node = least.filter((v) => (options.vcRegion ? v.options?.regions?.includes(options.vcRegion) : true))[0] || least[0] || null
     }
     if (!this.node) throw new Error('No available Node was found, please add a RyanlinkNode to the Manager via Manager.NodeManager#createNode')
@@ -167,8 +178,8 @@ export class Player {
       Math.max(
         Math.min(
           Math.round(
-            this.RyanlinkManager.options.playerOptions.volumeDecrementer
-              ? this.volume * this.RyanlinkManager.options.playerOptions.volumeDecrementer
+            manager.options.playerOptions.volumeDecrementer
+              ? this.volume * manager.options.playerOptions.volumeDecrementer
               : this.volume
           ),
           1000
@@ -177,11 +188,11 @@ export class Player {
       )
     )
 
-    if (!dontEmitPlayerCreateEvent) this.RyanlinkManager.emit('playerCreate', this)
+    this.queue = new Queue(this.guildId, {}, new QueueSaver(manager.options.queueOptions), manager.options.queueOptions)
 
-    this.queue = new Queue(this.guildId, {}, new QueueSaver(this.RyanlinkManager.options.queueOptions), this.RyanlinkManager.options.queueOptions)
+    this.oldJSON = this.toJSON()
 
-    if (this.RyanlinkManager.options.resuming.enabled) {
+    if (manager.options.resuming.enabled) {
       this.autoResume().catch(() => {})
     }
   }
@@ -269,7 +280,7 @@ export class Player {
 
           if (this.resolveRetryCount >= limit) {
             this.resolveRetryCount = 0
-            this.queue.tracks.shift() // Purge the failing track
+            this.queue.tracks.shift() 
             this.RyanlinkManager.emit('queueErrorReport', this, options.clientTrack as UnresolvedTrack, error)
             
             if (this.RyanlinkManager.options?.autoSkipOnResolveError === true && this.queue.tracks[0]) {
@@ -479,7 +490,7 @@ export class Player {
     return this
   }
 
-  public oldJSON: PlayerJson = this.toJSON()
+  public oldJSON: PlayerJson
 
   public syncState() {
     this.RyanlinkManager.emit('playerClientUpdate', this.oldJSON, this)
@@ -502,7 +513,7 @@ export class Player {
 
     const startVolume = this.volume
     const steps = 10
-    const interval = 50 // 500ms total
+    const interval = 50 
 
     for (let i = 1; i <= steps; i++) {
       const currentVolume = Math.round(startVolume + (targetVolume - startVolume) * (i / steps))
@@ -803,7 +814,7 @@ export class Player {
 
   public async destroy(reason?: DestroyReasons | string, disconnect: boolean = true) {
     if (this.RyanlinkManager.options.advancedOptions?.debugOptions.playerDestroy.debugLog) {
-      // Audio-Debug removed
+      void 0;
     }
 
     if (this.getData('internal_queueempty')) {
@@ -819,7 +830,7 @@ export class Player {
       })
 
       if (this.RyanlinkManager.options.advancedOptions?.debugOptions.playerDestroy.debugLog) {
-        // Audio-Debug removed
+        void 0;
       }
       return
     }
@@ -835,7 +846,7 @@ export class Player {
     await this.node.destroyPlayer(this.guildId)
 
     if (this.RyanlinkManager.options.advancedOptions?.debugOptions.playerDestroy.debugLog) {
-      // Audio-Debug removed
+      void 0;
     }
 
     this.RyanlinkManager.emit('playerDestroy', this, reason)
@@ -1034,17 +1045,22 @@ export class Autoplay {
 
     if (!player.autoplay && config.enabled !== true) return
 
+    const prefetchThreshold = config.prefetchThreshold ?? 1
+    if (player.queue.tracks.length > prefetchThreshold) return
+
     if (Autoplay.adding.has(player.guildId)) return
     Autoplay.adding.add(player.guildId)
 
     try {
-      const playedData = Autoplay.buildPlayedData(player)
-      const relatedTracks = await Autoplay.fetchRelatedTracks(player, lastTrack, config, playedData)
+      const history = Autoplay.getHistory(player, config)
+      const candidates = await Autoplay.fetchCandidates(player, lastTrack, config)
+      const picked = Autoplay.selectTracks(lastTrack, candidates, history, config)
 
-      if (relatedTracks.length > 0) {
-        for (const track of relatedTracks) {
-          player.queue.add(track)
-        }
+      if (picked.length > 0) {
+
+        for (const t of picked) Autoplay.pushHistory(player, t.info.identifier, config)
+
+        for (const track of picked) player.queue.add(track)
 
         if (!player.playing && !player.paused && player.queue.tracks.length > 0) {
           await player.play()
@@ -1053,7 +1069,7 @@ export class Autoplay {
     } catch (error) {
       player.RyanlinkManager.emit('debug', 'AutoplayError' as any, {
         state: 'error',
-        message: `Autoplay failed: ${error.message}`,
+        message: `Autoplay failed: ${(error as Error).message}`,
         error,
         functionLayer: 'Autoplay > defaultAutoplay()',
       })
@@ -1062,106 +1078,181 @@ export class Autoplay {
     }
   }
 
-  private static buildPlayedData(player: Player) {
-    const playedIds = new Set<string>()
-    const playedTracks = new Set<string>()
+  private static getHistory(player: Player, _config: AutoplayConfig): Set<string> {
+    let buf = player.getData<string[]>('autoplay_history_buf')
+    if (!Array.isArray(buf)) {
+      buf = []
+      player.setData('autoplay_history_buf', buf)
+    }
 
-    const addTrack = (track: Track) => {
-      if (!track) return
-      if (track.info.identifier) playedIds.add(track.info.identifier)
-      if (track.info.isrc) playedIds.add(track.info.isrc)
-      if (track.info.title && track.info.author) {
-        const key = `${track.info.title.toLowerCase()}|${track.info.author.toLowerCase()}`
-        playedTracks.add(key)
+    const combined = new Set<string>([...buf, ...player.recentHistory])
+
+    if (player.queue.current?.info?.identifier) combined.add(player.queue.current.info.identifier)
+    player.queue.previous.forEach((t) => { if (t?.info?.identifier) combined.add(t.info.identifier) })
+    player.queue.tracks.forEach((t) => { if (t?.info?.identifier) combined.add(t.info.identifier) })
+    return combined
+  }
+
+  private static pushHistory(player: Player, id: string, config: AutoplayConfig): void {
+    const limit = config.historyLimit ?? 20
+    let buf = player.getData<string[]>('autoplay_history_buf')
+    if (!Array.isArray(buf)) buf = []
+    buf.push(id)
+    if (buf.length > limit) buf.splice(0, buf.length - limit) 
+    player.setData('autoplay_history_buf', buf)
+
+    if (!player.recentHistory.includes(id)) {
+      player.recentHistory.push(id)
+      if (player.recentHistory.length > (player.recentHistoryLimit || 15)) player.recentHistory.shift()
+    }
+  }
+
+  private static async fetchCandidates(player: Player, lastTrack: Track, config: AutoplayConfig): Promise<Track[]> {
+    const source = lastTrack.info.sourceName?.toLowerCase() ?? ''
+    const candidates: Track[] = []
+
+    if (source.includes('spotify')) {
+      candidates.push(...await Autoplay.fetchSpotifyRec(player, lastTrack))
+    } else if (source.includes('soundcloud') || source.includes('sc')) {
+      candidates.push(...await Autoplay.fetchSoundCloudRelated(player, lastTrack))
+    } else if (source.includes('youtube') || source.includes('yt')) {
+      candidates.push(...await Autoplay.fetchYouTubeRelated(player, lastTrack))
+    } else if (source.includes('deezer') || source.includes('dz')) {
+      candidates.push(...await Autoplay.fetchDeezerRelated(player, lastTrack))
+    }
+
+    if (candidates.length < (config.limit ?? 1) * 3) {
+      const nativeSource = Autoplay.sourceToSearchPrefix(source)
+      candidates.push(...await Autoplay.fetchArtistSearch(player, lastTrack, nativeSource))
+    }
+
+    if (candidates.length < (config.limit ?? 1) * 3) {
+      const nativeSource = Autoplay.sourceToSearchPrefix(source)
+      candidates.push(...await Autoplay.fetchTitleSearch(player, lastTrack, nativeSource))
+    }
+
+    if (candidates.length === 0) {
+      candidates.push(...await Autoplay.fetchArtistSearch(player, lastTrack, 'ytsearch'))
+    }
+
+    return candidates
+  }
+
+  private static sourceToSearchPrefix(sourceName: string): string {
+    if (sourceName.includes('spotify')) return 'spsearch'
+    if (sourceName.includes('soundcloud') || sourceName.includes('sc')) return 'scsearch'
+    if (sourceName.includes('deezer') || sourceName.includes('dz')) return 'dzsearch'
+    if (sourceName.includes('apple')) return 'amsearch'
+    if (sourceName.includes('youtubemusic') || sourceName.includes('ytm')) return 'ytmsearch'
+    return 'ytsearch'
+  }
+
+  private static async fetchSpotifyRec(player: Player, track: Track): Promise<Track[]> {
+    try {
+      const res = await player.search({ query: `sprec:seed_tracks=${track.info.identifier}` }, 'Autoplay') as any
+      return (res.tracks ?? []) as Track[]
+    } catch { return [] }
+  }
+
+  private static async fetchSoundCloudRelated(player: Player, track: Track): Promise<Track[]> {
+    try {
+
+      const res = await player.search({ query: track.info.author, source: 'scsearch' as any }, 'Autoplay') as any
+      return (res.tracks ?? []) as Track[]
+    } catch { return [] }
+  }
+
+  private static async fetchYouTubeRelated(player: Player, track: Track): Promise<Track[]> {
+    try {
+
+      if (track.info.uri?.includes('youtube.com') || track.info.uri?.includes('youtu.be')) {
+        const res = await player.search({ query: track.info.uri }, 'Autoplay') as any
+        if (res.loadType === 'playlist') return (res.tracks ?? []) as Track[]
       }
-    }
 
-    if (player.queue.current) addTrack(player.queue.current)
-    player.queue.previous.forEach(addTrack)
-    player.queue.tracks.forEach(addTrack)
-
-    player.recentHistory.forEach((id) => playedIds.add(id))
-
-    return { playedIds, playedTracks }
+      const res = await player.search({ query: `${track.info.title} ${track.info.author}`, source: 'ytmsearch' as any }, 'Autoplay') as any
+      return (res.tracks ?? []) as Track[]
+    } catch { return [] }
   }
 
-  private static async fetchRelatedTracks(
-    player: Player,
+  private static async fetchDeezerRelated(player: Player, track: Track): Promise<Track[]> {
+    try {
+      const res = await player.search({ query: track.info.author, source: 'dzsearch' as any }, 'Autoplay') as any
+      return (res.tracks ?? []) as Track[]
+    } catch { return [] }
+  }
+
+  private static async fetchArtistSearch(player: Player, track: Track, source: string): Promise<Track[]> {
+    try {
+      const res = await player.search({ query: track.info.author, source: source as any }, 'Autoplay') as any
+      return (res.tracks ?? []) as Track[]
+    } catch { return [] }
+  }
+
+  private static async fetchTitleSearch(player: Player, track: Track, source: string): Promise<Track[]> {
+    try {
+      const query = `${track.info.title} ${track.info.author}`.trim()
+      const res = await player.search({ query, source: source as any }, 'Autoplay') as any
+      return (res.tracks ?? []) as Track[]
+    } catch { return [] }
+  }
+
+  private static selectTracks(
     lastTrack: Track,
+    candidates: Track[],
+    history: Set<string>,
     config: AutoplayConfig,
-    playedData: { playedIds: Set<string>; playedTracks: Set<string> }
-  ): Promise<Track[]> {
-    const tracks: Track[] = []
-    const source = lastTrack.info.sourceName?.toLowerCase()
+  ): Track[] {
+    const limit = config.limit ?? 1
+    const minDur = config.minDuration ?? 20_000
+    const maxDur = config.maxDuration ?? 900_000
+    const tolerance = config.durationTolerance ?? 90_000
+    const excludeKeywords = (config.excludeKeywords ?? [
+      'nightcore', 'bass boosted', '8d audio', 'slowed', 'reverb',
+      'bass boost', 'pitch shift', 'speed up', 'sped up',
+    ]).map((k) => k.toLowerCase())
 
-    if (source?.includes('spotify')) {
-      const spotifyTracks = await this.getSpotifyRecommendations(player, lastTrack)
-      tracks.push(...spotifyTracks)
-    }
+    const originalTitle = lastTrack.info.title.toLowerCase()
+    const originalHasModifier = excludeKeywords.some((k) => originalTitle.includes(k))
 
-    if (tracks.length < (config.limit || 5) && (source?.includes('youtube') || source?.includes('yt'))) {
-      const youtubeTracks = await this.getYouTubeSimilar(player, lastTrack)
-      tracks.push(...youtubeTracks)
-    }
+    const keywordRegex = originalHasModifier
+      ? null
+      : excludeKeywords.length > 0
+        ? new RegExp(excludeKeywords.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i')
+        : null
 
-    if (tracks.length === 0) {
-      const searchTracks = await this.getArtistSearch(player, lastTrack, config.defaultSource || 'ytsearch')
-      tracks.push(...searchTracks)
-    }
+    const scored = candidates
+      .filter((t) => {
 
-    return this.filterTracks(lastTrack, tracks, playedData, config)
-  }
+        if (history.has(t.info.identifier)) return false
+        if (t.info.isrc && history.has(t.info.isrc)) return false
 
-  private static filterTracks(lastTrack: Track, tracks: Track[], playedData: { playedIds: Set<string>; playedTracks: Set<string> }, config: AutoplayConfig): Track[] {
-    const excludeKeywords = config.excludeKeywords?.map((k) => k.toLowerCase()) || []
+        if (t.info.duration < minDur || t.info.duration > maxDur) return false
 
-    return tracks
-      .filter((track) => {
-        if (playedData.playedIds.has(track.info.identifier)) return false
-        if (track.info.isrc && playedData.playedIds.has(track.info.isrc)) return false
-
-        const key = `${track.info.title.toLowerCase()}|${track.info.author.toLowerCase()}`
-        if (playedData.playedTracks.has(key)) return false
-
-        if (track.info.duration < (config.minDuration || 20000) || track.info.duration > (config.maxDuration || 900000)) {
-          return false
-        }
-
-        const title = track.info.title.toLowerCase()
-        if (excludeKeywords.some((keyword) => title.includes(keyword))) return false
-
+        if (keywordRegex && keywordRegex.test(t.info.title)) return false
         return true
       })
-      .sort((a, b) => {
-        const diffA = Math.abs(a.info.duration - lastTrack.info.duration)
-        const diffB = Math.abs(b.info.duration - lastTrack.info.duration)
-        return (diffA - diffB) + (Math.random() - 0.5) * 30000
+      .map((t) => {
+        let score = 0
+
+        const delta = Math.abs(t.info.duration - lastTrack.info.duration)
+        score += Math.max(0, 40 - Math.floor(delta / tolerance * 40))
+
+        if (t.info.author.toLowerCase() === lastTrack.info.author.toLowerCase()) score += 30
+
+        else if (
+          t.info.author.toLowerCase().includes(lastTrack.info.author.toLowerCase()) ||
+          lastTrack.info.author.toLowerCase().includes(t.info.author.toLowerCase())
+        ) score += 15
+
+        score += Math.random() * 10
+
+        return { track: t, score }
       })
-      .slice(0, config.limit || 5)
-  }
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((s) => s.track)
 
-  private static async getSpotifyRecommendations(player: Player, track: Track): Promise<Track[]> {
-    try {
-      const res = (await player.search({ query: `sprec:seed_tracks=${track.info.identifier}` }, 'Autoplay')) as any
-      if (res.loadType === 'search' || res.loadType === 'track') return res.tracks as Track[]
-      if (res.loadType === 'playlist') return res.tracks as Track[]
-    } catch { }
-    return []
-  }
-
-  private static async getYouTubeSimilar(player: Player, track: Track): Promise<Track[]> {
-    try {
-      const res = (await player.search({ query: `https://www.youtube.com/watch?v=${track.info.identifier}` }, 'Autoplay')) as any
-      if (res.loadType === 'playlist') return res.tracks as Track[]
-    } catch { }
-    return []
-  }
-
-  private static async getArtistSearch(player: Player, track: Track, source: string): Promise<Track[]> {
-    try {
-      const res = (await player.search({ query: track.info.author, source: source as any }, 'Autoplay')) as any
-      if (res.loadType === 'search' || res.loadType === 'track') return res.tracks as Track[]
-    } catch { }
-    return []
+    return scored
   }
 }

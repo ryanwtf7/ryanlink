@@ -1,6 +1,44 @@
 import { RyanlinkManager } from '../src/core/Manager'
 import { LavalinkMock } from './mocks/LavalinkMock'
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
+
+jest.mock('ws', () => {
+  const { EventEmitter } = require('node:events')
+  class MockWebSocket extends EventEmitter {
+    public static OPEN = 1
+    public static CLOSED = 3
+    public readyState = 0
+    constructor(public url: string, public options: any) {
+       super()
+       setTimeout(() => {
+         this.readyState = 1
+         this.emit('open')
+         setTimeout(() => {
+           this.emit('message', JSON.stringify({ 
+             op: 'ready', 
+             sessionId: 'mock-session', 
+             resumed: false,
+             info: {
+               version: { semver: '4.0.0' },
+               plugins: []
+             }
+           }))
+         }, 5)
+       }, 5)
+    }
+    send = jest.fn()
+    close = jest.fn((code, reason) => { 
+      this.readyState = 3
+      this.emit('close', code, reason) 
+    })
+    terminate = jest.fn(() => this.close(1006, 'term'))
+    ping = jest.fn(() => this.emit('pong'))
+  }
+  return {
+    __esModule: true,
+    default: MockWebSocket,
+    WebSocket: MockWebSocket,
+  }
+})
 import { DestroyReasons, DebugEvents } from '../src/config/Constants'
 import { Autoplay } from '../src/audio/Player'
 import { RyanlinkNode } from '../src/node/Node'
@@ -16,19 +54,19 @@ describe('Player Expanded', () => {
         host: 'localhost', id: 'local', port: 2333, authorization: 'pw',
         autoChecks: { sourcesValidations: true }
       }],
-      sendToShard: vi.fn(),
+      sendToShard: jest.fn(),
     })
     await manager.init({ id: 'bot123' })
     const node = manager.nodeManager.nodes.get('local')! as RyanlinkNode
     node.sessionId = 'sess123'
-    // @ts-ignore
-    node.socket = { readyState: 1 }
-    // Ensure info is initialized
     node.info = { sourceManagers: ['youtube'], plugins: [] } as any
+    // Add minimal socket interface to prevent heartbeat crash
+    // @ts-ignore
+    node.socket = { readyState: 1, on: jest.fn(), send: jest.fn(), close: jest.fn(), removeAllListeners: jest.fn(), removeListener: jest.fn() } as any
   })
 
   afterEach(() => {
-    vi.restoreAllMocks()
+    jest.restoreAllMocks()
     LavalinkMock.clearResponses()
   })
 
@@ -56,7 +94,7 @@ describe('Player Expanded', () => {
     const player = manager.createPlayer({ guildId: 'p2', voiceChannelId: 'v1' })
     const node = player.node as any
     
-    const globalFetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+    const globalFetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       if (typeof url === 'string' && url.includes('bandcamp.com')) {
         return {
           ok: true,
@@ -75,7 +113,7 @@ describe('Player Expanded', () => {
     const player = manager.createPlayer({ guildId: 'p3', voiceChannelId: 'v1' })
     LavalinkMock.setResponse('/sessions/sess123/players/p3', {})
     
-    const sendToShardSpy = vi.spyOn(manager.options, 'sendToShard')
+    const sendToShardSpy = jest.spyOn(manager.options, 'sendToShard')
 
     await player.stopPlaying()
     expect(player.paused).toBe(false)
@@ -139,15 +177,17 @@ describe('Player Expanded', () => {
       } 
     } as any, 'user')
     
-    // Mock search to return tracks (YouTube Similarity needs 'playlist' loadType)
-    const searchTracks = [
+    // Build the candidate pool directly — bypass the multi-source fetch chain
+    const candidates = [
       { encoded: 'rel1_e', info: { identifier: 'rel1', title: 'Related', author: 'Artist', duration: 40000, sourceName: 'youtube' } },
-      { encoded: 'short_e', info: { identifier: 'short', title: 'Short', author: 'Artist', duration: 5000, sourceName: 'youtube' } }, // filtered
-      { encoded: 'id1_e', info: { identifier: 'id1', title: 'Song', author: 'Artist', duration: 30000, sourceName: 'youtube' } }, // filtered (already played)
-      { encoded: 'skip_e', info: { identifier: 'skip', title: 'Skip THIS', author: 'Artist', duration: 50000, sourceName: 'youtube' } }, // filtered (keyword)
+      { encoded: 'short_e', info: { identifier: 'short', title: 'Short', author: 'Artist', duration: 5000, sourceName: 'youtube' } }, // filtered: too short
+      { encoded: 'id1_e', info: { identifier: 'id1', title: 'Song', author: 'Artist', duration: 30000, sourceName: 'youtube' } }, // filtered: in history (current)
+      { encoded: 'skip_e', info: { identifier: 'skip', title: 'Skip THIS', author: 'Artist', duration: 50000, sourceName: 'youtube' } }, // filtered: keyword
     ].map(t => manager.utils.buildTrack(t as any, 'user'))
     
-    vi.spyOn(player, 'search').mockResolvedValue({ loadType: 'playlist', tracks: searchTracks } as any)
+    // Spy on the private fetchCandidates to control the candidate pool precisely
+    // @ts-ignore
+    jest.spyOn(Autoplay, 'fetchCandidates').mockResolvedValue(candidates)
     
     player.queue.current = track
     
@@ -160,7 +200,7 @@ describe('Player Expanded', () => {
 
     await Autoplay.defaultAutoplay(player, track)
     
-    // Only 'Related' should be added
+    // Only 'Related' should survive filtering (short filtered by minDuration, id1 by history, skip by keyword)
     expect(player.queue.tracks.length).toBe(1)
     expect(player.queue.tracks[0].info.identifier).toBe('rel1')
   })
@@ -169,19 +209,20 @@ describe('Player Expanded', () => {
     const localManager = new RyanlinkManager({
       client: { id: 'bot123' },
       nodes: [{ host: 'localhost', id: 'local', port: 2333, authorization: 'pw' }],
-      sendToShard: vi.fn(),
+      sendToShard: jest.fn(),
     })
     await localManager.init({ id: 'bot123' })
     const node = localManager.nodeManager.nodes.get('local')!
     // @ts-ignore
-    node.socket = { readyState: 1 }
+    // @ts-ignore
+    node.socket = { readyState: 1, on: jest.fn(), send: jest.fn(), close: jest.fn(), removeAllListeners: jest.fn(), removeListener: jest.fn() } as any
     // @ts-ignore
     node.sessionId = 'sess123'
     
     const player = localManager.createPlayer({ guildId: 'auto_err', voiceChannelId: 'v1' })
     const track = localManager.utils.buildTrack({ encoded: 'id2_e', info: { identifier: 'id2', sourceName: 'unknown', author: 'Artist', title: 'Original' } } as any, 'user')
     
-    const searchSpy = vi.spyOn(player, 'search').mockResolvedValue({ 
+    jest.spyOn(player, 'search').mockResolvedValue({ 
       loadType: 'search', 
       tracks: [localManager.utils.buildTrack({ encoded: 'art1_e', info: { identifier: 'art1', title: 'Art', author: 'Artist', duration: 30000, sourceName: 'youtube' } } as any, 'user')] 
     } as any)
@@ -202,22 +243,23 @@ describe('Player Expanded', () => {
     const localManager = new RyanlinkManager({
       client: { id: 'error-bot' },
       nodes: [{ host: 'localhost', id: 'local', port: 2333, authorization: 'pw' }],
-      sendToShard: vi.fn(),
+      sendToShard: jest.fn(),
     })
     await localManager.init({ id: 'error-bot' })
     const node = localManager.nodeManager.nodes.get('local')!
     // @ts-ignore
-    node.socket = { readyState: 1 }
+    // @ts-ignore
+    node.socket = { readyState: 1, on: jest.fn(), send: jest.fn(), close: jest.fn(), removeAllListeners: jest.fn(), removeListener: jest.fn() } as any
     // @ts-ignore
     node.sessionId = 'err-sess'
     
     const player = localManager.createPlayer({ guildId: 'auto_fail', voiceChannelId: 'v1' })
     const track = localManager.utils.buildTrack({ encoded: 'id_fail_e', info: { identifier: 'id_fail', sourceName: 'unknown', author: 'Artist', title: 'Fail' } } as any, 'user')
     
-    // Mock the static method to throw directly
+    // Spy on fetchCandidates (the actual private method) to simulate a fetch error
     // @ts-ignore
-    const fetchSpy = vi.spyOn(Autoplay, 'fetchRelatedTracks').mockImplementation(() => Promise.reject(new Error('Fetch failed')))
-    const debugSpy = vi.spyOn(localManager, 'emit')
+    const fetchSpy = jest.spyOn(Autoplay, 'fetchCandidates').mockRejectedValue(new Error('Fetch failed'))
+    const debugSpy = jest.spyOn(localManager, 'emit')
     
     // @ts-ignore
     Autoplay.adding.clear()

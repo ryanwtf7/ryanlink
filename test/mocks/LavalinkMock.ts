@@ -1,5 +1,4 @@
 import fs from 'node:fs'
-import { vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 
 function debugLog(msg: string) {
@@ -48,24 +47,54 @@ export class MockWebSocket extends EventEmitter {
   }
 }
 
-export class LavalinkMock {
-  private static responses = new Map<string, any>()
+if (!(global as any).__LAVALINK_MOCK_RESPONSES__) {
+  ;(global as any).__LAVALINK_MOCK_RESPONSES__ = new Map<string, any>()
+}
+const responses: Map<string, any> = (global as any).__LAVALINK_MOCK_RESPONSES__
 
+export class LavalinkMock {
   static setup() {
+    debugLog('LavalinkMock.setup() starting')
+    responses.clear()
+    // Default responses
+    this.setResponse('info', {
+      version: { semver: '4.0.0', major: 4, minor: 0, patch: 0, preRelease: null, build: null },
+      sourceManagers: ['youtube', 'spotify', 'soundcloud'],
+      filters: ['volume', 'equalizer', 'karaoke', 'timescale', 'tremolo', 'vibrato', 'distortion', 'rotation', 'channelMix', 'lowPass'],
+      plugins: []
+    })
+    this.setResponse('version', '4.0.0')
+    this.setResponse('sessions', { draining: false, resuming: false, timeout: 60 })
+    this.setResponse('stats', {
+      players: 0,
+      playingPlayers: 0,
+      uptime: 0,
+      memory: { free: 1e9, used: 1e8, allocated: 2e9, reservable: 3e9 },
+      cpu: { cores: 8, systemLoad: 0.1, audioLoad: 0.01 },
+      frameStats: { sent: 0, nulled: 0, deficit: 0 }
+    })
+    debugLog(`LavalinkMock.setup() finished. Keys: ${Array.from(responses.keys()).join(', ')}`)
+
     // Mock fetch
-    globalThis.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
+    globalThis.fetch = jest.fn().mockImplementation(async (url: string, options: any) => {
       const urlObj = new URL(url)
       const path = urlObj.pathname
+      const normPath = path.toLowerCase()
       const method = options?.method || 'GET'
       debugLog(`MockFetch: ${method} ${path} (orig: ${url})`)
       
       // Find matching response
-      for (const [pattern, response] of this.responses.entries()) {
+      const keys = Array.from(responses.keys())
+      debugLog(`Searching for match for ${path} in keys: ${keys.join(', ')}`)
+      for (const [pattern, response] of responses.entries()) {
         const p = pattern.startsWith('/') ? pattern : `/${pattern}`
-        // Match exact or with /v4 prefix
-        if (path === p || path === `/v4${p}` || path.includes(pattern)) {
+        const normP = p.toLowerCase()
+        const normPattern = pattern.toLowerCase()
+        
+        if (normPath === normP || normPath === `/v4${normP}` || normPath.includes(normPattern)) {
           const status = response?._status || 200
           const data = response?._status ? response.data : response
+          debugLog(`Matched ${pattern} for ${path}`)
           return {
             status: status,
             ok: status >= 200 && status < 300,
@@ -76,6 +105,27 @@ export class LavalinkMock {
         }
       }
 
+      // Final Fallback for info/version/stats
+      if (normPath.includes('info')) {
+        return {
+          status: 200, ok: true,
+          json: async () => ({
+            version: { semver: '4.0.0', major: 4, minor: 0, patch: 0, preRelease: null, build: null },
+            sourceManagers: ['youtube', 'spotify', 'soundcloud'],
+            filters: ['volume', 'equalizer', 'karaoke', 'timescale', 'tremolo', 'vibrato', 'distortion', 'rotation', 'channelMix', 'lowPass'],
+            plugins: []
+          }),
+          headers: new Headers({ 'Content-Type': 'application/json' }),
+        }
+      }
+      if (normPath.includes('version')) {
+        return {
+          status: 200, ok: true,
+          text: async () => '4.0.0',
+          headers: new Headers({ 'Content-Type': 'application/json' }),
+        }
+      }
+
       return {
         status: 404,
         ok: false,
@@ -83,14 +133,14 @@ export class LavalinkMock {
         text: async () => `Not Found: ${path}`,
         headers: new Headers({ 'Content-Type': 'application/json' }),
       }
-    })
+    }) as any
   }
 
   static setResponse(pattern: string, data: any) {
-    this.responses.set(pattern, data)
+    responses.set(pattern, data)
   }
 
   static clearResponses() {
-    this.responses.clear()
+    responses.clear()
   }
 }

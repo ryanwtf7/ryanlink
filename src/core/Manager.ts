@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events'
-
 import { DebugEvents, DestroyReasons } from '../config/Constants'
 import { NodeManager } from '../node/NodeManager'
 import { Player, Autoplay } from '../audio/Player'
@@ -83,10 +82,16 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
         autoplayConfig: {
           enabled: options?.playerOptions?.autoplayConfig?.enabled ?? true,
           defaultSource: options?.playerOptions?.autoplayConfig?.defaultSource ?? 'ytsearch',
-          limit: options?.playerOptions?.autoplayConfig?.limit ?? 5,
+          limit: options?.playerOptions?.autoplayConfig?.limit ?? 1,
           minDuration: options?.playerOptions?.autoplayConfig?.minDuration ?? 20000,
           maxDuration: options?.playerOptions?.autoplayConfig?.maxDuration ?? 900000,
-          excludeKeywords: options?.playerOptions?.autoplayConfig?.excludeKeywords ?? ['nightcore', 'bass boosted', '8d audio', 'slowed', 'reverb'],
+          excludeKeywords: options?.playerOptions?.autoplayConfig?.excludeKeywords ?? [
+            'nightcore', 'bass boosted', '8d audio', 'slowed', 'reverb',
+            'bass boost', 'pitch shift', 'speed up', 'sped up',
+          ],
+          durationTolerance: options?.playerOptions?.autoplayConfig?.durationTolerance ?? 90000,
+          historyLimit: options?.playerOptions?.autoplayConfig?.historyLimit ?? 20,
+          prefetchThreshold: options?.playerOptions?.autoplayConfig?.prefetchThreshold ?? 1,
         },
         volumeDecrementer: options?.playerOptions?.volumeDecrementer ?? 1,
         requesterTransformer: options?.playerOptions?.requesterTransformer ?? null,
@@ -183,28 +188,26 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
       options.queueOptions.maxPreviousTracks = 25
   }
 
-  private dispatchDebug(
-    name: DebugEvents,
-    eventData: {
-      message: string
-      state: 'log' | 'warn' | 'error'
-      error?: Error | string
-      functionLayer: string
-    }
-  ) {
+  private dispatchDebug(name: DebugEvents, eventData: any) {
     if (!this.options?.advancedOptions?.enableDebugEvents) return
-    this.emit('debug', name, eventData)
+    try {
+
+      const sanitizedData = JSON.parse(safeStringify(eventData))
+      this.emit('debug', name, sanitizedData)
+    } catch {
+      this.emit('debug', name, { state: eventData.state, message: 'Serialization failed during debug dispatch', functionLayer: eventData.functionLayer })
+    }
   }
 
   private _debugNoAudio(
     state: 'log' | 'warn' | 'error',
     functionLayer: string,
     messages: { message: string; consoleMessage?: string },
-    ...consoleArgs: unknown[]
+    ..._consoleArgs: unknown[]
   ): void {
     this.dispatchDebug(DebugEvents.NoAudioDebug, { state, functionLayer, message: messages.message })
     if (this.options?.advancedOptions?.debugOptions?.noAudio) {
-      // Audio-Debug removed
+      void 0;
     }
   }
 
@@ -218,6 +221,14 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     this.validateOptions(this.options)
 
     this.nodeManager = new NodeManager(this as RyanlinkManager)
+  }
+
+  public toJSON() {
+    return {
+      initiated: this.initiated,
+      playerCount: this.players.size,
+      nodeCount: this.nodeManager.nodes.size,
+    }
   }
 
   public getPlayer(guildId: string): CustomPlayerT | undefined {
@@ -234,13 +245,6 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     return newPlayer
   }
 
-  /**
-   * Search for tracks across multiple sources directly via Lavalink.
-   * @param query The search query or link.
-   * @param requestUser The user who requested the search.
-   * @param node Optional node to use for the search.
-   * @param throwOnEmpty Whether to throw an error if no results are found.
-   */
   public async search(
     query: SearchQuery,
     requestUser?: unknown,
@@ -299,7 +303,7 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
         success++
       } catch (err) {
         console.error(err)
-        this.nodeManager.emit('error', node, err)
+        this.nodeManager.emit('error', err, node)
       }
     }
     if (success > 0) this.initiated = true
@@ -474,7 +478,7 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
               }
             }
           } else {
-            // User joined the channel
+
             if (player.options.autoPause && player.paused && player.getData('internal_autoPaused')) {
               player.setData('internal_autoPaused', undefined)
               player.resume().catch(() => { })
@@ -556,13 +560,7 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
           try {
             const previousPosition = player.position
             const previousPaused = player.paused
-
-            this.dispatchDebug(DebugEvents.PlayerAutoReconnect, {
-              state: 'log',
-              message: `Auto reconnecting player because RyanlinkManager.options.playerOptions.onDisconnect.autoReconnect is true`,
-              functionLayer: 'RyanlinkManager > provideVoiceUpdate()',
-            })
-
+            
             if (!autoReconnectOnlyWithTracks || (autoReconnectOnlyWithTracks && (player.queue.current || player.queue.tracks.length))) {
               await player.connect()
 

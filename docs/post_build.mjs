@@ -101,10 +101,36 @@ export function modifyTableMarkdown(markdown) {
       }
       return `| ${rowCells.join(' | ')} |`
     })
-
     const newTableContent = `${newHeader}\n${newHeaderSeparator}\n${outputRows.join('\n')}`
     return `## Properties\n\n${newTableContent}`
   })
+}
+
+export function ensureFrontmatter(content, filePath) {
+  const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---/
+  const match = content.match(frontmatterRegex)
+  
+  let title = ""
+  const fileName = path.basename(filePath, path.extname(filePath))
+  
+  // Use file name as title if not specified, but improve it
+  title = fileName
+    .replace(/-/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (str) => str.toUpperCase())
+
+  if (match) {
+    let frontmatter = match[1]
+    if (!frontmatter.includes('title:')) {
+      console.log(chalk.yellow(`⚠️ Adding missing title to frontmatter in: ${chalk.white(filePath)}`))
+      frontmatter = `title: "${title}"\n${frontmatter}`
+      return content.replace(frontmatterRegex, `---\n${frontmatter}\n---`)
+    }
+    return content
+  } else {
+    console.log(chalk.yellow(`⚠️ Adding missing frontmatter and title to: ${chalk.white(filePath)}`))
+    return `---\ntitle: "${title}"\n---\n\n${content}`
+  }
 }
 
 export async function processDocumentation() {
@@ -120,14 +146,26 @@ export async function processDocumentation() {
   for (const file of files) {
     const filePath = path.join(docsPath, file)
     let content = fs.readFileSync(filePath, 'utf8')
+    let wasModified = false
+
+    // Ensure title exists
+    const newContentWithTitle = ensureFrontmatter(content, filePath)
+    if (newContentWithTitle !== content) {
+      content = newContentWithTitle
+      wasModified = true
+    }
 
     if (content.includes('## Properties')) {
       console.log(chalk.green(`✅ Optimizing properties table in: ${chalk.white.italic(filePath)}`))
       content = modifyTableMarkdown(content)
+      wasModified = true
+    }
+
+    if (wasModified) {
       fs.writeFileSync(filePath, content)
       modifiedCount++
     } else {
-      console.log(chalk.gray(`⚪ Skipping ${chalk.white.italic(file)} (no properties table found).`))
+      console.log(chalk.gray(`⚪ Skipping ${chalk.white.italic(file)} (no changes needed).`))
     }
   }
 
