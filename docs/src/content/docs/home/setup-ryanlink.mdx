@@ -41,9 +41,9 @@ manager.init({ id: 'YOUR_BOT_ID' });
 
 The constructor accepts a `RyanConfiguration` object. Key properties include:
 
--   `client: { id: string; username?: string; }` <Badge text="Required" variant="red" />: Your bot's client ID and optional username.
--   `nodes: NodeConfiguration[]` <Badge text="Required" variant="red" />: An array of Lavalink node configurations.
--   `sendToShard: (guildId: string, payload: object) => void` <Badge text="Required" variant="red" />: A function your bot uses to send Discord gateway voice updates.
+-   `client: { id: string; username?: string; }` <Badge text="Required" variant="danger" />: Your bot's client ID and optional username.
+-   `nodes: NodeConfiguration[]` <Badge text="Required" variant="danger" />: An array of Lavalink node configurations.
+-   `sendToShard: (guildId: string, payload: object) => void` <Badge text="Required" variant="danger" />: A function your bot uses to send Discord gateway voice updates.
 -   `playerClass?: Player` <Badge text="Optional" />: Custom Player class to use. Defaults to `Player`.
 -   `playerOptions?: PlayerOptions` <Badge text="Optional" />: Default options for new players.
 -   `autoMove?: boolean` <Badge text="Optional" />: Automatically move players to other nodes if a node fails. Defaults to `false`.
