@@ -1,26 +1,65 @@
+const { EventEmitter } = require('node:events')
+
+class MockWebSocket extends EventEmitter {
+  public static OPEN = 1
+  public static CLOSED = 3
+  public readyState = 1
+  public binaryType: BinaryType = 'arraybuffer'
+  public bufferedAmount = 0
+  public extensions = ''
+  public protocol = ''
+  public onopen: ((this: WebSocket, ev: Event) => any) | null = null
+  public onmessage: ((this: WebSocket, ev: MessageEvent) => any) | null = null
+  public onerror: ((this: WebSocket, ev: Event) => any) | null = null
+  public onclose: ((this: WebSocket, ev: CloseEvent) => any) | null = null
+  public url = 'ws://localhost'
+
+  constructor() {
+     super()
+  }
+  send = jest.fn()
+  close = jest.fn()
+  ping = jest.fn()
+  pong = jest.fn()
+}
+
+class MockRyanlinkNode {
+  public options: any;
+  public manager: any;
+  public sessionId: string | undefined;
+  public socket: InstanceType<typeof MockWebSocket>;
+  public initiated: boolean = false;
+  public connected: boolean = false;
+  public stats: any = { players: 0, playingPlayers: 0, cpu: {}, memory: {}, uptime: 0, detailedStats: {}, frameStats: {} };
+
+  constructor(options: any, manager: any) {
+    this.options = options;
+    this.manager = manager;
+    this.socket = new MockWebSocket();
+  }
+
+  connect = jest.fn();
+  disconnect = jest.fn();
+  destroy = jest.fn();
+  updatePlayer = jest.fn();
+  request = jest.fn();
+  destroyPlayer = jest.fn();
+}
+
+jest.mock('ws', () => ({
+  __esModule: true,
+  default: MockWebSocket,
+  WebSocket: MockWebSocket,
+}));
+
+jest.mock('../src/node/Node', () => ({
+  __esModule: true,
+  RyanlinkNode: MockRyanlinkNode,
+}));
+
 import { RyanlinkManager } from '../src/core/Manager'
 import { LavalinkMock } from './mocks/LavalinkMock'
 import { DestroyReasons } from '../src/config/Constants'
-
-jest.mock('ws', () => {
-  const { EventEmitter } = require('node:events')
-  class MockWebSocket extends EventEmitter {
-    public static OPEN = 1
-    public static CLOSED = 3
-    public readyState = 1
-    constructor() {
-       super()
-    }
-    send = jest.fn()
-    close = jest.fn()
-    terminate = jest.fn()
-  }
-  return {
-    __esModule: true,
-    default: MockWebSocket,
-    WebSocket: MockWebSocket,
-  }
-})
 
 describe('RyanlinkManager', () => {
   let manager: RyanlinkManager
@@ -45,10 +84,13 @@ describe('RyanlinkManager', () => {
         }
       }
     })
-    const node = manager.nodeManager.nodes.get('local')!
-    node.sessionId = 'mock-session'
-    // @ts-ignore
-    node.socket = { readyState: 1, send: jest.fn(), close: jest.fn(), on: jest.fn(), once: jest.fn(), removeListener: jest.fn(), emit: jest.fn() }
+
+    const mockNode = new MockRyanlinkNode({ host: 'localhost', port: 2333, authorization: 'pw', id: 'local' }, manager.nodeManager);
+    mockNode.sessionId = 'mock-session';
+    mockNode.socket = new MockWebSocket(); // Use the globally defined MockWebSocket
+    mockNode.connected = true; // Mark as connected for tests
+
+    manager.nodeManager.nodes.set('local', mockNode as any);
     manager.initiated = true
   })
 

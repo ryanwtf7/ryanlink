@@ -203,7 +203,7 @@ describe('Player', () => {
   it('handles changeNode execution failures', async () => {
     const player = manager.createPlayer({ guildId: 'cn1', voiceChannelId: 'v1' })
     // Set dummy voice data to bypass "Voice Data is missing" check
-    player.voice = { sessionId: 's', endpoint: 'e', token: 't' }
+    player.voice = { sessionId: 's', endpoint: 'e', token: 't', channelId: 'v1' }
     
     // Ensure the node has some mock info to pass the initial source check
     const badNode = { 

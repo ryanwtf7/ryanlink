@@ -1136,7 +1136,7 @@ export class RyanlinkNode {
     }
 
     if (typeof res?.guildId === 'string' && typeof res?.voice !== 'undefined') {
-      const player = this._LManager.getPlayer(data.guildId)
+      const player = this._LManager.getPlayer(res.guildId)
       if (!player) return
 
       if (typeof res?.voice?.connected === 'boolean' && res.voice.connected === false) {

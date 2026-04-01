@@ -162,18 +162,24 @@ describe('Manager Expanded', () => {
     } as any)
     
     expect(debugSpy).toHaveBeenCalledWith(DebugEvents.NoAudioDebug, expect.objectContaining({
-      message: expect.stringContaining("Missing sessionId")
+      state: 'warn',
+      message: expect.stringContaining("Voice Server Update received, but some required fields are missing")
     }))
 
     // Test Missing channelId
     player.voice.sessionId = 's1'
+    player.voiceChannelId = null
+    player.options.voiceChannelId = undefined
+    // @ts-ignore
+    player.voice.channelId = null
     await manager.provideVoiceUpdate({ 
       t: 'VOICE_SERVER_UPDATE', 
       d: { guild_id: 'g1', token: 't1', endpoint: 'e1' } 
     } as any)
     
     expect(debugSpy).toHaveBeenCalledWith(DebugEvents.NoAudioDebug, expect.objectContaining({
-      message: expect.stringContaining("Missing channelId")
+      state: 'warn',
+      message: expect.stringContaining("Voice Server Update received, but some required fields are missing")
     }))
   })
 

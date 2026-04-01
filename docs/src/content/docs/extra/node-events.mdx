@@ -18,7 +18,7 @@ The `NodeManager` emits events for node connectivity and lifecycle. Listen on `m
 | `reconnectinprogress` | `(node)` | Reconnection attempt is in progress. |
 | `error` | `(node, error, payload?)` | Node encountered a REST or WebSocket error. |
 | `destroy` | `(node, destroyReason?)` | Node was destroyed and removed from the manager. |
-| `raw` | `(node, payload)` | Every raw WebSocket payload received from the node. |
+| `raw` | `(node, payload)` | Every raw WebSocket payload received from the node. Known ops: `ready`, `stats`, `playerUpdate`, `event`. |
 | `resumed` | `(node, payload, players)` | Node session resumed. `players` is the array of restored player states. |
 
 ## NodeLink Exclusive Events <Badge text="NodeLink only" variant="tip" />

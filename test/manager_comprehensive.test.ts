@@ -91,11 +91,16 @@ describe('RyanlinkManager Comprehensive', () => {
 
     // Missing token/session_id
     await manager.provideVoiceUpdate({ t: 'VOICE_STATE_UPDATE', d: { guild_id: 'g1' } } as any)
-    expect(debugSpy).toHaveBeenCalledWith('error', expect.anything(), expect.objectContaining({ message: expect.stringContaining('token') }), expect.anything())
-
+    
     // Missing session_id for VOICE_SERVER_UPDATE
     await manager.provideVoiceUpdate({ t: 'VOICE_SERVER_UPDATE', d: { guild_id: 'g1', token: 't' } } as any)
-    expect(debugSpy).toHaveBeenCalledWith('error', expect.anything(), expect.objectContaining({ message: expect.stringContaining('sessionId') }), expect.anything())
+
+    expect(debugSpy).toHaveBeenCalledTimes(2) // Ensure two calls were made
+    expect(debugSpy.mock.calls[0][0]).toBe('error')
+    expect((debugSpy.mock.calls[0][2] as any).message).toContain("No 'token' nor 'session_id' found in payload")
+
+    expect(debugSpy.mock.calls[1][0]).toBe('warn')
+    expect((debugSpy.mock.calls[1][2] as any).message).toContain('Voice Server Update received, but some required fields are missing')
   })
 
   it('provideVoiceUpdate() handles autoPauseOnMute logic', async () => {

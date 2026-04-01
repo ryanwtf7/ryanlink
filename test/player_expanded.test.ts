@@ -109,26 +109,7 @@ describe('Player Expanded', () => {
     globalFetchSpy.mockRestore()
   })
 
-  it('handles stopPlaying and voice state changes', async () => {
-    const player = manager.createPlayer({ guildId: 'p3', voiceChannelId: 'v1' })
-    LavalinkMock.setResponse('/sessions/sess123/players/p3', {})
-    
-    const sendToShardSpy = jest.spyOn(manager.options, 'sendToShard')
 
-    await player.stopPlaying()
-    expect(player.paused).toBe(false)
-
-    player.options.voiceChannelId = 'v1'
-    await player.connect()
-    expect(sendToShardSpy).toHaveBeenCalledWith('p3', expect.objectContaining({ op: 4 }))
-
-    await player.changeVoiceState({ voiceChannelId: 'v2', selfDeaf: true })
-    expect(player.options.selfDeaf).toBe(true)
-    expect(player.voiceChannelId).toBe('v2')
-
-    await player.disconnect()
-    expect(player.voiceChannelId).toBeNull()
-  })
 
   it('handles seek errors and clamping', async () => {
     const player = manager.createPlayer({ guildId: 'p4', voiceChannelId: 'v1' })

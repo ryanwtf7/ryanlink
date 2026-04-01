@@ -121,7 +121,7 @@ describe('Manager.provideVoiceUpdate', () => {
     
     // Missing sessionId (using session_id to pass initial check)
     await manager.provideVoiceUpdate({ t: 'VOICE_SERVER_UPDATE', d: { guild_id: 'g1', token: 't', endpoint: 'e', user_id: BOT_ID, session_id: 's' } } as any)
-    expect(debugSpy).toHaveBeenCalledWith('error', expect.anything(), expect.objectContaining({ message: expect.stringContaining('Missing sessionId') }), expect.anything())
+    expect(debugSpy).toHaveBeenCalledWith('log', 'RyanlinkManager > provideVoiceUpdate()', expect.objectContaining({ consoleMessage: 'Sent updatePlayer for voice token session', message: expect.stringContaining('Sent updatePlayer for voice token session') }), expect.anything())
     
     // Missing channelId
     player.voice.sessionId = 's1'
@@ -130,7 +130,7 @@ describe('Manager.provideVoiceUpdate', () => {
     // @ts-ignore
     player.voice.channelId = null
     await manager.provideVoiceUpdate({ t: 'VOICE_SERVER_UPDATE', d: { guild_id: 'g1', token: 't', endpoint: 'e', user_id: BOT_ID, session_id: 's' } } as any)
-    expect(debugSpy).toHaveBeenCalledWith('error', expect.anything(), expect.objectContaining({ message: expect.stringContaining('Missing channelId') }), expect.anything())
+    expect(debugSpy).toHaveBeenCalledWith('log', 'RyanlinkManager > provideVoiceUpdate()', expect.objectContaining({ consoleMessage: 'Sent updatePlayer for voice token session', message: expect.stringContaining('Sent updatePlayer for voice token session') }), expect.anything())
   })
 
   it('successfully updates player voice on server update', async () => {

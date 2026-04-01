@@ -3,7 +3,7 @@ import { EQList, audioOutputsData } from '../src/config/Constants'
 
 // ─── mock player ─────────────────────────────────────────────────────────────
 
-function makePlayer(nodeOverrides: Record<string, any> = {}): any {
+function makePlayer(nodeOverrides = {}) {
   const player: any = {
     guildId: 'guild1',
     position: 0,

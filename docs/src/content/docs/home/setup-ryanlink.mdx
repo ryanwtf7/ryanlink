@@ -4,6 +4,171 @@ description: Wire up RyanlinkManager with your Discord.js bot in minutes.
 ---
 
 import { Steps } from '@astrojs/starlight/components';
+import { Badge } from '@astrojs/starlight/components';
+
+The `RyanlinkManager` is the central class in Ryanlink, responsible for initializing and managing Lavalink nodes, creating and destroying audio players, and handling Discord voice state updates. It extends Node's `EventEmitter`, allowing you to listen for various events throughout the lifecycle of your nodes and players.
+
+## Instantiation
+
+To create a new `RyanlinkManager` instance:
+
+```typescript
+import { RyanlinkManager } from 'ryanlink';
+
+const manager = new RyanlinkManager({
+  client: { id: 'YOUR_BOT_ID' },
+  nodes: [
+    {
+      id: 'my-node-1',
+      host: 'localhost',
+      port: 2333,
+      authorization: 'youshallnotpass',
+    },
+  ],
+  sendToShard: (guildId, payload) => {
+    // Your Discord bot library's method to send gateway payloads
+    // Example for discord.js:
+    // client.guilds.cache.get(guildId)?.shard?.send(payload);
+  },
+  // ... other options
+});
+
+// Initialize the manager (connects to Lavalink nodes)
+manager.init({ id: 'YOUR_BOT_ID' });
+```
+
+### `RyanConfiguration<CustomPlayerT>` Options
+
+The constructor accepts a `RyanConfiguration` object. Key properties include:
+
+-   `client: { id: string; username?: string; }` <Badge text="Required" variant="red" />: Your bot's client ID and optional username.
+-   `nodes: NodeConfiguration[]` <Badge text="Required" variant="red" />: An array of Lavalink node configurations.
+-   `sendToShard: (guildId: string, payload: object) => void` <Badge text="Required" variant="red" />: A function your bot uses to send Discord gateway voice updates.
+-   `playerClass?: Player` <Badge text="Optional" />: Custom Player class to use. Defaults to `Player`.
+-   `playerOptions?: PlayerOptions` <Badge text="Optional" />: Default options for new players.
+-   `autoMove?: boolean` <Badge text="Optional" />: Automatically move players to other nodes if a node fails. Defaults to `false`.
+-   `autoSkip?: boolean` <Badge text="Optional" />: Automatically skip to the next track on playback errors. Defaults to `true`.
+-   `autoSkipOnResolveError?: boolean` <Badge text="Optional" />: Automatically skip tracks that fail to resolve. Defaults to `true`.
+-   `emitNewSongsOnly?: boolean` <Badge text="Optional" />: Only emit `trackStart` for truly new songs, not resumed ones. Defaults to `false`.
+-   `resuming?: { enabled: boolean; timeout: number; }` <Badge text="Optional" />: Resume configuration for players. `enabled` defaults to `false`, `timeout` defaults to `60000`ms.
+-   `linksWhitelist?: string[]` <Badge text="Optional" />: Array of allowed domains/links for playback.
+-   `linksBlacklist?: string[]` <Badge text="Optional" />: Array of disallowed domains/links for playback.
+-   `linksAllowed?: boolean` <Badge text="Optional" />: Whether links are allowed at all. Defaults to `true`.
+-   `queueOptions?: QueueOptions` <Badge text="Optional" />: Options for the player queue.
+-   `advancedOptions?: AdvancedOptions` <Badge text="Optional" />: Advanced debug and behavior options.
+
+## Properties
+
+### `manager.options`
+
+-   **Type:** `RyanConfiguration<CustomPlayerT>`
+-   The configuration options passed during instantiation, with defaults applied.
+
+### `manager.nodeManager`
+
+-   **Type:** [`NodeManager`](#)
+-   Manages all connected Lavalink nodes. Refer to [Node Events](pathname:///extra/node-events) for its event structure.
+
+### `manager.utils`
+
+-   **Type:** `RyanlinkUtils`
+-   Utility functions for internal operations like query transformation.
+
+### `manager.voiceStates`
+
+-   **Type:** `Map<string, { guildId: string; channelId: string; userId: string; deaf: boolean; mute: boolean }>`
+-   A map storing cached Discord voice states for users in active voice channels.
+
+### `manager.initiated`
+
+-   **Type:** `boolean`
+-   Indicates whether the manager has been successfully initialized via `manager.init()`.
+
+### `manager.players`
+
+-   **Type:** `MiniMap<string, CustomPlayerT>`
+-   A map of active [`Player`](#) instances, keyed by `guildId`.
+
+### `manager.useable`
+
+-   **Type:** `boolean`
+-   A getter that returns `true` if at least one Lavalink node is connected and available, `false` otherwise.
+
+## Methods
+
+### `manager.init(clientData: BotClientOptions): Promise<this>`
+
+Initializes the manager and attempts to connect to all configured Lavalink nodes. Must be called once after instantiation.
+
+-   `clientData`: An object containing `id: string` (your bot's user ID) and optionally `username: string`.
+
+### `manager.getPlayer(guildId: string): CustomPlayerT | undefined`
+
+Retrieves an existing player for the given guild ID.
+
+-   `guildId`: The ID of the Discord guild.
+-   **Returns:** The `Player` instance if found, otherwise `undefined`.
+
+### `manager.createPlayer(options: PlayerOptions): CustomPlayerT`
+
+Creates a new audio player for the specified guild. If a player already exists for the guild, it returns the existing one.
+
+-   `options`: [`PlayerOptions`](#) for the new player.
+-   **Returns:** The new or existing `Player` instance.
+
+### `manager.destroyPlayer(guildId: string, destroyReason?: string): Promise<void | CustomPlayerT>`
+
+Destroys an active player and disconnects it from the voice channel. This is the recommended method to stop playback and clean up resources.
+
+-   `guildId`: The ID of the Discord guild.
+-   `destroyReason?`: An optional reason for destroying the player (e.g., `DestroyReasons.ChannelDeleted`).
+
+### `manager.deletePlayer(guildId: string): boolean | void`
+
+Deletes a player internally without proper destruction. **Avoid using this method directly unless you know what you're doing.** It's preferable to use `manager.destroyPlayer()`.
+
+-   `guildId`: The ID of the Discord guild.
+-   **Returns:** `true` if the player was deleted, `false` if not found, or `void`.
+
+### `manager.search(query: SearchQuery, requestUser?: unknown, node?: RyanlinkNode | NodeLinkNode, throwOnEmpty: boolean = false): Promise<SearchResult>`
+
+Searches for tracks on a Lavalink node.
+
+-   `query`: The search query (string or object with `query`, `source`, etc.).
+-   `requestUser?`: The user who requested the search (can be any type, used for requester data).
+-   `node?`: The specific `RyanlinkNode` or `NodeLinkNode` to use for the search. Defaults to the least used node.
+-   `throwOnEmpty`: If `true`, throws an error if no results are found. Defaults to `false`.
+-   **Returns:** A `SearchResult` object.
+
+### `manager.provideVoiceUpdate(data: VoicePacket | VoiceServer | VoiceState | ChannelDeletePacket): Promise<void>`
+
+Handles raw Discord voice state and voice server update payloads. Your Discord bot library should forward these events to this method.
+
+-   `data`: The raw Discord gateway payload.
+
+### `manager.getVoiceStateUsers(guildId: string, channelId: string): { guildId: string; channelId: string; userId: string; deaf: boolean; mute: boolean }[]`
+
+Retrieves a list of users (excluding the bot itself) currently in the specified voice channel, based on cached voice states.
+
+-   `guildId`: The ID of the Discord guild.
+-   `channelId`: The ID of the voice channel.
+-   **Returns:** An array of user voice state objects.
+
+### `manager.toJSON()`
+
+Returns a simple JSON object representing the manager's current state, including `initiated`, `playerCount`, and `nodeCount`.
+
+### Event Emitter Methods
+
+The `RyanlinkManager` extends `EventEmitter` and supports standard event methods:
+
+-   `manager.on(event, listener)`
+-   `manager.once(event, listener)`
+-   `manager.off(event, listener)`
+-   `manager.emit(event, ...args)`
+-   `manager.removeListener(event, listener)`
+
+For a full list of events and their signatures, refer to [Manager Events](pathname:///extra/manager-events).
 
 ## Minimal Setup (Discord.js)
 
@@ -26,7 +191,8 @@ import { Steps } from '@astrojs/starlight/components';
      }],
      sendToShard: (guildId, payload) => {
        // For sharded bots: calculate correct shard from guildId
-       const shardId = Number((BigInt(guildId) >> 22n) % BigInt(client.options.shardCount || 1));
+       const totalShards = (client.options.shardCount as number) || client.ws.shards.size || 1;
+       const shardId = Number((BigInt(guildId) >> 22n) % BigInt(totalShards));
        const shard = client.ws.shards.get(shardId);
        if (shard) shard.send(payload);
        else client.guilds.cache.get(guildId)?.shard?.send(payload);
@@ -40,9 +206,13 @@ import { Steps } from '@astrojs/starlight/components';
 
    ```typescript
    client.on('raw', (packet) => {
-     manager.provideVoiceUpdate(packet);
+     if (client.manager?.initiated) {
+       client.manager.provideVoiceUpdate(packet).catch(() => {});
+     }
    });
    ```
+
+   > **DAVE (E2EE) note:** Discord's DAVE protocol sends `VOICE_STATE_UPDATE` with `channel_id: null` during the handshake even when the bot is actively joining. Ryanlink handles this automatically — it preserves `player.voiceChannelId` as a fallback so Lavalink always receives the correct channel ID.
 
 3. **Initialize on ready**
 

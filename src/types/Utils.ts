@@ -436,20 +436,28 @@ export interface InvalidRestRequest {
   path: string
 }
 export interface VoiceConnectionState {
-  token: string
+  token: string | null
 
-  endpoint: string
+  endpoint: string | null
 
-  sessionId: string
+  sessionId: string | null
 
-  channelId?: string
+  channelId: string | null
 
   connected?: boolean
 
   ping?: number
 }
 
-export type VoiceConnectionOptions = Omit<VoiceConnectionState, 'connected' | 'ping'>
+export interface VoiceConnectionOptions {
+  token: string
+
+  endpoint: string
+
+  sessionId: string
+
+  channelId: string
+}
 
 export interface FailingAddress {
   failingAddress: string

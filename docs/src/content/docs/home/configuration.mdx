@@ -32,8 +32,9 @@ const manager = new RyanlinkManager({
     }
   ],
   sendToShard: (guildId, payload) => {
-    // For sharded bots: calculate the correct shard from guildId
-    const shardId = Number((BigInt(guildId) >> 22n) % BigInt(client.options.shardCount || 1));
+    // For sharded bots: calculate correct shard from guildId
+    const totalShards = (client.options.shardCount as number) || client.ws.shards.size || 1;
+    const shardId = Number((BigInt(guildId) >> 22n) % BigInt(totalShards));
     const shard = client.ws.shards.get(shardId);
     if (shard) shard.send(payload);
     else client.guilds.cache.get(guildId)?.shard?.send(payload); // fallback
@@ -232,3 +233,16 @@ Or implement your own by satisfying the `QueueStoreManager` interface (`get`, `s
 ---
 
 > Always implement `sendToShard` correctly for your Discord library. Without it, Ryanlink cannot communicate with Discord's voice servers.
+
+---
+
+## DAVE (E2EE Voice) Compatibility
+
+Discord's DAVE protocol (end-to-end encrypted voice) sends a `VOICE_STATE_UPDATE` with `channel_id: null` during the handshake, even when the bot is actively joining a channel. Ryanlink handles this automatically:
+
+- If `VOICE_STATE_UPDATE` arrives with `channel_id: null` but contains a valid `session_id` and the player is already in a channel, Ryanlink updates the session ID and ignores the disconnect signal.
+- When sending voice data to Lavalink, `player.voiceChannelId` is used as a fallback if `player.voice.channelId` is temporarily null.
+
+No configuration is required — this is handled internally in `provideVoiceUpdate`.
+
+> **Lavalink requirement:** DAVE support requires Lavalink **4.2.0+**. Older versions cannot connect to DAVE endpoints and audio will silently fail.

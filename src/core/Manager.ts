@@ -6,7 +6,7 @@ import { MemoryQueueStore } from '../audio/QueueStore'
 import type { BotClientOptions, DeepRequired, ManagerEvents, RyanConfiguration, RequiredManagerOptions } from '../types/Manager'
 import type { NodeConfiguration } from '../types/Node'
 import type { PlayerOptions } from '../types/Player'
-import type { ChannelDeletePacket, VoicePacket, VoiceServer, VoiceState, SearchQuery, SearchResult } from '../types/Utils'
+import type { ChannelDeletePacket, VoicePacket, VoiceServer, VoiceState, SearchQuery, SearchResult, VoiceConnectionOptions } from '../types/Utils'
 import { RyanlinkUtils, MiniMap, safeStringify } from '../utils/Utils'
 import type { RyanlinkNode } from '../node/Node'
 import type { NodeLinkNode } from '../node/NodeLink'
@@ -207,7 +207,8 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
   ): void {
     this.dispatchDebug(DebugEvents.NoAudioDebug, { state, functionLayer, message: messages.message })
     if (this.options?.advancedOptions?.debugOptions?.noAudio) {
-      void 0;
+      const color = state === 'error' ? '\x1b[31m' : state === 'warn' ? '\x1b[33m' : '\x1b[34m'
+      console.log(`${color}[NoAudioDebug]\x1b[0m ${messages.consoleMessage || messages.message}`, ..._consoleArgs)
     }
   }
 
@@ -372,6 +373,11 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
         } else {
           this.voiceStates.delete(`${update.guild_id}_${update.user_id}`)
         }
+
+        if (update.user_id === this.options?.client.id && update.session_id) {
+          const p = this.getPlayer(update.guild_id)
+          if (p) p.setData('internal_voiceSessionId', update.session_id)
+        }
       }
 
       if (!('token' in update) && !('session_id' in update)) {
@@ -412,52 +418,50 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
       if ('token' in update) {
         if (!player.node?.sessionId) throw new Error('Audio Node is either not ready or not up to date')
 
-        const sessionId2Use = player.voice?.sessionId || ('sessionId' in update ? (update.sessionId as string) : undefined)
-
-        const channelId2Use = player.voice?.channelId || ('channel_id' in update ? (update.channel_id as string) : undefined)
-
+        const serverUpdate = update as any as VoiceServer
+        player.voice.token = serverUpdate.token
+        player.voice.endpoint = serverUpdate.endpoint
+        
         const voiceData = {
-          token: update.token,
-          endpoint: update.endpoint,
-          sessionId: sessionId2Use,
-          channelId: channelId2Use,
+          token: player.voice.token,
+          endpoint: player.voice.endpoint,
+          sessionId: player.voice.sessionId || player.getData('internal_voiceSessionId') as string || null,
+          channelId: player.voice.channelId || player.voiceChannelId || player.options?.voiceChannelId || null,
         }
-        if (!sessionId2Use) {
+
+        if (!voiceData.token || !voiceData.endpoint || !voiceData.sessionId || !voiceData.channelId) {
           this._debugNoAudio(
-            'error',
+            'warn',
             'RyanlinkManager > provideVoiceUpdate()',
             {
-              message: `Can't send updatePlayer for voice token session - Missing sessionId :: ${safeStringify({ voice: voiceData, update, playerVoice: player.voice }, 2)}`,
-              consoleMessage: "Can't send updatePlayer for voice token session - Missing sessionId",
-            },
-            { voice: voiceData, update, playerVoice: player.voice }
-          )
-        } else if (!channelId2Use) {
-          this._debugNoAudio(
-            'error',
-            'RyanlinkManager > provideVoiceUpdate()',
-            {
-              message: `Can't send updatePlayer for voice token session - Missing channelId :: ${safeStringify({ voice: voiceData, update, playerVoice: player.voice }, 2)}`,
-              consoleMessage: "Can't send updatePlayer for voice token session - Missing channelId",
-            },
-            { voice: voiceData, update, playerVoice: player.voice }
+              message: `Voice Server Update received, but some required fields are missing :: ${safeStringify({ voice: voiceData, update }, 2)}`,
+              consoleMessage: "Voice Server Update received, but some required fields are missing",
+            }
           )
         } else {
+          const samePayload =
+            player.lastVoiceUpdate &&
+            player.lastVoiceUpdate.sessionId === voiceData.sessionId &&
+            player.lastVoiceUpdate.token === voiceData.token &&
+            player.lastVoiceUpdate.endpoint === voiceData.endpoint &&
+            player.lastVoiceUpdate.channelId === voiceData.channelId
+
+          if (samePayload) return
+
+          player.lastVoiceUpdate = { ...voiceData }
+
+          this._debugNoAudio("log", "RyanlinkManager > provideVoiceUpdate()", {
+            message: `Sent updatePlayer for voice token session :: ${safeStringify({ voice: voiceData, update, playerVoice: player.voice }, 2)}`,
+            consoleMessage: 'Sent updatePlayer for voice token session',
+          }, { voice: voiceData, playerVoice: player.voice, update })
+
           await player.node.updatePlayer({
             guildId: player.guildId,
+            noReplace: true,
             playerOptions: {
-              voice: voiceData,
+              voice: voiceData as any,
             },
           })
-          this._debugNoAudio(
-            'log',
-            'RyanlinkManager > provideVoiceUpdate()',
-            {
-              message: `Sent updatePlayer for voice token session :: ${safeStringify({ voice: voiceData, update, playerVoice: player.voice }, 2)}`,
-              consoleMessage: 'Sent updatePlayer for voice token session',
-            },
-            { voice: voiceData, playerVoice: player.voice, update }
-          )
         }
         return
       }
@@ -485,25 +489,23 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
             }
           }
         }
-
-        this._debugNoAudio(
-          'warn',
-          'RyanlinkManager > provideVoiceUpdate()',
-          {
-            message: `voice update user is not equal to provided client id of the RyanlinkManager.options.client.id :: user: "${update.user_id}" manager client id: "${this.options?.client.id}"`,
-            consoleMessage: 'voice update user is not equal to provided client id of the manageroptions#client#id',
-          },
-          'user:',
-          update.user_id,
-          'manager client id:',
-          this.options?.client.id
-        )
         return
       }
 
+      if ('session_id' in update) {
+        player.voice.sessionId = (update.session_id as any) || player.voice.sessionId
+      }
+
+      if ('token' in update) {
+        const serverUpdate = update as any as VoiceServer
+        player.voice.token = serverUpdate.token
+        player.voice.endpoint = serverUpdate.endpoint
+      }
+
       if (update.channel_id) {
-        if (player.voiceChannelId !== update.channel_id) {
+        if (player.voiceChannelId && player.voiceChannelId !== update.channel_id) {
           this.emit('playerMove', player, player.voiceChannelId, update.channel_id)
+          player.lastVoiceUpdate = null
           const users = this.getVoiceStateUsers(player.guildId, update.channel_id)
           if (users.length <= 1) {
             if (player.options.smartLeave) {
@@ -515,19 +517,50 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
           }
         }
 
-        player.voice.sessionId = update.session_id || player.voice.sessionId
         player.voice.channelId = update.channel_id || player.voice.channelId
-
-        if (!player.voice.sessionId) {
-          this._debugNoAudio('warn', 'RyanlinkManager > provideVoiceUpdate()', {
-            message: `Function to assing sessionId provided, but no found in Payload: ${safeStringify({ update, playerVoice: player.voice }, 2)}`,
-            consoleMessage: `Function to assing sessionId provided, but no found in Payload: ${safeStringify(update, 2)}`,
-          })
-        }
-
         player.voiceChannelId = update.channel_id
         player.options.voiceChannelId = update.channel_id
+      }
 
+      if (player.voice.token && player.voice.sessionId && player.voice.endpoint && (player.voice.channelId || player.voiceChannelId) && player.node?.sessionId) {
+        const voiceData: VoiceConnectionOptions = {
+          token: player.voice.token,
+          endpoint: player.voice.endpoint,
+          sessionId: (player.voice.sessionId || player.getData('internal_voiceSessionId') as string),
+          channelId: (player.voice.channelId || player.voiceChannelId || player.options?.voiceChannelId),
+        }
+
+        const samePayload =
+          player.lastVoiceUpdate &&
+          player.lastVoiceUpdate.sessionId === voiceData.sessionId &&
+          player.lastVoiceUpdate.token === voiceData.token &&
+          player.lastVoiceUpdate.endpoint === voiceData.endpoint &&
+          player.lastVoiceUpdate.channelId === voiceData.channelId
+
+        if (samePayload) return
+
+        player.lastVoiceUpdate = { ...voiceData }
+
+        this._debugNoAudio(
+          'log',
+          'RyanlinkManager > provideVoiceUpdate()',
+          {
+            message: `Sent updatePlayer for voice data (VOICE_SERVER_UPDATE/VOICE_STATE_UPDATE) :: ${safeStringify({ voice: voiceData, update, playerVoice: player.voice }, 2)}`,
+            consoleMessage: 'Sent updatePlayer for voice data',
+          },
+          { voice: voiceData, playerVoice: player.voice, update }
+        )
+
+        await player.node.updatePlayer({
+          guildId: player.guildId,
+          noReplace: true,
+          playerOptions: {
+            voice: voiceData as any,
+          },
+        }).catch(() => {})
+      }
+
+      if (update.channel_id) {
         const selfMuteChanged = typeof update.self_mute === 'boolean' && player.voiceState.selfMute !== update.self_mute
         const serverMuteChanged = typeof update.mute === 'boolean' && player.voiceState.serverMute !== update.mute
         const selfDeafChanged = typeof update.self_deaf === 'boolean' && player.voiceState.selfDeaf !== update.self_deaf
@@ -549,7 +582,7 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
         }
         if (selfDeafChanged || serverDeafChanged) this.emit('playerDeafChange', player, player.voiceState.selfDeaf, player.voiceState.serverDeaf)
         if (suppressChange) this.emit('playerSuppressChange', player, player.voiceState.suppress)
-      } else {
+      } else if (!('token' in update)) {
         const { autoReconnectOnlyWithTracks, destroyPlayer, autoReconnect } = this.options?.playerOptions?.onDisconnect ?? {}
 
         if (destroyPlayer === true) {

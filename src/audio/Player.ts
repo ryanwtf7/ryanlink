@@ -102,11 +102,18 @@ export class Player {
 
   public connected: boolean | undefined = false
 
-  public voice: VoiceConnectionOptions = {
+  public lastVoiceUpdate: VoiceConnectionOptions | null = null
+
+  public voice: {
+    token: string | null
+    endpoint: string | null
+    sessionId: string | null
+    channelId: string | null
+  } = {
     endpoint: null,
     sessionId: null,
     token: null,
-    channelId: undefined,
+    channelId: null,
   }
 
   public voiceState: {
@@ -371,7 +378,12 @@ export class Player {
             endTime: options?.endTime ?? undefined,
             filters: options?.filters ?? undefined,
             volume: options.volume ?? this.internalVolume ?? undefined,
-            voice: options.voice ?? undefined,
+            voice: options.voice ?? (this.voice.token && this.voice.endpoint && (this.voice.sessionId || this.getData('internal_voiceSessionId')) && (this.voice.channelId || this.voiceChannelId || this.options?.voiceChannelId) ? {
+              token: this.voice.token,
+              endpoint: this.voice.endpoint,
+              sessionId: (this.voice.sessionId || this.getData('internal_voiceSessionId') as string),
+              channelId: (this.voice.channelId || this.voiceChannelId || this.options?.voiceChannelId),
+            } : undefined),
           }).filter((v) => typeof v[1] !== 'undefined')
         ) as Partial<PlayConfiguration>,
       })
@@ -451,7 +463,12 @@ export class Player {
         endTime: options?.endTime ?? undefined,
         filters: options?.filters ?? undefined,
         paused: options?.paused ?? undefined,
-        voice: options?.voice ?? undefined,
+        voice: options.voice ?? (this.voice.token && this.voice.endpoint && (this.voice.sessionId || this.getData('internal_voiceSessionId')) && (this.voice.channelId || this.voiceChannelId || this.options?.voiceChannelId) ? {
+          token: this.voice.token,
+          endpoint: this.voice.endpoint,
+          sessionId: (this.voice.sessionId || this.getData('internal_voiceSessionId') as string),
+          channelId: (this.voice.channelId || this.voiceChannelId || this.options?.voiceChannelId),
+        } : undefined),
       }).filter((v) => typeof v[1] !== 'undefined')
     ) as Partial<PlayConfiguration>
 
@@ -768,11 +785,12 @@ export class Player {
     })
 
     this.voiceChannelId = this.options.voiceChannelId
+    this.voice.channelId = this.options.voiceChannelId || null
 
     return this
   }
 
-  public async changeVoiceState(data: { voiceChannelId?: string; selfDeaf?: boolean; selfMute?: boolean }) {
+  public async setVoiceChannel(data: { voiceChannelId?: string; selfDeaf?: boolean; selfMute?: boolean }) {
     if (this.options.voiceChannelId === data.voiceChannelId) throw new RangeError("New Channel can't be equal to the old Channel.")
 
     await this.RyanlinkManager.options.sendToShard(this.guildId, {
@@ -950,6 +968,12 @@ export class Player {
           })
         }
       }
+      const voiceData = {
+        token: this.voice.token,
+        endpoint: this.voice.endpoint,
+        sessionId: this.voice.sessionId,
+        channelId: this.voice.channelId,
+      };
       await this.node.updatePlayer({
         guildId: this.guildId,
         noReplace: false,
@@ -960,12 +984,7 @@ export class Player {
             volume: this.internalVolume,
             paused: this.paused,
           }),
-          voice: {
-            token: this.voice.token,
-            endpoint: this.voice.endpoint,
-            sessionId: this.voice.sessionId,
-            channelId: this.voice.channelId,
-          },
+          voice: voiceData,
         },
       })
       this.filterManager.applyPlayerFilters()
