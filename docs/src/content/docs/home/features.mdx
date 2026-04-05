@@ -20,10 +20,12 @@ import { Badge } from '@astrojs/starlight/components';
 - **Full playback control** — `play`, `pause`, `resume`, `seek`, `skip`, `stop`, `setVolume`, `setRepeatMode`
 - **Repeat modes** — `off`, `track`, `queue`
 - **Gapless preloading** (NodeLink) — `nextTrack` field for zero-silence transitions
-- **Auto-reconnect** — configurable `onDisconnect.autoReconnect`
-- **Smart leave** — destroy player when voice channel is empty (`smartLeave`)
-- **Auto-pause** — pause when channel empties, resume when users rejoin (`autoPause`)
-- **Client-based position tracking** — configurable `clientBasedPositionUpdateInterval`
+- **High-Performance Audio** — Native fetch, efficient memory management, and parallel track loading.
+- **Dynamic Filter Stacking** — Non-destructive filter layering with built-in presets (Pop, Electronic, etc.).
+- **Proactive Automation** — Smart auto-pause/resume, empty channel handling, and resolution self-healing.
+- **Deep Lyrics Integration** — Native support for timed and text lyrics via `lavalyrics` plugin.
+- **Memory-Optimized Registry** — Industry-leading `TrackRegistry` for zero-overhead large queue management.
+- **Strictly Type-Safe** — 100% TypeScript with advanced module augmentation support.
 - **Volume decrementer** — scale internal volume independently of reported volume
 - **Lifecycle hooks** — `onTrackStart`, `onQueueEnd`, `onNodeFailover` per-player
 

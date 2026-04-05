@@ -29,9 +29,16 @@ export type SourceSearchPlatformBase =
   | 'qbrec'
   | 'pdsearch'
   | 'pdisrc'
+  | 'pdrec'
   | 'jssearch'
   | 'jsrec'
-  | 'pdrec'
+  | 'agsearch'
+  | 'agrec'
+  | 'ausearch'
+  | 'kwsearch'
+  | 'nesearch'
+  | 'ebsearch'
+  | 'monosearch'
   | 'ftts'
 
 export type DuncteSearchPlatform = 'speak' | 'phsearch' | 'pornhub' | 'porn' | 'tts'
@@ -68,92 +75,34 @@ export type RyanlinkSearchPlatform =
   | 'ytmsearch'
   | 'scsearch'
   | 'bcsearch'
-  | SourceSearchPlatformBase
-  | DuncteSearchPlatform
-  | ExtendedSearchPlatform
-  | AudioClientSearchPlatform
+  | (string & {})
 
 export type ClientCustomSearchPlatformUtils = 'local' | 'http' | 'https' | 'link' | 'uri'
 
 export type ClientSearchPlatform =
-  | ClientCustomSearchPlatformUtils
   | 'youtube'
-  | 'yt'
-  | 'youtube music'
-  | 'youtubemusic'
-  | 'ytm'
-  | 'musicyoutube'
-  | 'music youtube'
   | 'soundcloud'
-  | 'sc'
-  | 'am'
-  | 'apple music'
-  | 'applemusic'
-  | 'apple'
-  | 'musicapple'
-  | 'music apple'
-  | 'sp'
-  | 'spsuggestion'
   | 'spotify'
-  | 'spotify.com'
-  | 'spotifycom'
-  | 'dz'
+  | 'applemusic'
   | 'deezer'
-  | 'yandex'
-  | 'yandex music'
   | 'yandexmusic'
-  | 'vk'
-  | 'vk music'
-  | 'vkmusic'
   | 'tidal'
-  | 'tidal music'
   | 'qobuz'
   | 'pandora'
-  | 'pd'
-  | 'pandora music'
-  | 'pandoramusic'
-  | 'flowerytts'
-  | 'flowery'
-  | 'flowery.tts'
-  | AudioClientSearchPlatformResolve
-  | AudioClientSearchPlatform
-  | 'js'
-  | 'jiosaavn'
-  | 'td'
-  | 'tidal'
-  | 'tdrec'
-  | 'audiomack'
-  | 'adm'
-  | 'admsearch'
-  | 'shazam'
-  | 'sh'
-  | 'shsearch'
-  | 'instagram'
-  | 'ig'
-  | 'igsearch'
-  | 'bilibili'
-  | 'bl'
-  | 'blsearch'
-  | 'lastfm'
-  | 'last.fm'
-  | 'lf'
-  | 'lfsearch'
-  | 'amazon music'
-  | 'amazonmusic'
-  | 'amz'
-  | 'amzsearch'
-  | 'gaana'
-  | 'gn'
-  | 'gnsearch'
-  | 'td'
-  | 'tidal'
-  | 'tdrec'
-
-  | 'mcsearch'
   | 'mixcloud'
-  | 'ncsearch'
   | 'nicovideo'
-  | 'ebox'
+  | 'bandcamp'
+  | 'jiosaavn'
+  | 'shazam'
+  | 'gaana'
+  | 'amazonmusic'
+  | 'audiomack'
+  | 'anghami'
+  | 'audius'
+  | 'kwai'
+  | 'netease'
+  | 'lastfm'
+  | (string & {})
   | 'jukebox'
   | 'slsearch'
   | 'songlink'
@@ -210,6 +159,29 @@ export type SourcesRegex =
   | 'jiosaavn'
   | 'appleMusic'
   | 'tidal'
+  | 'amazonmusic'
+  | 'gaana'
+  | 'audiomack'
+  | 'shazam'
+  | 'qobuz'
+  | 'bilibili'
+  | 'anghami'
+  | 'audius'
+  | 'kwai'
+  | 'netease'
+  | 'nicovideo'
+  | 'instagram'
+  | 'lastfm'
+  | 'letrasmus'
+  | 'monochrome'
+  | 'eternalbox'
+  | 'bluesky'
+  | 'songlink'
+  | 'reddit'
+  | 'tumblr'
+  | 'twitter'
+  | 'pinterest'
+  | 'iheartradio'
   | 'PandoraTrackRegex'
   | 'PandoraAlbumRegex'
   | 'PandoraArtistRegex'
@@ -264,6 +236,7 @@ export type PlayerEvents =
   | TrackStuckEvent
   | TrackExceptionEvent
   | WebSocketClosedEvent
+  | ReadyEvent
   | SponsorBlockSegmentEvents
   | LyricsEvent
 
@@ -417,6 +390,7 @@ export type PlayerEventType =
   | 'TrackExceptionEvent'
   | 'TrackStuckEvent'
   | 'WebSocketClosedEvent'
+  | 'ReadyEvent'
   | SponsorBlockSegmentEventType
   | LyricsEventType
 
@@ -518,6 +492,37 @@ export interface PlayerUpdateInfo {
   playerOptions: PlayConfiguration
 
   noReplace?: boolean
+}
+
+export interface LyricsSearchResult {
+  videoId: string
+  title: string
+}
+
+export interface LyricsFoundEvent extends PlayerEvent {
+  type: 'LyricsFoundEvent'
+  guildId: string
+  lyrics: LyricsResult
+}
+
+export interface LyricsNotFoundEvent extends PlayerEvent {
+  type: 'LyricsNotFoundEvent'
+  guildId: string
+}
+
+export interface LyricsLineEvent extends PlayerEvent {
+  type: 'LyricsLineEvent'
+  guildId: string
+  lineIndex: number
+  line: LyricsLine
+  skipped: boolean
+}
+
+export interface ReadyEvent extends PlayerEvent {
+  type: 'ReadyEvent'
+  guildId: string
+  resumed: boolean
+  sessionId: string
 }
 export interface AudioPlayerState {
   guildId: string

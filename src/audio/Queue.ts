@@ -46,8 +46,16 @@ export class Queue {
   private readonly QueueSaver: QueueSaver | null = null
   private managerUtils = new RyanlinkUtils()
   private queueChanges: QueueChangesWatcher | null
+  private player: any | null = null
 
-  constructor(guildId: string, data: Partial<StoredQueue> = {}, queueSaver?: QueueSaver, queueOptions?: ManagerQueueOptions) {
+  constructor(
+    guildId: string,
+    data: Partial<StoredQueue> = {},
+    queueSaver?: QueueSaver,
+    queueOptions?: ManagerQueueOptions,
+    player?: any
+  ) {
+    this.player = player || null
     this.queueChanges = queueOptions?.queueChangesWatcher || null
     this.guildId = guildId
     this.QueueSaver = queueSaver
@@ -135,6 +143,11 @@ export class Queue {
         previous: this.previous ? [...this.previous] : [],
         tracks: this.tracks ? [...this.tracks] : [],
         position: this.position,
+        voiceChannel: this.player?.voiceChannelId || null,
+        textChannel: this.player?.textChannelId || null,
+        paused: this.player?.paused || false,
+        volume: this.player?.volume || 100,
+        nodeId: this.player?.node?.id || null,
       }
     },
 

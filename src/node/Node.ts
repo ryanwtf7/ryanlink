@@ -84,7 +84,7 @@ export class RyanlinkNode {
     if (!this.connected || !this.stats) return Infinity
     const cpuScore = (this.stats.cpu.systemLoad || 0) * 0.7
     const memScore = ((this.stats.memory.used || 0) / (this.stats.memory.allocated || 1)) * 0.2
-    const playerScore = (this.stats.players / 100) * 0.1 
+    const playerScore = (this.stats.players / 100) * 0.1
     return cpuScore + memScore + playerScore
   }
 
@@ -178,8 +178,8 @@ export class RyanlinkNode {
   }
 
   constructor(options: NodeConfiguration, manager: NodeManager) {
-    ;(this as any)[NodeManagerSymbol] = manager
-    ;(this as any)[ManagerSymbol] = manager.RyanlinkManager
+    ; (this as any)[NodeManagerSymbol] = manager
+      ; (this as any)[ManagerSymbol] = manager.RyanlinkManager
     this.options = {
       secure: false,
       retryAmount: 5,
@@ -328,41 +328,41 @@ export class RyanlinkNode {
       playlist:
         res.loadType === 'playlist'
           ? {
-              name: res.data.info?.name || res.data.pluginInfo?.name || null,
-              title: res.data.info?.name || res.data.pluginInfo?.name || null,
-              author: res.data.info?.author || res.data.pluginInfo?.author || null,
-              thumbnail:
-                res.data.info?.artworkUrl ||
-                res.data.pluginInfo?.artworkUrl ||
-                (typeof res.data?.info?.selectedTrack !== 'number' || res.data?.info?.selectedTrack === -1
-                  ? null
-                  : resTracks[res.data?.info?.selectedTrack]
-                    ? resTracks[res.data?.info?.selectedTrack]?.info?.artworkUrl ||
-                      resTracks[res.data?.info?.selectedTrack]?.info?.pluginInfo?.artworkUrl
-                    : null) ||
-                null,
-              uri:
-                res.data.info?.url ||
-                res.data.info?.uri ||
-                res.data.info?.link ||
-                res.data.pluginInfo?.url ||
-                res.data.pluginInfo?.uri ||
-                res.data.pluginInfo?.link ||
-                null,
-              selectedTrack:
-                typeof res.data?.info?.selectedTrack !== 'number' || res.data?.info?.selectedTrack === -1
-                  ? null
-                  : resTracks[res.data?.info?.selectedTrack]
-                    ? this.NodeManager.RyanlinkManager.utils.buildTrack(resTracks[res.data?.info?.selectedTrack], requestUser)
-                    : null,
-              duration: resTracks.length
-                ? resTracks.reduce(
-                    (acc: number, cur: Track & { info: Track['info'] & { length?: number } }) =>
-                      acc + (cur?.info?.duration || cur?.info?.length || 0),
-                    0
-                  )
-                : 0,
-            }
+            name: res.data.info?.name || res.data.pluginInfo?.name || null,
+            title: res.data.info?.name || res.data.pluginInfo?.name || null,
+            author: res.data.info?.author || res.data.pluginInfo?.author || null,
+            thumbnail:
+              res.data.info?.artworkUrl ||
+              res.data.pluginInfo?.artworkUrl ||
+              (typeof res.data?.info?.selectedTrack !== 'number' || res.data?.info?.selectedTrack === -1
+                ? null
+                : resTracks[res.data?.info?.selectedTrack]
+                  ? resTracks[res.data?.info?.selectedTrack]?.info?.artworkUrl ||
+                  resTracks[res.data?.info?.selectedTrack]?.info?.pluginInfo?.artworkUrl
+                  : null) ||
+              null,
+            uri:
+              res.data.info?.url ||
+              res.data.info?.uri ||
+              res.data.info?.link ||
+              res.data.pluginInfo?.url ||
+              res.data.pluginInfo?.uri ||
+              res.data.pluginInfo?.link ||
+              null,
+            selectedTrack:
+              typeof res.data?.info?.selectedTrack !== 'number' || res.data?.info?.selectedTrack === -1
+                ? null
+                : resTracks[res.data?.info?.selectedTrack]
+                  ? this.NodeManager.RyanlinkManager.utils.buildTrack(resTracks[res.data?.info?.selectedTrack], requestUser)
+                  : null,
+            duration: resTracks.length
+              ? resTracks.reduce(
+                (acc: number, cur: Track & { info: Track['info'] & { length?: number } }) =>
+                  acc + (cur?.info?.duration || cur?.info?.length || 0),
+                0
+              )
+              : 0,
+          }
           : null,
       tracks: (resTracks.length ? resTracks.map((t) => this.NodeManager.RyanlinkManager.utils.buildTrack(t, requestUser)) : []) as Track[],
     }
@@ -374,16 +374,15 @@ export class RyanlinkNode {
     if (Query.source) this.NodeManager.RyanlinkManager.utils.validateSourceString(this, Query.source)
     if (/^https?:\/\//.test(Query.query)) return this.search({ query: Query.query, source: Query.source }, requestUser)
 
-    const lavaSearchSources = [
-      'spsearch', 'sprec', 'amsearch', 'dzsearch', 'dzisrc', 'ytmsearch', 'ytsearch',
-      'scsearch', 'ymsearch', 'ymrec', 'vksearch', 'vkrec', 'tdsearch', 'tdrec',
-      'jssearch', 'jsrec', 'admsearch', 'admrec', 'shsearch', 'lfsearch', 'amzsearch',
-      'amzrec', 'gnsearch', 'gnrec', 'qbsearch', 'qbisrc', 'qbrec', 'pdsearch', 'pdisrc', 'pdrec',
-    ]
-    if (!lavaSearchSources.includes(Query.source))
+    const sourceName = Query.source?.toLowerCase()?.replace('search', '')?.replace('rec', '')?.replace('isrc', '')
+    const isSupported = this.info?.sourceManagers?.includes(sourceName) ||
+      this.info?.plugins?.some(p => p.name.toLowerCase().includes(sourceName))
+
+    if (!isSupported && !this.NodeManager.RyanlinkManager.options?.playerOptions?.allowCustomSources) {
       throw new SyntaxError(
-        `Query.source "${Query.source}" is not supported by LavaSearch. Supported: ${lavaSearchSources.join(', ')}`
+        `Query.source "${Query.source}" is not supported by LavaSearch on this node. Enable allowCustomSources to skip this check.`
       )
+    }
 
     if (this._checkForPlugins) {
 
@@ -670,12 +669,26 @@ export class RyanlinkNode {
 
   public async updateSession(resuming?: boolean, timeout?: number): Promise<Session | InvalidRestRequest | null> {
     if (!this.sessionId) throw new Error('the Ryanlink-Node is either not ready, or not up to date!')
-    const data = {} as Session
+    const data = {} as any
     if (typeof resuming === 'boolean') data.resuming = resuming
     if (typeof timeout === 'number' && timeout > 0) data.timeout = timeout
+
+    const EXCLUDED_KEYS = [
+      'authorization', 'host', 'port', 'secure', 'closeOnError',
+      'retryAmount', 'retryDelay', 'retryTimespan', 'requestSignalTimeoutMS',
+      'heartBeatInterval', 'enablePingOnStatsCheck', 'autoChecks', 'regions',
+      'nodeType', 'id', 'sessionId'
+    ]
+
+    for (const [key, value] of Object.entries(this.options)) {
+      if (value && typeof value === 'object' && !EXCLUDED_KEYS.includes(key) && !Array.isArray(value)) {
+        data[key] = value
+      }
+    }
+
     this.resuming = {
-      enabled: typeof resuming === 'boolean' ? resuming : false,
-      timeout: typeof resuming === 'boolean' && resuming === true ? timeout : null,
+      enabled: typeof resuming === 'boolean' ? resuming : this.resuming.enabled,
+      timeout: typeof resuming === 'boolean' && resuming === true ? timeout : this.resuming.timeout,
     }
     return this.request(`/sessions/${this.sessionId}`, (r) => {
       r.method = 'PATCH'
@@ -718,7 +731,7 @@ export class RyanlinkNode {
           v.name === 'lavalyrics-plugin' ||
           v.name === 'java-lyrics-plugin' ||
           v.name === 'lyrics' ||
-          v.name === 'lavasrc-plugin' 
+          v.name === 'lavasrc-plugin'
         )
         if (!hasLyricsPlugin)
           throw new RangeError(`No lyrics plugin found on node ${this.id}. Expected: lavalyrics-plugin, java-lyrics-plugin, lyrics, or lavasrc-plugin.`)
@@ -1171,7 +1184,7 @@ export class RyanlinkNode {
     }
 
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout)
-    
+
     this.consecutiveReconnectAttempts++
     const baseDelay = this.options.retryDelay || 1000
     const maxDelay = 30000
@@ -1293,6 +1306,16 @@ export class RyanlinkNode {
 
     this.info.isNodelink = !!this.info.isNodelink
 
+    if (this.options.sponsorblock || this.options.xm || this.options.dunctebot || this.options.lavadspx) {
+      await this.updateSession().catch((e) => {
+        this.dispatchDebug(DebugEvents.UpdateSessionFail, {
+          state: 'warn',
+          message: `Failed to update session with plugin options: ${e.message}`,
+          functionLayer: 'RyanlinkNode > open() > updateSession()',
+        })
+      })
+    }
+
     this.NodeManager.emit('connect', this)
     console.log(`\x1b[32m[Ryanlink]\x1b[0m Node \x1b[36m${this.id}\x1b[0m connected successfully.`)
   }
@@ -1401,7 +1424,7 @@ export class RyanlinkNode {
           player.ping.ws = payload.state.ping >= 0 ? payload.state.ping : player.ping.ws <= 0 && player.connected ? null : player.ping.ws || 0
 
           player.queue.position = player.lastPosition
-          player.queue.utils.save().catch(() => {})
+          player.queue.utils.save().catch(() => { })
 
           if (!player.createdTimeStamp && payload.state.time) player.createdTimeStamp = payload.state.time
 
@@ -1468,20 +1491,23 @@ export class RyanlinkNode {
     }
 
     switch (payload.type) {
+      case 'ReadyEvent':
+        if (this.info?.isNodelink === true) this.trackStart(player, player.queue.current as Track, payload as any)
+        break
       case 'TrackStartEvent':
-        this.trackStart(player, player.queue.current as Track, payload)
+        this.trackStart(player, player.queue.current as Track, payload as TrackStartEvent)
         break
       case 'TrackEndEvent':
-        this.trackEnd(player, player.queue.current as Track, payload)
+        this.trackEnd(player, player.queue.current as Track, payload as TrackEndEvent)
         break
       case 'TrackStuckEvent':
-        this.trackStuck(player, player.queue.current as Track, payload)
+        this.trackStuck(player, player.queue.current as Track, payload as TrackStuckEvent)
         break
       case 'TrackExceptionEvent':
-        this.trackError(player, player.queue.current as Track, payload)
+        this.trackError(player, player.queue.current as Track, payload as TrackExceptionEvent)
         break
       case 'WebSocketClosedEvent':
-        this.socketClosed(player, payload)
+        this.socketClosed(player, payload as WebSocketClosedEvent)
         break
       case 'SegmentsLoaded':
         this.SponsorBlockSegmentLoaded(player, player.queue.current as Track, payload)

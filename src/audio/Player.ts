@@ -54,6 +54,7 @@ export class Player {
   }
   public set node(node: RyanlinkNode | NodeLinkNode) {
     ;(this as any)[NodeSymbol] = node
+    this.options.node = node?.id || node
   }
 
   public queue: Queue
@@ -158,8 +159,11 @@ export class Player {
     }
 
     this.guildId = this.options.guildId
-    this.voiceChannelId = this.options.voiceChannelId
-    this.textChannelId = this.options.textChannelId || null
+    this.voiceChannelId = this.options.voiceChannelId || this.options.data?.voiceChannel || null
+    this.textChannelId = this.options.textChannelId || this.options.data?.textChannel || null
+
+    if (this.options.data?.paused !== undefined) this.paused = this.options.data.paused
+    if (this.options.data?.volume !== undefined) this.volume = this.options.data.volume
 
     this.node = typeof this.options.node === 'string' ? manager.nodeManager.nodes.get(this.options.node) : this.options.node
 
@@ -195,7 +199,13 @@ export class Player {
       )
     )
 
-    this.queue = new Queue(this.guildId, {}, new QueueSaver(manager.options.queueOptions), manager.options.queueOptions)
+    this.queue = new Queue(
+      this.guildId,
+      this.options.data || {},
+      new QueueSaver(manager.options.queueOptions),
+      manager.options.queueOptions,
+      this
+    )
 
     this.oldJSON = this.toJSON()
 
@@ -1097,6 +1107,15 @@ export class Autoplay {
     }
   }
 
+  private static normalizeTitle(title: string): string {
+    if (!title) return ''
+    const EXCLUDE_REGEX = /\[.*?\]|\(.*?\)|\{.*?\}|official|video|audio|lyrics|hq|hd|remastered|version|remix|ft\.|feat\.|featuring/gi;
+    return title.toLowerCase()
+      .replace(EXCLUDE_REGEX, '')
+      .replace(/[^a-z0-9]/g, '')
+      .trim();
+  }
+
   private static getHistory(player: Player, _config: AutoplayConfig): Set<string> {
     let buf = player.getData<string[]>('autoplay_history_buf')
     if (!Array.isArray(buf)) {
@@ -1107,8 +1126,15 @@ export class Autoplay {
     const combined = new Set<string>([...buf, ...player.recentHistory])
 
     if (player.queue.current?.info?.identifier) combined.add(player.queue.current.info.identifier)
-    player.queue.previous.forEach((t) => { if (t?.info?.identifier) combined.add(t.info.identifier) })
-    player.queue.tracks.forEach((t) => { if (t?.info?.identifier) combined.add(t.info.identifier) })
+    if (player.queue.current?.info?.title) combined.add('title:' + Autoplay.normalizeTitle(player.queue.current.info.title))
+    player.queue.previous.forEach((t) => { 
+      if (t?.info?.identifier) combined.add(t.info.identifier) 
+      if (t?.info?.title) combined.add('title:' + Autoplay.normalizeTitle(t.info.title))
+    })
+    player.queue.tracks.forEach((t) => { 
+      if (t?.info?.identifier) combined.add(t.info.identifier) 
+      if (t?.info?.title) combined.add('title:' + Autoplay.normalizeTitle(t.info.title))
+    })
     return combined
   }
 
@@ -1117,7 +1143,10 @@ export class Autoplay {
     let buf = player.getData<string[]>('autoplay_history_buf')
     if (!Array.isArray(buf)) buf = []
     buf.push(id)
-    if (buf.length > limit) buf.splice(0, buf.length - limit) 
+    if (player.queue.current?.info?.title) {
+       buf.push('title:' + Autoplay.normalizeTitle(player.queue.current.info.title))
+    }
+    if (buf.length > limit * 2) buf.splice(0, buf.length - (limit * 2)) 
     player.setData('autoplay_history_buf', buf)
 
     if (!player.recentHistory.includes(id)) {
@@ -1245,6 +1274,7 @@ export class Autoplay {
 
         if (history.has(t.info.identifier)) return false
         if (t.info.isrc && history.has(t.info.isrc)) return false
+        if (history.has('title:' + Autoplay.normalizeTitle(t.info.title))) return false
 
         if (t.info.duration < minDur || t.info.duration > maxDur) return false
 

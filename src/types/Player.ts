@@ -100,6 +100,7 @@ export interface PlayerOptions {
   onNodeFailover?: (player: any, from: any, to: any) => void
 
   trackResolveRetryLimit?: number
+  data?: Partial<StoredQueue>
 }
 
 export type anyObject = { [key: string | number]: string | number | null | anyObject }

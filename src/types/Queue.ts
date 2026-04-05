@@ -6,6 +6,11 @@ export interface StoredQueue {
   previous: Track[]
   tracks: (Track | UnresolvedTrack)[]
   position?: number
+  voiceChannel?: string | null
+  textChannel?: string | null
+  paused?: boolean
+  volume?: number
+  nodeId?: string
 }
 
 export interface QueueStoreManager {
@@ -15,9 +20,11 @@ export interface QueueStoreManager {
 
   delete: (guildId: string) => Awaitable<void | boolean>
 
+  keys: () => Awaitable<string[]>
+
   stringify: (value: StoredQueue | string) => Awaitable<StoredQueue | string>
 
-  parse: (value: StoredQueue | string) => Awaitable<Partial<StoredQueue>>
+  parse: (value: StoredQueue | string | undefined) => Awaitable<Partial<StoredQueue>>
 }
 
 export interface ManagerQueueOptions {

@@ -26,12 +26,13 @@
 ### Key Features
 
 - **Lavalink v4 Protocol** - Full support for the latest lavalink features, filters, and SponsorBlock.
-- **Cross-Platform Sources** - Built-in support for 20+ platforms including **Spotify**, **Apple Music**, **JioSaavn**, and more.
+- **Multiverse Source Support** - Industry-leading coverage for dozens of platforms including **Spotify**, **Apple Music**, **JioSaavn**, and more.
 - **Cross-Runtime Ready** - Optimized for **Node.js**, **Bun**, and **Deno**.
 - **Advanced Queue Persistence** - Built-in drivers for **Redis**, **Local Disk**, and **In-Memory** storage.
 - **High-Performance Audio** - Native fetch, efficient memory management, and parallel track loading.
 - **Dynamic Filter Stacking** - Non-destructive filter layering with built-in presets (**Pop**, **Electronic**, etc.).
 - **Proactive Automation** - Smart auto-pause/resume, empty channel handling, and resolution self-healing.
+- **Native Lyrics Integration** - Deep support for timed and text lyrics via `lavalyrics`.
 - **Memory-Optimized Registry** - Industry-leading `TrackRegistry` for zero-overhead large queue management.
 - **Strictly Type-Safe** - 100% TypeScript with advanced module augmentation support.
 
@@ -49,16 +50,13 @@ Introduces a **Proactive Smart Layer** that reduces developer boilerplate by aut
 
 ---
 
-## Supported Platforms
-
 Ryanlink provides industry-leading coverage with support for all major audio platforms and streaming services:
 
-| Category | Supported Platforms |
-| :--- | :--- |
-| **Premium Streaming** | Spotify, Apple Music, Deezer, Tidal, Amazon Music, Yandex Music, Qobuz |
-| **Social & Video** | YouTube, YouTube Music, SoundCloud, Instagram, TikTok, Twitch, Vimeo, Bilibili |
-| **Regional & Radio** | JioSaavn, Gaana, VK Music, Audiomack, Pandora, Last.fm, Mixcloud, Radiohost |
-| **Other** | Bandcamp, Local Files, HTTP/Stream links, Flowery TTS, Google Cloud TTS |
+### NodeLink Native
+`youtube`, `amazonmusic`, `anghami`, `applemusic`, `audiomack`, `audius`, `bandcamp`, `bilibili`, `bluesky`, `deezer`, `eternalbox`, `flowery`, `gaana`, `genius`, `google-tts`, `http`, `iheartradio`, `instagram`, `jiosaavn`, `kwai`, `lastfm`, `lazypytts`, `letrasmus`, `local`, `mixcloud`, `monochrome`, `netease`, `nicovideo`, `pandora`, `pinterest`, `pipertts`, `qobuz`, `reddit`, `rss`, `shazam`, `songlink`, `soundcloud`, `spotify`, `telegram`, `tidal`, `tumblr`, `twitch`, `twitter`, `vimeo`, `vkmusic`, `yandexmusic`
+
+### LavaSrc Plugin
+`youtube music`, `spotify`, `applemusic`, `deezer`, `yandexmusic`, `flowery-tts`, `tidal`, `qobuz`, `jiosaavn`, `amazonmusic`, `gaana`, `lastfm`, `pandora`, `audiomack`, `audius`, `anghami`, `shazam`, `instagram`, `google-tts`, `mixcloud`
 
 ---
 

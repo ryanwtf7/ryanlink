@@ -8,7 +8,83 @@ import type { InvalidRestRequest, AudioPlayerState } from './Utils'
 
 export type ModifyRequest = (options: RequestInit & { path: string; extraQueryUrlParams?: URLSearchParams }) => void
 
-export type SponsorBlockSegment = 'sponsor' | 'selfpromo' | 'interaction' | 'intro' | 'outro' | 'preview' | 'music_offtopic' | 'filler'
+export type SponsorBlockSegment = 'sponsor' | 'selfpromo' | 'interaction' | 'intro' | 'outro' | 'preview' | 'music_offtopic' | 'filler' | 'poi_highlight'
+
+export interface SponsorBlockOptions {
+  enabled?: boolean
+  categories?: SponsorBlockSegment[]
+  categoryBehaviors?: Record<string, string>
+  autoSkip?: boolean
+  fastForward?: boolean
+  minDuration?: number
+  minViews?: number
+  maxRetries?: number
+  requestTimeout?: number
+  segmentSkipping?: boolean
+  skipAccuracy?: number
+  strict?: boolean
+  userAgent?: string
+  voteThreshold?: number
+  allowVoting?: boolean
+  cacheExpiry?: number
+  cacheSize?: number
+}
+
+export interface LavaXMOptions {
+  amigaMixer?: boolean
+  ampFactor?: number
+  defaultPan?: number
+  fixSampleLoop?: boolean
+  fx9Bug?: boolean
+  interpolation?: number
+  vblank?: boolean
+}
+
+export interface DuncteBotOptions {
+  sources?: {
+    clypit?: boolean
+    getyarn?: boolean
+    mixcloud?: boolean
+    ocremix?: boolean
+    pixeldrain?: boolean
+    pornhub?: boolean
+    reddit?: boolean
+    soundgasm?: boolean
+    tiktok?: boolean
+    tts?: boolean
+  }
+  ttsLanguage?: string
+}
+
+export interface LavaDSPXOptions {
+  enabled?: boolean
+  normalization?: {
+    enabled?: boolean
+    maxAmplification?: number
+  }
+  'echo-cancellation'?: {
+    enabled?: boolean
+    strength?: number
+  }
+  highpass?: {
+    enabled?: boolean
+    cutoffFrequency?: number
+    order?: number
+  }
+  lowpass?: {
+    enabled?: boolean
+    cutoffFrequency?: number
+    order?: number
+  }
+}
+
+export interface LavaLyricsOptions {
+  sources?: string[]
+}
+
+export interface LavaSearchOptions {
+  [key: string]: unknown
+}
 
 export interface NodeConfiguration {
   nodeType?: NodeTypes
@@ -46,6 +122,18 @@ export interface NodeConfiguration {
 
     sourcesValidations?: boolean
   }
+
+  lavalyrics?: LavaLyricsOptions
+
+  lavasearch?: LavaSearchOptions
+
+  sponsorblock?: SponsorBlockOptions
+
+  xm?: LavaXMOptions
+
+  dunctebot?: DuncteBotOptions
+
+  lavadspx?: LavaDSPXOptions
 }
 
 export interface MemoryStats {
@@ -169,11 +257,20 @@ export interface PluginObject {
 }
 
 export interface LyricsResult {
+  type?: 'timed' | 'text'
+
+  track?: {
+    title: string
+    author: string
+    album: string | null
+    albumArt: { url: string; height: number; width: number }[]
+  }
+
   sourceName: string
 
   provider: string
 
-  text: string | null
+  text?: string | null
 
   lines: LyricsLine[]
 
@@ -181,11 +278,16 @@ export interface LyricsResult {
 }
 
 export interface LyricsLine {
-  timestamp: number
-
-  duration: number | null
-
   line: string
+
+  range?: {
+    start: number
+    end: number
+  }
+
+  timestamp?: number
+
+  duration?: number | null
 
   plugin: PluginInfo
 }

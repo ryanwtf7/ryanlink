@@ -89,20 +89,20 @@ Lyrics API hub — aggregates from LavaSrc, java-timed-lyrics, and other sources
 ### Methods
 
 ```typescript
-// Get lyrics for the current track (uses player session)
-const lyrics = await player.node.lyrics.getCurrent(player.guildId);
-const lyrics2 = await player.node.lyrics.getCurrent(player.guildId, true); // skipTrackSource
+// Search for lyrics globally across all providers
+const searchResults = await player.node.lyrics.search('never gonna give you up');
+// [{ videoId: '...', title: '...' }]
 
-// Get lyrics for a specific encoded track
-const lyrics3 = await player.node.lyrics.get(track, false);
+// Get lyrics by videoId
+const lyricsResult = await player.node.lyrics.getLyrics(searchResults[0].videoId);
 
-// Subscribe to real-time lyrics lines
+// Subscribe to real-time lyrics lines during playback
 await player.node.lyrics.subscribe(player.guildId);
 await player.node.lyrics.unsubscribe(player.guildId);
 
 // Convenience methods on the player
-const lyrics4 = await player.getCurrentLyrics();
-const lyrics5 = await player.getLyrics(track);
+const lyricsData = await player.getCurrentLyrics(); // Wrapper for node.lyrics.getCurrent
+const lyricsByTrack = await player.getLyrics(track); // Wrapper for node.lyrics.get
 player.subscribeLyrics();
 player.unsubscribeLyrics();
 ```

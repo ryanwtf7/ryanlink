@@ -69,6 +69,7 @@ export enum DebugEvents {
   NodeRawEvent = 'NodeRawEvent',
   NodeStatsUpdate = 'NodeStatsUpdate',
   NodeAtomicMigration = 'NodeAtomicMigration',
+  UpdateSessionFail = 'UpdateSessionFail',
 }
 
 export enum DestroyReasons {
@@ -93,7 +94,7 @@ export enum DisconnectReasons {
   DisconnectAllNodes = 'DisconnectAllNodes',
 }
 
-export const validSponsorBlocks = ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro', 'preview', 'music_offtopic', 'filler']
+export const validSponsorBlocks = ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro', 'preview', 'music_offtopic', 'filler', 'poi_highlight']
 
 export const audioOutputsData: Record<AudioOutputs, ChannelMixFilter> = {
   mono: {

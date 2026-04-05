@@ -19,6 +19,10 @@ export class MemoryQueueStore implements QueueStoreManager {
     return this.data.delete(guildId)
   }
 
+  async keys(): Promise<string[]> {
+    return Array.from(this.data.keys())
+  }
+
   async stringify(value: StoredQueue | string): Promise<StoredQueue | string> {
     return typeof value === 'object' ? JSON.stringify(value) : value
   }
@@ -60,6 +64,11 @@ export class LocalDiskQueueStore implements QueueStoreManager {
     if (existsSync(file)) unlinkSync(file)
   }
 
+  async keys(): Promise<string[]> {
+    if (!existsSync(this.path)) return []
+    return (await import('node:fs')).readdirSync(this.path).filter(f => f.endsWith('.json')).map(f => f.replace('.json', ''))
+  }
+
   async stringify(value: StoredQueue | string): Promise<string> {
     return typeof value === 'object' ? JSON.stringify(value) : value
   }
@@ -93,6 +102,11 @@ export class RedisQueueStore implements QueueStoreManager {
 
   async delete(guildId: string): Promise<void> {
     await this.redis.del(`${this.prefix}${guildId}`)
+  }
+
+  async keys(): Promise<string[]> {
+    const keys = (await (this.redis as any).keys(`${this.prefix}*`)) || []
+    return keys.map((k: string) => k.replace(this.prefix, ''))
   }
 
   async stringify(value: StoredQueue | string): Promise<string> {

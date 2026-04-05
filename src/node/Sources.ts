@@ -54,6 +54,7 @@ export const SourceMappings: Record<SearchPlatform, RyanlinkSearchPlatform | Cli
   qobuz: 'qbsearch',
   qbisrc: 'qbisrc',
   qbrec: 'qbrec',
+  qb: 'qbsearch',
 
   pandora: 'pdsearch',
   pd: 'pdsearch',
@@ -79,7 +80,6 @@ export const SourceMappings: Record<SearchPlatform, RyanlinkSearchPlatform | Cli
   porn: 'phsearch',
 
   local: 'local',
-
   http: 'http',
   https: 'https',
   link: 'link',
@@ -104,6 +104,7 @@ export const SourceMappings: Record<SearchPlatform, RyanlinkSearchPlatform | Cli
   shazam: 'shsearch',
   sh: 'shsearch',
   shsearch: 'shsearch',
+  szsearch: 'shsearch',
 
   instagram: 'igsearch',
   ig: 'igsearch',
@@ -128,6 +129,7 @@ export const SourceMappings: Record<SearchPlatform, RyanlinkSearchPlatform | Cli
   gn: 'gnsearch',
   gnsearch: 'gnsearch',
   gnrec: 'gnrec',
+  gaanasearch: 'gnsearch',
 
   mcsearch: 'mcsearch',
   mixcloud: 'mcsearch',
@@ -135,34 +137,45 @@ export const SourceMappings: Record<SearchPlatform, RyanlinkSearchPlatform | Cli
   ncsearch: 'ncsearch',
   nicovideo: 'ncsearch',
 
-  szsearch: 'shsearch', 
-
-  ebox: 'ebox',
-  jukebox: 'ebox',
+  ebsearch: 'ebsearch',
+  ebox: 'ebsearch',
+  jukebox: 'ebsearch',
+  eternalbox: 'ebsearch',
 
   slsearch: 'slsearch',
   songlink: 'slsearch',
   odesli: 'slsearch',
 
-  ausearch: 'ausearch',
-  audius: 'ausearch',
-
-  azsearch: 'azsearch',
-
-  agsearch: 'agsearch',
   anghami: 'agsearch',
+  ag: 'agsearch',
+  agsearch: 'agsearch',
+  agrec: 'agrec',
 
-  bksearch: 'bksearch',
-  bluesky: 'bksearch',
+  audius: 'ausearch',
+  ausearch: 'ausearch',
 
+  kwai: 'kwsearch',
+  kw: 'kwsearch',
+  kwsearch: 'kwsearch',
+
+  netease: 'nesearch',
+  ne: 'nesearch',
+  nesearch: 'nesearch',
+
+  letrasmus: 'lmsearch',
+  lm: 'lmsearch',
   lmsearch: 'lmsearch',
   letras: 'lmsearch',
 
+  monochrome: 'monosearch',
+  monosearch: 'monosearch',
+
+  bluesky: 'bksearch',
+  bksearch: 'bksearch',
+
+  azsearch: 'azsearch',
   pipertts: 'pipertts',
-
   gtts: 'gtts',
-
-  gaanasearch: 'gnsearch', 
 }
 
 export const BuiltinSources = {
@@ -240,10 +253,32 @@ export const LinkMatchers: Record<SourcesRegex, RegExp> = {
     /(https?:\/\/)(www\.)?open\.spotify\.com\/((?<region>[a-zA-Z-]+)\/)?(user\/(?<user>[a-zA-Z0-9-_]+)\/)?(?<type>track|album|playlist|artist|episode|show)\/(?<identifier>[a-zA-Z0-9-_]+)/,
 
   appleMusic: /https?:\/\/?(?:www\.)?music\.apple\.com\/(\S+)/,
-
   tidal: /https?:\/\/?(?:www\.)?(?:tidal|listen)\.tidal\.com\/(?<type>track|album|playlist|artist)\/(?<identifier>[a-zA-Z0-9-_]+)/,
-
   jiosaavn: /(https?:\/\/)(www\.)?jiosaavn\.com\/(?<type>song|album|featured|artist)\/([a-zA-Z0-9-_/,]+)/,
+
+  amazonmusic: /https?:\/\/(?:music|www)\.amazon\.(?:com|co\.uk|de|fr|es|it|co\.jp|ca|in|com\.br|com\.mx|com\.au)\/(\S+)/,
+  gaana: /https?:\/\/gaana\.com\/(?:song|album|playlist)\/(\S+)/,
+  audiomack: /https?:\/\/audiomack\.com\/(?:\w+)\/(?:song|album|playlist)\/(\S+)/,
+  shazam: /https?:\/\/(?:www\.)?shazam\.com\/(?:track|discover)\/(\S+)/,
+  qobuz: /https?:\/\/(?:www\.)?qobuz\.com\/(?:\w+)\/(?:album|track)\/(\S+)/,
+  bilibili: /https?:\/\/(?:www\.)?bilibili\.com\/video\/(\S+)/,
+  anghami: /https?:\/\/(?:www\.)?anghami\.com\/(?:song|album|playlist)\/(\S+)/,
+  audius: /https?:\/\/audius\.co\/(?:\w+)\/(\S+)/,
+  kwai: /https?:\/\/(?:www\.)?kwai\.com\/\S+/,
+  netease: /https?:\/\/music\.163\.com\/\S+/,
+  nicovideo: /https?:\/\/(?:www\.)?nicovideo\.jp\/watch\/(\S+)/,
+  instagram: /https?:\/\/(?:www\.)?instagram\.com\/(?:reels|p|tv)\/(\S+)/,
+  lastfm: /https?:\/\/(?:www\.)?last\.fm\/(?:music|user)\/(\S+)/,
+  letrasmus: /https?:\/\/(?:www\.)?letras\.mus\.br\/\S+/,
+  monochrome: /https?:\/\/(?:www\.)?monochrome\.net\/\S+/,
+  eternalbox: /https?:\/\/(?:www\.)?eternalbox\.dev\/\S+/,
+  bluesky: /https?:\/\/(?:www\.)?bsky\.app\/\S+/,
+  songlink: /https?:\/\/(?:www\.)?(?:song\.link|album\.link|odesli\.co)\/\S+/,
+  reddit: /https?:\/\/(?:www\.)?reddit\.com\/r\/\S+/,
+  tumblr: /https?:\/\/(?:www\.)?tumblr\.com\/\S+/,
+  twitter: /https?:\/\/(?:www\.)?(?:twitter|x)\.com\/\S+/,
+  pinterest: /https?:\/\/(?:www\.)?pinterest\.com\/\S+/,
+  iheartradio: /https?:\/\/(?:www\.)?iheart\.com\/\S+/,
 
   PandoraTrackRegex: /^@?(?:https?:\/\/)?(?:www\.)?pandora\.com\/artist\/[\w-]+(?:\/[\w-]+)*\/(?<identifier>TR[A-Za-z0-9]+)(?:[?#].*)?$/,
   PandoraAlbumRegex: /^@?(?:https?:\/\/)?(?:www\.)?pandora\.com\/artist\/[\w-]+(?:\/[\w-]+)*\/(?<identifier>AL[A-Za-z0-9]+)(?:[?#].*)?$/,

@@ -246,6 +246,58 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     return newPlayer
   }
 
+  public async resumePlayers(): Promise<void> {
+    if (!this.options.resuming?.enabled) return
+
+    const store = this.options.queueOptions.queueStore
+    if (typeof store.keys !== 'function') {
+        this.dispatchDebug(DebugEvents.NoAudioDebug, {
+            state: 'warn',
+            message: 'QueueStore does not support keys() method. Skipping resumePlayers().',
+            functionLayer: 'RyanlinkManager > resumePlayers()',
+        })
+        return
+    }
+
+    const keys = await store.keys()
+    
+    for (const guildId of keys) {
+        try {
+            const data = await store.get(guildId)
+            const parsed = await store.parse(data)
+            
+            if (parsed && (parsed.current || parsed.tracks?.length)) {
+                const player = this.createPlayer({
+                    guildId,
+                    voiceChannelId: parsed.voiceChannel,
+                    textChannelId: parsed.textChannel,
+                    node: parsed.nodeId || undefined,
+                    data: parsed,
+                })
+                
+                if (parsed.voiceChannel) {
+                    await player.connect().catch(() => {})
+                }
+                
+                if (parsed.current) {
+                    await player.play({
+                        paused: parsed.paused,
+                        volume: parsed.volume,
+                        startTime: parsed.position,
+                        clientTrack: parsed.current,
+                    }).catch(() => {})
+                }
+            }
+        } catch (e) {
+            this.dispatchDebug(DebugEvents.NoAudioDebug, {
+                state: 'error',
+                message: `Failed to resume player for guild ${guildId}: ${e.message}`,
+                functionLayer: 'RyanlinkManager > resumePlayers()',
+            })
+        }
+    }
+  }
+
   public async search(
     query: SearchQuery,
     requestUser?: unknown,
@@ -307,8 +359,10 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
         this.nodeManager.emit('error', err, node)
       }
     }
-    if (success > 0) this.initiated = true
-    else
+    if (success > 0) {
+      this.initiated = true
+      await this.resumePlayers().catch(() => {})
+    } else
       this.dispatchDebug(DebugEvents.FailedToConnectToNodes, {
         state: 'error',
         message: 'Failed to connect to at least 1 Node',

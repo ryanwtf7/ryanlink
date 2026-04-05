@@ -7,62 +7,34 @@ import { Badge } from '@astrojs/starlight/components';
 
 Ryanlink supports a vast array of search platforms. When performing a search using `manager.search()` or `player.search()`, pass a URL or a query string prefixed with one of the following identifiers.
 
-## Standard Platforms
+## NodeLink Professional Sources <Badge text="Requires NodeLink" variant="tip" />
 
-| Platform | Prefix(es) | Notes |
+NodeLink provides native, high-performance support for an extensive range of global and regional platforms.
+
+| Category | Supported Platforms |
+| :--- | :--- |
+| **Streaming** | `spotify`, `applemusic`, `deezer`, `tidal`, `amazonmusic`, `qobuz`, `audiomack`, `pandora`, `lastfm`, `gaana`, `jiosaavn`, `anghami`, `audius`, `netease`, `vkmusic`, `yandexmusic`, `myfreemp3` |
+| **Video & Music** | `youtube`, `youtube music`, `soundcloud`, `bandcamp`, `bilibili`, `nicovideo`, `vimeo`, `twitch`, `mixcloud`, `monochrome` |
+| **Social & News** | `instagram`, `tiktok`, `twitter`, `tumblr`, `reddit`, `pinterest`, `bluesky`, `telegram`, `rss` |
+| **Regional Content** | `kwai` (CN), `gaana` (IN), `jiosaavn` (IN), `netease` (CN), `vkmusic` (RU), `yandexmusic` (RU), `anghami` (MENA) |
+| **TTS & Utilities** | `google-tts`, `pipertts`, `flowery`, `lazypytts`, `letrasmus`, `genius`, `shazam`, `songlink`, `eternalbox`, `http`, `local` |
+
+## LavaSrc & LavaSearch Support <Badge text="Plugin Required" variant="caution" />
+
+When using the LavaSrc plugin, Ryanlink enables advanced features like ISRC resolution, recommendations, and rich metadata for these platforms:
+
+| Platform | Search Prefix | Features |
 | :--- | :--- | :--- |
-| **YouTube** | `ytsearch:`, `yt:`, `youtube:` | Standard video search |
-| **YouTube Music** | `ytmsearch:`, `ytm:`, `youtubemusic:` | Music-only search (recommended) |
-| **SoundCloud** | `scsearch:`, `sc:`, `soundcloud:` | Track search |
-| **Bandcamp** | `bcsearch:`, `bc:`, `bandcamp:` | Track search |
-
-## LavaSrc Plugin Platforms <Badge text="Requires lavasrc-plugin" variant="caution" />
-
-| Platform | Search | Recommendations | ISRC |
-| :--- | :--- | :--- | :--- |
-| **Spotify** | `spsearch:`, `sp:` | `sprec:` | — |
-| **Apple Music** | `amsearch:`, `am:` | — | — |
-| **Deezer** | `dzsearch:`, `dz:` | `dzrec:` | `dzisrc:` |
-| **Yandex Music** | `ymsearch:`, `yandex:` | `ymrec:` | — |
-| **VK Music** | `vksearch:`, `vk:` | `vkrec:` | — |
-| **Tidal** | `tdsearch:`, `td:` | `tdrec:` | — |
-| **JioSaavn** | `jssearch:`, `js:` | `jsrec:` | — |
-| **Qobuz** | `qbsearch:`, `qobuz:` | `qbrec:` | `qbisrc:` |
-| **Pandora** | `pdsearch:`, `pd:` | `pdrec:` | `pdisrc:` |
-| **Audiomack** | `admsearch:`, `adm:` | `admrec:` | — |
-| **Shazam** | `shsearch:`, `sh:` | — | — |
-| **Last.fm** | `lfsearch:`, `lf:` | — | — |
-| **Amazon Music** | `amzsearch:`, `amz:` | `amzrec:` | — |
-| **Gaana** | `gnsearch:`, `gn:` | `gnrec:` | — |
-| **Instagram** | `igsearch:`, `ig:` | — | — |
-| **Bilibili** | `blsearch:`, `bl:` | — | — |
-
-## NodeLink Exclusive Platforms <Badge text="Requires NodeLink" variant="tip" />
-
-| Platform | Prefix(es) | Description |
-| :--- | :--- | :--- |
-| **Mixcloud** | `mcsearch:`, `mixcloud:` | Track search |
-| **NicoVideo** | `ncsearch:`, `nicovideo:` | Video search |
-| **Songlink / Odesli** | `slsearch:`, `songlink:` | Aggregated search |
-| **Audius** | `ausearch:`, `audius:` | Track search |
-| **Amazon Music** | `azsearch:` | NodeLink alias |
-| **Anghami** | `agsearch:`, `anghami:` | Track search |
-| **Bluesky** | `bksearch:`, `bluesky:` | Media search |
-| **Letras.mus.br** | `lmsearch:`, `letras:` | Lyrics/meaning search |
-| **Eternal Box** | `ebox:`, `jukebox:` | Infinite Jukebox search |
-| **Piper TTS** | `pipertts:` | Local text-to-speech |
-| **Google TTS** | `gtts:`, `speak:` | Google Cloud TTS |
-
-## TTS & Special Sources
-
-| Source | Prefix(es) | Plugin Required |
-| :--- | :--- | :--- |
-| **Flowery TTS** | `ftts:`, `flowery:` | Built-in |
-| **Google Cloud TTS** | `tts:` | `tts-plugin` (DuncteBot) |
-| **DuncteBot speak** | `speak:` | `skybot-lavalink-plugin` |
-| **PornHub** | `phsearch:`, `pornhub:` | `skybot-lavalink-plugin` |
-| **Local File** | `local:` | Node filesystem access |
-| **HTTP(S) URL** | `http:`, `https:`, `link:`, `uri:` | Direct URL playback |
+| **Spotify** | `spsearch:` | Albums, Playlists, Tracks, Recommendations |
+| **Apple Music** | `amsearch:` | Albums, Playlists, Tracks |
+| **Deezer** | `dzsearch:` | Albums, Playlists, Tracks, ISRC |
+| **YouTube Music** | `ytmsearch:` | Video & Audio isolation |
+| **Tidal** | `tdsearch:` | High-fidelity track resolution |
+| **JioSaavn** | `jssearch:` | Regional playlists and charts |
+| **Amazon Music** | `amzsearch:` | Full catalog search |
+| **Instagram** | `igsearch:` | Audio from Reels and Posts |
+| **Google TTS** | `google-tts:` | Cloud-powered text-to-speech |
+| **Mixcloud** | `mixcloud:` | Long-form radio and DJ sets |
 
 ## Setting a Default Platform
 

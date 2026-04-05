@@ -3,7 +3,7 @@ import { isRegExp } from 'node:util/types'
 
 import { DebugEvents } from '../config/Constants'
 import type { RyanlinkManager } from '../core/Manager'
-import { SourceMappings, BuiltinSources, LinkMatchers } from '../node/Sources'
+import { SourceMappings, LinkMatchers } from '../node/Sources'
 import type { RyanlinkNode } from '../node/Node'
 import type { Player } from '../audio/Player'
 import type { NodeConfiguration, NodeTypes } from '../types/Node'
@@ -71,8 +71,8 @@ export class RyanlinkUtils {
         encoded: data.encoded,
         info: {
           identifier: data.info.identifier,
-          title: data.info.title,
-          author: data.info.author,
+          title: data.info.title || data.pluginInfo?.title || (data as any).plugin?.title || 'Unknown Title',
+          author: data.info.author || data.pluginInfo?.author || (data as any).plugin?.author || 'Unknown Artist',
           duration: (data as Track).info?.duration || (data as AudioTrack).info?.length,
           artworkUrl: data.info.artworkUrl || data.pluginInfo?.artworkUrl || (data as any).plugin?.artworkUrl,
           uri: data.info.uri,
@@ -305,57 +305,32 @@ export class RyanlinkUtils {
 
     if (!node._checkForSources) return
 
-    if (
-      (LinkMatchers.YoutubeMusicRegex.test(queryString) || LinkMatchers.YoutubeRegex.test(queryString)) &&
-      !node.info?.sourceManagers?.includes('youtube')
-    ) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'youtube' enabled")
+    const sourceManagers = node.info.sourceManagers || []
+    const plugins = node.info.plugins || []
+
+    for (const [name, matcher] of Object.entries(LinkMatchers)) {
+      if (!(matcher instanceof RegExp) || name === 'CombinedRegex') continue
+
+      if (matcher.test(queryString)) {
+        let sourceName = name.toLowerCase().replace('redex', '').replace('regex', '').replace('all', '')
+        
+        // Specific mapping for sources where the Matcher name doesn't align exactly with the sourceManager name (Lavalink conventions)
+        if (sourceName === 'yt' || sourceName === 'youtube') sourceName = 'youtube'
+        if (sourceName === 'sc' || sourceName === 'soundcloud') sourceName = 'soundcloud'
+        if (sourceName === 'applemusic') sourceName = 'applemusic'
+        if (sourceName === 'yandexmusic') sourceName = 'yandexmusic'
+        if (sourceName === 'vkmusic') sourceName = 'vkmusic'
+        if (sourceName === 'flowerytts') sourceName = 'flowery-tts'
+        
+        const isSupported = sourceManagers.includes(sourceName) || 
+                           plugins.some(p => p.name.toLowerCase().includes(sourceName))
+
+        if (!isSupported) {
+          throw new Error(`Query / Link Provided for this Source but Audio Node has not '${sourceName}' enabled`)
+        }
+        return
+      }
     }
-    if (
-      (LinkMatchers.SoundCloudMobileRegex.test(queryString) || LinkMatchers.SoundCloudRegex.test(queryString)) &&
-      !node.info?.sourceManagers?.includes('soundcloud')
-    ) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'soundcloud' enabled")
-    }
-    if (LinkMatchers.bandcamp.test(queryString) && !node.info?.sourceManagers?.includes('bandcamp')) {
-      throw new Error(
-        "Query / Link Provided for this Source but Audio Node has not 'bandcamp' enabled (introduced with audio-engine 2.2.0+)"
-      )
-    }
-    if (LinkMatchers.TwitchTv.test(queryString) && !node.info?.sourceManagers?.includes('twitch')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'twitch' enabled")
-    }
-    if (LinkMatchers.vimeo.test(queryString) && !node.info?.sourceManagers?.includes('vimeo')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'vimeo' enabled")
-    }
-    if (LinkMatchers.tiktok.test(queryString) && !node.info?.sourceManagers?.includes('tiktok')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'tiktok' enabled")
-    }
-    if (LinkMatchers.mixcloud.test(queryString) && !node.info?.sourceManagers?.includes('mixcloud')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'mixcloud' enabled")
-    }
-    if (LinkMatchers.AllSpotifyRegex.test(queryString) && !node.info?.sourceManagers?.includes('spotify')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'spotify' enabled")
-    }
-    if (LinkMatchers.appleMusic.test(queryString) && !node.info?.sourceManagers?.includes('applemusic')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'applemusic' enabled")
-    }
-    if (LinkMatchers.AllDeezerRegex.test(queryString) && !node.info?.sourceManagers?.includes('deezer')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'deezer' enabled")
-    }
-    if (LinkMatchers.musicYandex.test(queryString) && !node.info?.sourceManagers?.includes('yandexmusic')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'yandexmusic' enabled")
-    }
-    if (LinkMatchers.jiosaavn.test(queryString) && !node.info?.sourceManagers?.includes('jiosaavn')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'jiosaavn' enabled")
-    }
-    if (LinkMatchers.tidal.test(queryString) && !node.info?.sourceManagers?.includes('tidal')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'tidal' enabled")
-    }
-    if (LinkMatchers.AllPandoraRegex.test(queryString) && !node.info?.sourceManagers?.includes('pandora')) {
-      throw new Error("Query / Link Provided for this Source but Audio Node has not 'pandora' enabled")
-    }
-    return
   }
 
   findSourceOfQuery(queryString: string) {
@@ -433,111 +408,38 @@ export class RyanlinkUtils {
   validateSourceString(node: RyanlinkNode, sourceString: SearchPlatform) {
     if (!sourceString) throw new Error(`No SourceString was provided`)
     const source = SourceMappings[sourceString.toLowerCase().trim()] as RyanlinkSearchPlatform
-    if (!source && !!this.RyanlinkManager.options.playerOptions.allowCustomSources)
-      throw new Error(
-        `Ryanlink does not support SearchQuerySource: '${sourceString}'. You can disable this check by setting 'ManagerOptions.PlayerOptions.allowCustomSources' to true`
-      )
-
+    
     if (!node.info) throw new Error('Audio Node does not have any info cached yet, not ready yet!')
-
     if (!node._checkForSources) return
 
-    const lavaSrcSources = [
-      'spsearch', 'sprec',           
-      'amsearch',                     
-      'dzsearch', 'dzisrc', 'dzrec', 
-      'ymsearch', 'ymrec',           
-      'vksearch', 'vkrec',           
-      'tdsearch', 'tdrec',           
-      'jssearch', 'jsrec',           
-      'admsearch', 'admrec',         
-      'shsearch',                    
-      'lfsearch',                    
-      'amzsearch', 'amzrec',         
-      'gnsearch', 'gnrec',           
-      'qbsearch', 'qbisrc', 'qbrec', 
-      'pdsearch', 'pdisrc', 'pdrec', 
-    ]
-    if (lavaSrcSources.includes(source) && node._checkForPlugins) {
-      const hasLavaSrc = node.info?.plugins?.some((p) =>
-        p.name === 'lavasrc-plugin' || p.name.toLowerCase().includes('lavasrc')
-      )
-      if (!hasLavaSrc)
-        throw new Error(`Audio Node requires 'lavasrc-plugin' for source '${source}'`)
-    }
+    const sourceManagers = node.info.sourceManagers || []
+    const plugins = node.info.plugins || []
 
-    if (source === 'amsearch' && !node.info?.sourceManagers?.includes('applemusic')) {
-      throw new Error("Audio Node has not 'applemusic' enabled, which is required to have 'amsearch' work")
-    }
-    if ((source === 'dzisrc' || source === 'dzsearch' || source === 'dzrec') && !node.info?.sourceManagers?.includes('deezer')) {
-      throw new Error("Audio Node has not 'deezer' enabled, which is required to have '" + source + "' work")
-    }
-    if (source === 'dzisrc' && node.info?.sourceManagers?.includes('deezer') && !node.info?.sourceManagers?.includes('http')) {
-      throw new Error("Audio Node has not 'http' enabled, which is required to have 'dzisrc' to work")
-    }
-    if ((source === 'jsrec' || source === 'jssearch') && !node.info?.sourceManagers?.includes('jiosaavn')) {
-      throw new Error("Audio Node has not 'jiosaavn' enabled, which is required to have '" + source + "' work")
-    }
-    if (source === 'scsearch' && !node.info?.sourceManagers?.includes('soundcloud')) {
-      throw new Error("Audio Node has not 'soundcloud' enabled, which is required to have 'scsearch' work")
-    }
-    if ((source === 'tdsearch' || source === 'tdrec') && !node.info?.sourceManagers?.includes('tidal')) {
-      throw new Error("Audio Node has not 'tidal' enabled, which is required to have '" + source + "' work")
-    }
-    if ((source === 'ymsearch' || source === 'ymrec') && !node.info?.sourceManagers?.includes('yandexmusic')) {
-      throw new Error("Audio Node has not 'yandexmusic' enabled, which is required to have '" + source + "' work")
-    }
-    if ((source === 'ytmsearch' || source === 'ytsearch') && !node.info?.sourceManagers?.includes('youtube')) {
-      throw new Error("Audio Node has not 'youtube' enabled, which is required to have '" + source + "' work")
-    }
-    if ((source === 'vksearch' || source === 'vkrec') && !node.info?.sourceManagers?.includes('vkmusic')) {
-      throw new Error("Audio Node has not 'vkmusic' enabled, which is required to have '" + source + "' work")
-    }
-    if ((source === 'qbsearch' || source === 'qbisrc' || source === 'qbrec') && !node.info?.sourceManagers?.includes('qobuz')) {
-      throw new Error("Audio Node has not 'qobuz' enabled, which is required to have '" + source + "' work")
-    }
-    if ((source === 'pdsearch' || source === 'pdisrc' || source === 'pdrec') && !node.info?.sourceManagers?.includes('pandora')) {
-      throw new Error("Audio Node has not 'pandora' enabled, which is required to have '" + source + "' work")
-    }
+    // Normalize source string for dynamic comparison
+    let normalized = source?.toLowerCase()
+      .replace('search', '')
+      .replace('rec', '')
+      .replace('isrc', '')
+      .replace('music', '')
 
-    if (
-      source === 'speak' &&
-      node._checkForPlugins &&
-      !node.info?.plugins?.find((c) =>
-        c.name === 'skybot-lavalink-plugin' ||
-        c.name.toLowerCase().includes(BuiltinSources.DuncteBot_Plugin.toLowerCase())
-      )
-    ) {
-      throw new Error("Audio Node has not 'speak' enabled — requires 'skybot-lavalink-plugin'")
-    }
-    if (
-      source === 'phsearch' &&
-      node._checkForPlugins &&
-      !node.info?.plugins?.find((c) => c.name === 'skybot-lavalink-plugin')
-    ) {
-      throw new Error("Audio Node has not 'phsearch' enabled — requires 'skybot-lavalink-plugin'")
-    }
-    if (
-      source === 'tts' &&
-      node._checkForPlugins &&
-      !node.info?.plugins?.find((c) =>
-        c.name === 'tts-plugin' ||
-        c.name.toLowerCase().includes(BuiltinSources.GoogleCloudTTS.toLowerCase())
-      )
-    ) {
-      throw new Error("Audio Node has not 'tts' enabled — requires 'tts-plugin'")
-    }
-    if (
-      source === 'ftts' &&
-      !(
-        node.info?.sourceManagers?.includes('ftts') ||
-        node.info?.sourceManagers?.includes('flowery-tts') ||
-        node.info?.sourceManagers?.includes('flowerytts')
-      )
-    ) {
-      throw new Error("Audio Node has not 'flowery-tts' enabled, which is required to have 'ftts' work")
-    }
+    if (normalized === 'am') normalized = 'applemusic'
+    if (normalized === 'yt') normalized = 'youtube'
+    if (normalized === 'sc') normalized = 'soundcloud'
+    if (normalized === 'sp') normalized = 'spotify'
+    if (normalized === 'dz') normalized = 'deezer'
+    if (normalized === 'ym') normalized = 'yandexmusic'
+    if (normalized === 'vk') normalized = 'vkmusic'
+    if (normalized === 'qb') normalized = 'qobuz'
+    if (normalized === 'pd') normalized = 'pandora'
+    if (normalized === 'ftts') normalized = 'flowery-tts'
 
+    const isSupported = sourceManagers.includes(normalized) || 
+                       sourceManagers.some(s => s.replace('-', '').includes(normalized)) ||
+                       plugins.some(p => p.name.toLowerCase().includes(normalized))
+
+    if (!isSupported && !this.RyanlinkManager.options.playerOptions.allowCustomSources) {
+       throw new Error(`Audio Node has not '${normalized}' enabled, which is required to have '${source}' work`)
+    }
     return
   }
 }
@@ -632,14 +534,14 @@ export async function applyUnresolvedData(resTrack: Track, data: UnresolvedTrack
   if (!resTrack?.info || !data?.info) return
   if (data.info.uri) resTrack.info.uri = data.info.uri
   if (utils?.RyanlinkManager?.options?.playerOptions?.useUnresolvedData === true) {
-    if (data.info.artworkUrl?.length) resTrack.info.artworkUrl = data.info.artworkUrl
-    if (data.info.title?.length) resTrack.info.title = data.info.title
-    if (data.info.author?.length) resTrack.info.author = data.info.author
+    if (data.info.artworkUrl?.length || data.pluginInfo?.artworkUrl) resTrack.info.artworkUrl = data.info.artworkUrl || data.pluginInfo?.artworkUrl
+    if (data.info.title?.length || data.pluginInfo?.title) resTrack.info.title = data.info.title || data.pluginInfo?.title
+    if (data.info.author?.length || data.pluginInfo?.author) resTrack.info.author = data.info.author || data.pluginInfo?.author
   } else {
-    if ((resTrack.info.title === 'Unknown title' || resTrack.info.title === 'Unspecified description') && resTrack.info.title != data.info.title)
-      resTrack.info.title = data.info.title
-    if (resTrack.info.author !== data.info.author) resTrack.info.author = data.info.author
-    if (resTrack.info.artworkUrl !== data.info.artworkUrl) resTrack.info.artworkUrl = data.info.artworkUrl
+    if ((resTrack.info.title === 'Unknown title' || resTrack.info.title === 'Unspecified description') && (resTrack.info.title != data.info.title || data.pluginInfo?.title))
+      resTrack.info.title = data.info.title || data.pluginInfo?.title || resTrack.info.title
+    if (resTrack.info.author !== data.info.author || data.pluginInfo?.author) resTrack.info.author = data.info.author || data.pluginInfo?.author || resTrack.info.author
+    if (resTrack.info.artworkUrl !== data.info.artworkUrl || data.pluginInfo?.artworkUrl) resTrack.info.artworkUrl = data.info.artworkUrl || data.pluginInfo?.artworkUrl || resTrack.info.artworkUrl
   }
   for (const key of Object.keys(data.info))
     if (typeof resTrack.info[key] === 'undefined' && key !== 'resolve' && data.info[key]) resTrack.info[key] = data.info[key]
