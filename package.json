@@ -9,11 +9,14 @@
     "discord",
     "ryanlink",
     "audio",
+    "lavalink",
+    "lavasrc",
+    "lavalyrics",
     "music",
     "typescript",
     "audio-engine"
   ],
-  "homepage": "https://github.com/ryanwtf7/ryanlink",
+  "homepage": "https://ryanwtf7.github.io/ryanlink",
   "bugs": {
     "url": "https://github.com/ryanwtf7/ryanlink/issues"
   },

@@ -70,6 +70,7 @@ export enum DebugEvents {
   NodeStatsUpdate = 'NodeStatsUpdate',
   NodeAtomicMigration = 'NodeAtomicMigration',
   UpdateSessionFail = 'UpdateSessionFail',
+  NodeError = 'NodeError',
 }
 
 export enum DestroyReasons {

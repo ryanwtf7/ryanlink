@@ -1447,7 +1447,7 @@ export class RyanlinkNode {
         }
         break
       case 'event':
-        this.handleEvent(payload)
+        await this.handleEvent(payload)
         break
       case 'ready':
         this.resetReconnectionAttempts()
@@ -1492,43 +1492,43 @@ export class RyanlinkNode {
 
     switch (payload.type) {
       case 'ReadyEvent':
-        if (this.info?.isNodelink === true) this.trackStart(player, player.queue.current as Track, payload as any)
+        if (this.info?.isNodelink === true) await this.trackStart(player, player.queue.current as Track, payload as any)
         break
       case 'TrackStartEvent':
-        this.trackStart(player, player.queue.current as Track, payload as TrackStartEvent)
+        await this.trackStart(player, player.queue.current as Track, payload as TrackStartEvent)
         break
       case 'TrackEndEvent':
-        this.trackEnd(player, player.queue.current as Track, payload as TrackEndEvent)
+        await this.trackEnd(player, player.queue.current as Track, payload as TrackEndEvent)
         break
       case 'TrackStuckEvent':
-        this.trackStuck(player, player.queue.current as Track, payload as TrackStuckEvent)
+        await this.trackStuck(player, player.queue.current as Track, payload as TrackStuckEvent)
         break
       case 'TrackExceptionEvent':
-        this.trackError(player, player.queue.current as Track, payload as TrackExceptionEvent)
+        await this.trackError(player, player.queue.current as Track, payload as TrackExceptionEvent)
         break
       case 'WebSocketClosedEvent':
         this.socketClosed(player, payload as WebSocketClosedEvent)
         break
       case 'SegmentsLoaded':
-        this.SponsorBlockSegmentLoaded(player, player.queue.current as Track, payload)
+        await this.SponsorBlockSegmentLoaded(player, player.queue.current as Track, payload)
         break
       case 'SegmentSkipped':
-        this.SponsorBlockSegmentSkipped(player, player.queue.current as Track, payload)
+        await this.SponsorBlockSegmentSkipped(player, player.queue.current as Track, payload)
         break
       case 'ChaptersLoaded':
-        this.SponsorBlockChaptersLoaded(player, player.queue.current as Track, payload)
+        await this.SponsorBlockChaptersLoaded(player, player.queue.current as Track, payload)
         break
       case 'ChapterStarted':
-        this.SponsorBlockChapterStarted(player, player.queue.current as Track, payload)
+        await this.SponsorBlockChapterStarted(player, player.queue.current as Track, payload)
         break
       case 'LyricsLineEvent':
-        this.LyricsLine(player, player.queue.current as Track, payload)
+        await this.LyricsLine(player, player.queue.current as Track, payload)
         break
       case 'LyricsFoundEvent':
-        this.LyricsFound(player, player.queue.current as Track, payload)
+        await this.LyricsFound(player, player.queue.current as Track, payload)
         break
       case 'LyricsNotFoundEvent':
-        this.LyricsNotFound(player, player.queue.current as Track, payload)
+        await this.LyricsNotFound(player, player.queue.current as Track, payload)
         break
       default:
         this.NodeManager.emit(

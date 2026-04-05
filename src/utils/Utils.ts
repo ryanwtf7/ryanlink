@@ -342,7 +342,7 @@ export class RyanlinkUtils {
     if (foundSource && !['https', 'http'].includes(foundSource) && SourceMappings[foundSource]) {
       return foundSource
     }
-    return null
+    return undefined
   }
 
   extractSourceOfQuery<T extends { query: string; source?: string }>(searchQuery: T): T {

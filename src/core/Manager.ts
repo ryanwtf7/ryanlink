@@ -222,6 +222,16 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     this.validateOptions(this.options)
 
     this.nodeManager = new NodeManager(this as RyanlinkManager)
+    this.nodeManager.on('error', (error, node) => {
+      if (this.options?.advancedOptions?.enableDebugEvents) {
+        this.emit('debug', DebugEvents.NodeError, {
+          state: 'error',
+          error: error,
+          message: `Node "${node.id}" encountered an error: ${error.message}`,
+          functionLayer: 'RyanlinkManager > nodeManager > error',
+        })
+      }
+    })
   }
 
   public toJSON() {

@@ -55,13 +55,17 @@ describe('Constants', () => {
     it('contains expected values', () => {
       expect(validSponsorBlocks).toContain('sponsor')
       expect(validSponsorBlocks).toContain('selfpromo')
+      expect(validSponsorBlocks).toContain('interaction')
       expect(validSponsorBlocks).toContain('intro')
       expect(validSponsorBlocks).toContain('outro')
+      expect(validSponsorBlocks).toContain('preview')
       expect(validSponsorBlocks).toContain('music_offtopic')
+      expect(validSponsorBlocks).toContain('filler')
+      expect(validSponsorBlocks).toContain('poi_highlight')
     })
 
-    it('has 8 entries', () => {
-      expect(validSponsorBlocks).toHaveLength(8)
+    it('has 9 entries', () => {
+      expect(validSponsorBlocks).toHaveLength(9)
     })
   })
 
