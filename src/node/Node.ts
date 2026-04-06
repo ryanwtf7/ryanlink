@@ -737,7 +737,17 @@ export class RyanlinkNode {
           throw new RangeError(`No lyrics plugin found on node ${this.id}. Expected: lavalyrics-plugin, java-lyrics-plugin, lyrics, or lavasrc-plugin.`)
       }
 
-      const url = `/lyrics?track=${track.encoded}&skipTrackSource=${skipTrackSource}`
+      let encoded = track.encoded
+      if (!encoded && track.info?.uri) {
+        try {
+          const res = await this._LManager.search({ query: track.info.uri }, 'LyricsResolve', this) as any
+          encoded = res?.tracks?.[0]?.encoded
+        } catch { /* unable to resolve encoded */ }
+      }
+
+      if (!encoded) return null
+
+      const url = `/lyrics?track=${encodeURIComponent(encoded)}&skipTrackSource=${skipTrackSource}`
       return (await this.request(url)) as LyricsResult | null
     },
 
@@ -1088,6 +1098,29 @@ export class RyanlinkNode {
     return this.nodeType === 'NodeLink'
   }
 
+  private applyPluginDefaults(): void {
+    if (!this.info?.plugins) return
+
+    const plugins = this.info.plugins as any[]
+
+    for (const plugin of plugins) {
+      const config = plugin.config || plugin.options
+      if (config && typeof config === 'object') {
+        const name = plugin.name.toLowerCase()
+
+        if (name === 'sponsorblock-plugin') {
+          this.options.sponsorblock = { ...config, ...this.options.sponsorblock }
+        } else if (name.includes('lavadspx')) {
+          this.options.lavadspx = { ...config, ...this.options.lavadspx }
+        } else if (name.includes('lava-xm')) {
+          this.options.xm = { ...config, ...this.options.xm }
+        } else if (name.includes('lavalyrics')) {
+          this.options.lavalyrics = { ...config, ...this.options.lavalyrics }
+        }
+      }
+    }
+  }
+
   public isRyanlinkNode(): this is RyanlinkNode {
     return this.nodeType === 'Core'
   }
@@ -1298,6 +1331,7 @@ export class RyanlinkNode {
     }
 
     this.info = await this.fetchInfo().catch((e) => (console.error(e, 'ON-OPEN-FETCH'), null))
+    this.applyPluginDefaults()
 
     if (!this.info && ['v3', 'v4'].includes(this.version)) {
       const errorString = `Audio Node(${this.restAddress}) does not provide any / ${this.version}/info`
@@ -1317,7 +1351,6 @@ export class RyanlinkNode {
     }
 
     this.NodeManager.emit('connect', this)
-    console.log(`\x1b[32m[Ryanlink]\x1b[0m Node \x1b[36m${this.id}\x1b[0m connected successfully.`)
   }
 
   private close(code: number, reason: string): void {
@@ -1593,6 +1626,17 @@ export class RyanlinkNode {
     }
 
     this._LManager.emit('trackStart', player, player.queue.current, payload)
+
+    if (this.options.lavalyrics !== undefined || this.info?.plugins?.some((v) =>
+      v.name === 'lavalyrics-plugin' ||
+      v.name === 'java-lyrics-plugin' ||
+      v.name === 'lyrics' ||
+      v.name === 'lavasrc-plugin'
+    )) {
+      this.lyrics.subscribe(player.guildId, true)
+        .catch(() => {})
+    }
+
     return
   }
 

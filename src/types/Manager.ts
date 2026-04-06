@@ -154,6 +154,8 @@ export interface ManagerPlayerOptions<CustomPlayerT extends Player = Player> {
   onQueueEnd?: (player: CustomPlayerT) => void
 
   onNodeFailover?: (player: CustomPlayerT, from: any, to: any) => void
+
+  fetchRelated?: (player: CustomPlayerT, track: Track) => Promise<Track[]>
 }
 
 export type DeepRequired<T> = {

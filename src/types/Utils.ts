@@ -499,25 +499,6 @@ export interface LyricsSearchResult {
   title: string
 }
 
-export interface LyricsFoundEvent extends PlayerEvent {
-  type: 'LyricsFoundEvent'
-  guildId: string
-  lyrics: LyricsResult
-}
-
-export interface LyricsNotFoundEvent extends PlayerEvent {
-  type: 'LyricsNotFoundEvent'
-  guildId: string
-}
-
-export interface LyricsLineEvent extends PlayerEvent {
-  type: 'LyricsLineEvent'
-  guildId: string
-  lineIndex: number
-  line: LyricsLine
-  skipped: boolean
-}
-
 export interface ReadyEvent extends PlayerEvent {
   type: 'ReadyEvent'
   guildId: string

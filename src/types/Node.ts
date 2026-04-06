@@ -257,15 +257,6 @@ export interface PluginObject {
 }
 
 export interface LyricsResult {
-  type?: 'timed' | 'text'
-
-  track?: {
-    title: string
-    author: string
-    album: string | null
-    albumArt: { url: string; height: number; width: number }[]
-  }
-
   sourceName: string
 
   provider: string
@@ -280,12 +271,7 @@ export interface LyricsResult {
 export interface LyricsLine {
   line: string
 
-  range?: {
-    start: number
-    end: number
-  }
-
-  timestamp?: number
+  timestamp: number
 
   duration?: number | null
 

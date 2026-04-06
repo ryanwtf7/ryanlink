@@ -92,15 +92,17 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
           durationTolerance: options?.playerOptions?.autoplayConfig?.durationTolerance ?? 90000,
           historyLimit: options?.playerOptions?.autoplayConfig?.historyLimit ?? 20,
           prefetchThreshold: options?.playerOptions?.autoplayConfig?.prefetchThreshold ?? 1,
+          fetchRelatedTracks: options?.playerOptions?.autoplayConfig?.fetchRelatedTracks ?? undefined,
         },
         volumeDecrementer: options?.playerOptions?.volumeDecrementer ?? 1,
         requesterTransformer: options?.playerOptions?.requesterTransformer ?? null,
         useUnresolvedData: options?.playerOptions?.useUnresolvedData ?? false,
         minAutoPlayMs: options?.playerOptions?.minAutoPlayMs ?? 10_000,
         maxErrorsPerTime: {
-          threshold: options?.playerOptions?.maxErrorsPerTime?.threshold ?? 35_000,
-          maxAmount: options?.playerOptions?.maxErrorsPerTime?.maxAmount ?? 3,
+          threshold: options?.playerOptions?.maxErrorsPerTime?.threshold ?? 10,
+          maxAmount: options?.playerOptions?.maxErrorsPerTime?.maxAmount ?? 5,
         },
+        fetchRelated: options?.playerOptions?.fetchRelated ?? undefined,
         enforceSponsorBlockRequestForEventEnablement: options?.playerOptions?.enforceSponsorBlockRequestForEventEnablement ?? true,
         trackResolveRetryLimit: options?.playerOptions?.trackResolveRetryLimit ?? options?.trackResolveRetryLimit ?? 3,
         onTrackStart: options?.playerOptions?.onTrackStart ?? options?.onTrackStart ?? null,
@@ -206,7 +208,7 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     ..._consoleArgs: unknown[]
   ): void {
     this.dispatchDebug(DebugEvents.NoAudioDebug, { state, functionLayer, message: messages.message })
-    if (this.options?.advancedOptions?.debugOptions?.noAudio) {
+    if (this.options?.advancedOptions?.debugOptions?.noAudio && this.options?.advancedOptions?.enableDebugEvents) {
       const color = state === 'error' ? '\x1b[31m' : state === 'warn' ? '\x1b[33m' : '\x1b[34m'
       console.log(`${color}[NoAudioDebug]\x1b[0m ${messages.consoleMessage || messages.message}`, ..._consoleArgs)
     }

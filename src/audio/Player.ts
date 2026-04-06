@@ -39,6 +39,8 @@ export interface AutoplayConfig {
   historyLimit?: number
 
   prefetchThreshold?: number
+
+  fetchRelatedTracks?: (player: Player, track: Track) => Promise<Track[]>
 }
 export class Player {
   public filterManager: FilterManager
@@ -53,7 +55,7 @@ export class Player {
     return (this as any)[NodeSymbol]
   }
   public set node(node: RyanlinkNode | NodeLinkNode) {
-    ;(this as any)[NodeSymbol] = node
+    ; (this as any)[NodeSymbol] = node
     this.options.node = node?.id || node
   }
 
@@ -111,11 +113,11 @@ export class Player {
     sessionId: string | null
     channelId: string | null
   } = {
-    endpoint: null,
-    sessionId: null,
-    token: null,
-    channelId: null,
-  }
+      endpoint: null,
+      sessionId: null,
+      token: null,
+      channelId: null,
+    }
 
   public voiceState: {
     selfDeaf: boolean
@@ -144,9 +146,9 @@ export class Player {
   }
 
   constructor(options: PlayerOptions, manager: RyanlinkManager, _dontEmitPlayerCreateEvent?: boolean) {
-    ;(this as any)[ManagerSymbol] = manager
+    ; (this as any)[ManagerSymbol] = manager
     this.options = options
-    
+
     if (typeof options?.customData === 'object') for (const [key, value] of Object.entries(options.customData)) this.setData(key, value)
 
     this.filterManager = new FilterManager(this)
@@ -210,7 +212,7 @@ export class Player {
     this.oldJSON = this.toJSON()
 
     if (manager.options.resuming.enabled) {
-      this.autoResume().catch(() => {})
+      this.autoResume().catch(() => { })
     }
   }
 
@@ -287,7 +289,7 @@ export class Player {
         } catch (error) {
           this.resolveRetryCount++
           const limit = this.options.trackResolveRetryLimit || 3
-          
+
           this.dispatchDebug(DebugEvents.PlayerPlayUnresolvedTrackFailed, {
             state: 'error',
             error: error,
@@ -297,9 +299,9 @@ export class Player {
 
           if (this.resolveRetryCount >= limit) {
             this.resolveRetryCount = 0
-            this.queue.tracks.shift() 
+            this.queue.tracks.shift()
             this.RyanlinkManager.emit('queueErrorReport', this, options.clientTrack as UnresolvedTrack, error)
-            
+
             if (this.RyanlinkManager.options?.autoSkipOnResolveError === true && this.queue.tracks[0]) {
               return this.play(options)
             }
@@ -540,7 +542,7 @@ export class Player {
 
     const startVolume = this.volume
     const steps = 10
-    const interval = 50 
+    const interval = 50
 
     for (let i = 1; i <= steps; i++) {
       const currentVolume = Math.round(startVolume + (targetVolume - startVolume) * (i / steps))
@@ -1082,13 +1084,19 @@ export class Autoplay {
 
     try {
       const history = Autoplay.getHistory(player, config)
-      const candidates = await Autoplay.fetchCandidates(player, lastTrack, config)
+      const customFetch = config.fetchRelatedTracks || player.RyanlinkManager.options.playerOptions.fetchRelated
+      let candidates: Track[] = []
+
+      if (typeof customFetch === 'function') {
+        candidates = await customFetch(player, lastTrack)
+      } else {
+        candidates = await Autoplay.fetchCandidates(player, lastTrack, config)
+      }
+
       const picked = Autoplay.selectTracks(lastTrack, candidates, history, config)
 
       if (picked.length > 0) {
-
-        for (const t of picked) Autoplay.pushHistory(player, t.info.identifier, config)
-
+        for (const t of picked) Autoplay.pushHistory(player, t.info.identifier, t.info.title ?? '', config)
         for (const track of picked) player.queue.add(track)
 
         if (!player.playing && !player.paused && player.queue.tracks.length > 0) {
@@ -1109,7 +1117,7 @@ export class Autoplay {
 
   private static normalizeTitle(title: string): string {
     if (!title) return ''
-    const EXCLUDE_REGEX = /\[.*?\]|\(.*?\)|\{.*?\}|official|video|audio|lyrics|hq|hd|remastered|version|remix|ft\.|feat\.|featuring/gi;
+    const EXCLUDE_REGEX = /\[.*?\]|\(.*?\)|\{.*?\}|official|video|audio|lyrics|hq|hd|remastered|version|remix|nightcore|slowed|reverb|sped\s*up|speed\s*up|bass\s*boost(?:ed)?|8d\s*audio|pitch\s*shift|tiktok|tik\s*tok|ft\.|feat\.|featuring/gi;
     return title.toLowerCase()
       .replace(EXCLUDE_REGEX, '')
       .replace(/[^a-z0-9]/g, '')
@@ -1126,27 +1134,17 @@ export class Autoplay {
     const combined = new Set<string>([...buf, ...player.recentHistory])
 
     if (player.queue.current?.info?.identifier) combined.add(player.queue.current.info.identifier)
-    if (player.queue.current?.info?.title) combined.add('title:' + Autoplay.normalizeTitle(player.queue.current.info.title))
-    player.queue.previous.forEach((t) => { 
-      if (t?.info?.identifier) combined.add(t.info.identifier) 
-      if (t?.info?.title) combined.add('title:' + Autoplay.normalizeTitle(t.info.title))
-    })
-    player.queue.tracks.forEach((t) => { 
-      if (t?.info?.identifier) combined.add(t.info.identifier) 
-      if (t?.info?.title) combined.add('title:' + Autoplay.normalizeTitle(t.info.title))
-    })
+    player.queue.previous.forEach((t) => { if (t?.info?.identifier) combined.add(t.info.identifier) })
+    player.queue.tracks.forEach((t) => { if (t?.info?.identifier) combined.add(t.info.identifier) })
     return combined
   }
 
-  private static pushHistory(player: Player, id: string, config: AutoplayConfig): void {
+  private static pushHistory(player: Player, id: string, title: string, config: AutoplayConfig): void {
     const limit = config.historyLimit ?? 20
     let buf = player.getData<string[]>('autoplay_history_buf')
     if (!Array.isArray(buf)) buf = []
     buf.push(id)
-    if (player.queue.current?.info?.title) {
-       buf.push('title:' + Autoplay.normalizeTitle(player.queue.current.info.title))
-    }
-    if (buf.length > limit * 2) buf.splice(0, buf.length - (limit * 2)) 
+    if (buf.length > limit) buf.shift()
     player.setData('autoplay_history_buf', buf)
 
     if (!player.recentHistory.includes(id)) {
@@ -1158,29 +1156,25 @@ export class Autoplay {
   private static async fetchCandidates(player: Player, lastTrack: Track, config: AutoplayConfig): Promise<Track[]> {
     const source = lastTrack.info.sourceName?.toLowerCase() ?? ''
     const candidates: Track[] = []
+    const limit = (config.limit ?? 1) * 5
 
-    if (source.includes('spotify')) {
+    if (source.includes('youtube') || source.includes('yt')) {
+      if (lastTrack.info.identifier && !lastTrack.info.isStream) {
+        try {
+          const res = await player.search({ query: `ytrec:${lastTrack.info.identifier}` }, 'Autoplay') as any
+          if (res.tracks?.length) candidates.push(...res.tracks)
+        } catch { }
+      }
+    }
+
+    const hasSpotifyId = !!Autoplay.extractSpotifyId(lastTrack) || !!Autoplay.extractSpotifyArtistId(lastTrack)
+    if (hasSpotifyId && candidates.length < limit) {
       candidates.push(...await Autoplay.fetchSpotifyRec(player, lastTrack))
-    } else if (source.includes('soundcloud') || source.includes('sc')) {
-      candidates.push(...await Autoplay.fetchSoundCloudRelated(player, lastTrack))
-    } else if (source.includes('youtube') || source.includes('yt')) {
-      candidates.push(...await Autoplay.fetchYouTubeRelated(player, lastTrack))
-    } else if (source.includes('deezer') || source.includes('dz')) {
-      candidates.push(...await Autoplay.fetchDeezerRelated(player, lastTrack))
     }
 
-    if (candidates.length < (config.limit ?? 1) * 3) {
+    if (candidates.length < limit) {
       const nativeSource = Autoplay.sourceToSearchPrefix(source)
-      candidates.push(...await Autoplay.fetchArtistSearch(player, lastTrack, nativeSource))
-    }
-
-    if (candidates.length < (config.limit ?? 1) * 3) {
-      const nativeSource = Autoplay.sourceToSearchPrefix(source)
-      candidates.push(...await Autoplay.fetchTitleSearch(player, lastTrack, nativeSource))
-    }
-
-    if (candidates.length === 0) {
-      candidates.push(...await Autoplay.fetchArtistSearch(player, lastTrack, 'ytsearch'))
+      candidates.push(...await Autoplay.searchRelated(player, lastTrack, nativeSource, true))
     }
 
     return candidates
@@ -1195,51 +1189,67 @@ export class Autoplay {
     return 'ytsearch'
   }
 
+  private static extractSpotifyId(track: Track): string | null {
+    const spotifyIdRegex = /^[A-Za-z0-9]{22}$/
+    if (spotifyIdRegex.test(track.info.identifier)) return track.info.identifier
+
+    const uriMatch = track.info.uri?.match(/track\/([A-Za-z0-9]{22})/)
+    if (uriMatch) return uriMatch[1]
+
+    const pluginMatch = (track.pluginInfo?.url || track.pluginInfo?.uri || '')
+      .match(/track\/([A-Za-z0-9]{22})/)
+    if (pluginMatch) return pluginMatch[1]
+
+    return null
+  }
+
+  private static extractSpotifyArtistId(track: Track): string | null {
+    const artistUrl = track.pluginInfo?.artistUrl || ''
+    const match = artistUrl.match(/artist\/([A-Za-z0-9]{22})/)
+    if (match) return match[1]
+
+    if (Array.isArray(track.pluginInfo?.authors)) {
+      for (const author of track.pluginInfo.authors) {
+        if (author.url) {
+          const match = author.url.match(/artist\/([A-Za-z0-9]{22})/)
+          if (match) return match[1]
+        }
+      }
+    }
+
+    const uriMatch = track.info.uri?.match(/artist\/([A-Za-z0-9]{22})/)
+    return uriMatch ? uriMatch[1] : null
+  }
+
   private static async fetchSpotifyRec(player: Player, track: Track): Promise<Track[]> {
     try {
-      const res = await player.search({ query: `sprec:seed_tracks=${track.info.identifier}` }, 'Autoplay') as any
-      return (res.tracks ?? []) as Track[]
-    } catch { return [] }
-  }
+      const trackId = Autoplay.extractSpotifyId(track)
+      const artistId = Autoplay.extractSpotifyArtistId(track)
 
-  private static async fetchSoundCloudRelated(player: Player, track: Track): Promise<Track[]> {
-    try {
-
-      const res = await player.search({ query: track.info.author, source: 'scsearch' as any }, 'Autoplay') as any
-      return (res.tracks ?? []) as Track[]
-    } catch { return [] }
-  }
-
-  private static async fetchYouTubeRelated(player: Player, track: Track): Promise<Track[]> {
-    try {
-
-      if (track.info.uri?.includes('youtube.com') || track.info.uri?.includes('youtu.be')) {
-        const res = await player.search({ query: track.info.uri }, 'Autoplay') as any
-        if (res.loadType === 'playlist') return (res.tracks ?? []) as Track[]
+      if (!trackId && !artistId) {
+        return Autoplay.searchRelated(player, track, 'spsearch', true)
       }
 
-      const res = await player.search({ query: `${track.info.title} ${track.info.author}`, source: 'ytmsearch' as any }, 'Autoplay') as any
+      const seeds: string[] = []
+      if (artistId) seeds.push(`seed_artists=${artistId}`)
+      if (trackId) seeds.push(`seed_tracks=${trackId}`)
+
+      const query = `sprec:${seeds.join('&')}`
+      const res = await player.search({ query }, 'Autoplay') as any
       return (res.tracks ?? []) as Track[]
     } catch { return [] }
   }
 
-  private static async fetchDeezerRelated(player: Player, track: Track): Promise<Track[]> {
+  private static async searchRelated(player: Player, track: Track, source: string, artistOnly: boolean = false): Promise<Track[]> {
     try {
-      const res = await player.search({ query: track.info.author, source: 'dzsearch' as any }, 'Autoplay') as any
-      return (res.tracks ?? []) as Track[]
-    } catch { return [] }
-  }
-
-  private static async fetchArtistSearch(player: Player, track: Track, source: string): Promise<Track[]> {
-    try {
-      const res = await player.search({ query: track.info.author, source: source as any }, 'Autoplay') as any
-      return (res.tracks ?? []) as Track[]
-    } catch { return [] }
-  }
-
-  private static async fetchTitleSearch(player: Player, track: Track, source: string): Promise<Track[]> {
-    try {
-      const query = `${track.info.title} ${track.info.author}`.trim()
+      let query = ''
+      if (artistOnly) {
+         query = track.info.author
+      } else {
+         query = source.includes('yt')
+          ? `${track.info.title} ${track.info.author} radio`
+          : `${track.info.title} ${track.info.author}`.trim()
+      }
       const res = await player.search({ query, source: source as any }, 'Autoplay') as any
       return (res.tracks ?? []) as Track[]
     } catch { return [] }
@@ -1253,55 +1263,52 @@ export class Autoplay {
   ): Track[] {
     const limit = config.limit ?? 1
     const minDur = config.minDuration ?? 20_000
-    const maxDur = config.maxDuration ?? 900_000
-    const tolerance = config.durationTolerance ?? 90_000
+    const maxDur = config.maxDuration ?? 1200_000
+    const tolerance = config.durationTolerance ?? 120_000
+
     const excludeKeywords = (config.excludeKeywords ?? [
       'nightcore', 'bass boosted', '8d audio', 'slowed', 'reverb',
-      'bass boost', 'pitch shift', 'speed up', 'sped up',
+      'bass boost', 'pitch shift', 'speed up', 'sped up', 'mix', 'compilation'
     ]).map((k) => k.toLowerCase())
 
-    const originalTitle = lastTrack.info.title.toLowerCase()
-    const originalHasModifier = excludeKeywords.some((k) => originalTitle.includes(k))
+    const filtered = candidates.filter((t) => {
+      if (history.has(t.info.identifier)) return false
+      if (t.info.isrc && history.has(t.info.isrc)) return false
+      
+      const normalizedTitle = Autoplay.normalizeTitle(t.info.title)
+      if (history.has('title:' + normalizedTitle)) return false
+      
+      const titleLower = t.info.title.toLowerCase()
+      if (excludeKeywords.some(k => titleLower.includes(k))) return false
+      
+      if (normalizedTitle === Autoplay.normalizeTitle(lastTrack.info.title)) return false
 
-    const keywordRegex = originalHasModifier
-      ? null
-      : excludeKeywords.length > 0
-        ? new RegExp(excludeKeywords.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i')
-        : null
+      return t.info.duration >= minDur && t.info.duration <= maxDur
+    })
 
-    const scored = candidates
-      .filter((t) => {
+    const scored = filtered.map((t) => {
+      let score = 0
 
-        if (history.has(t.info.identifier)) return false
-        if (t.info.isrc && history.has(t.info.isrc)) return false
-        if (history.has('title:' + Autoplay.normalizeTitle(t.info.title))) return false
+      // Duration match (Max 40 points)
+      const delta = Math.abs(t.info.duration - lastTrack.info.duration)
+      score += Math.max(0, 40 - Math.floor(delta / tolerance * 40))
 
-        if (t.info.duration < minDur || t.info.duration > maxDur) return false
+      const tAuthor = t.info.author.toLowerCase()
+      const lAuthor = lastTrack.info.author.toLowerCase()
+      
+      if (tAuthor === lAuthor) {
+        score += 50
+      } else if (tAuthor.includes(lAuthor) || lAuthor.includes(tAuthor)) {
+        score += 25
+      }
 
-        if (keywordRegex && keywordRegex.test(t.info.title)) return false
-        return true
-      })
-      .map((t) => {
-        let score = 0
+      // Random factor (Max 10 points)
+      score += Math.random() * 10
 
-        const delta = Math.abs(t.info.duration - lastTrack.info.duration)
-        score += Math.max(0, 40 - Math.floor(delta / tolerance * 40))
+      return { track: t, score }
+    })
+    .sort((a, b) => b.score - a.score)
 
-        if (t.info.author.toLowerCase() === lastTrack.info.author.toLowerCase()) score += 30
-
-        else if (
-          t.info.author.toLowerCase().includes(lastTrack.info.author.toLowerCase()) ||
-          lastTrack.info.author.toLowerCase().includes(t.info.author.toLowerCase())
-        ) score += 15
-
-        score += Math.random() * 10
-
-        return { track: t, score }
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit)
-      .map((s) => s.track)
-
-    return scored
+    return scored.slice(0, limit).map(s => s.track)
   }
 }
