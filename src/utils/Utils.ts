@@ -265,8 +265,6 @@ export class RyanlinkUtils {
 
     if (!queryString.trim().length) throw new Error(`Query string is empty, please provide a valid query string.`)
 
-    if (sourceString === 'speak' && queryString.length > 100) throw new Error(`Query is speak, which is limited to 100 characters.`)
-
     if (this.RyanlinkManager.options?.linksBlacklist?.length > 0) {
       if (this.RyanlinkManager.options?.advancedOptions?.enableDebugEvents) {
         this.RyanlinkManager.emit('debug', DebugEvents.ValidatingBlacklistLinks, {
@@ -303,72 +301,26 @@ export class RyanlinkUtils {
         throw new Error(`Query string contains a link / word which isn't whitelisted.`)
       }
     }
-
-    if (!node._checkForSources) return
-
-    const sourceManagers = node.info.sourceManagers || []
-    const plugins = node.info.plugins || []
-
-    const registry = node?.sourceRegistry || defaultRegistry
-    const matchers = registry.getAllMatchers()
-
-    for (const [name, matcher] of Object.entries(matchers)) {
-      if (!(matcher instanceof RegExp) || name === 'CombinedRegex') continue
-
-      if (matcher.test(queryString)) {
-        let sourceName = name.toLowerCase().replace('redex', '').replace('regex', '').replace('all', '')
-        
-        // Specific mapping for sources where the Matcher name doesn't align exactly with the sourceManager name (Lavalink conventions)
-        if (sourceName === 'yt' || sourceName === 'youtube') sourceName = 'youtube'
-        if (sourceName === 'sc' || sourceName === 'soundcloud') sourceName = 'soundcloud'
-        if (sourceName === 'applemusic') sourceName = 'applemusic'
-        if (sourceName === 'yandexmusic') sourceName = 'yandexmusic'
-        if (sourceName === 'vkmusic') sourceName = 'vkmusic'
-        if (sourceName === 'flowerytts') sourceName = 'flowery-tts'
-        
-        const isSupported = sourceManagers.includes(sourceName) || 
-                           plugins.some(p => p.name.toLowerCase().includes(sourceName))
-
-        if (!isSupported) {
-          throw new Error(`Query / Link Provided for this Source but Audio Node has not '${sourceName}' enabled`)
-        }
-        return
-      }
-    }
   }
 
   findSourceOfQuery(queryString: string, node?: RyanlinkNode) {
-    const registry = node?.sourceRegistry || defaultRegistry
-    const mappings = registry.getAllMappings()
-
-    const foundSource = Object.keys(mappings)
-      .find((source) => queryString?.toLowerCase?.()?.startsWith(`${source}:`.toLowerCase()))
-      ?.trim?.()
-      ?.toLowerCase?.() as SearchPlatform | undefined
-
-    if (foundSource && !['https', 'http'].includes(foundSource)) {
-      return foundSource
-    }
-
-    // Dynamic prefix detection
+    // Detect prefix directly from the query string (e.g. "ytmsearch:query" → "ytmsearch")
+    // No hardcoded mappings — the prefix is sent as-is to Lavalink
     const colonIndex = queryString.indexOf(':')
     if (colonIndex > 0 && colonIndex < 20) {
       const prefix = queryString.slice(0, colonIndex).toLowerCase()
-      if (node?.info?.sourceManagers?.includes(prefix)) {
-        return prefix
+      if (!['https', 'http'].includes(prefix)) {
+        return prefix as SearchPlatform
       }
     }
-
     return undefined
   }
 
   extractSourceOfQuery<T extends { query: string; source?: string }>(searchQuery: T, node?: RyanlinkNode): T {
     const foundSource = this.findSourceOfQuery(searchQuery.query, node)
-
     if (foundSource) {
-      const registry = node?.sourceRegistry || defaultRegistry
-      searchQuery.source = registry.getMapping(foundSource) || foundSource
-      searchQuery.query = searchQuery.query.slice(`${foundSource}:`.length, searchQuery.query.length)
+      searchQuery.source = foundSource
+      searchQuery.query = searchQuery.query.slice(`${foundSource}:`.length)
     }
     return searchQuery
   }
@@ -386,86 +338,42 @@ export class RyanlinkUtils {
   transformQuery(query: SearchQuery, node?: RyanlinkNode) {
     const typedDefault = this.typedLowerCase(this.RyanlinkManager?.options?.playerOptions?.defaultSearchPlatform)
     if (typeof query === 'string') {
-      const Query = {
-        query: query,
+      return this.extractSourceOfQuery({
+        query,
         extraQueryUrlParams: undefined,
         source: typedDefault,
-      }
-      return this.extractSourceOfQuery(Query, node)
+      }, node)
     }
-    const providedSource = query?.source?.trim?.()?.toLowerCase?.() as RyanlinkSearchPlatform | undefined
-    const registry = node?.sourceRegistry || defaultRegistry
-    const validSourceExtracted = registry.getMapping(providedSource ?? typedDefault)
     return this.extractSourceOfQuery({
       query: query.query,
       extraQueryUrlParams: query.extraQueryUrlParams,
-      source: validSourceExtracted ?? providedSource ?? typedDefault,
+      source: query.source?.trim?.()?.toLowerCase?.() ?? typedDefault,
     }, node)
   }
 
   transformAudioSearchQuery(query: AudioSearchQuery, node?: RyanlinkNode) {
     const typedDefault = this.typedLowerCase(this.RyanlinkManager?.options?.playerOptions?.defaultSearchPlatform)
     if (typeof query === 'string') {
-      const Query = {
-        query: query,
+      return this.extractSourceOfQuery({
+        query,
         types: [],
         extraQueryUrlParams: undefined,
         source: typedDefault,
-      }
-      return this.extractSourceOfQuery(Query, node)
+      }, node)
     }
-    const providedSource = query?.source?.trim?.()?.toLowerCase?.() as RyanlinkSearchPlatform | undefined
-    const registry = node?.sourceRegistry || defaultRegistry
-    const validSourceExtracted = registry.getMapping(providedSource ?? typedDefault)
-
-    const Query = {
+    return this.extractSourceOfQuery({
       query: query.query,
       types: query.types
         ? ['track', 'playlist', 'artist', 'album', 'text'].filter((v) => query.types?.find((x) => x.toLowerCase().startsWith(v)))
         : ['track', 'playlist', 'artist', 'album'],
-      source: validSourceExtracted ?? providedSource ?? typedDefault,
-    }
-
-    return this.extractSourceOfQuery(Query, node)
+      source: query.source?.trim?.()?.toLowerCase?.() ?? typedDefault,
+    }, node)
   }
 
   validateSourceString(node: RyanlinkNode, sourceString: SearchPlatform) {
     if (!sourceString) throw new Error(`No SourceString was provided`)
-    const registry = node?.sourceRegistry || defaultRegistry
-    const source = (registry.getMapping(sourceString.toLowerCase().trim()) || sourceString) as RyanlinkSearchPlatform
-    
     if (!node.info) throw new Error('Audio Node does not have any info cached yet, not ready yet!')
-    if (!node._checkForSources) return
-
-    const sourceManagers = node.info.sourceManagers || []
-    const plugins = node.info.plugins || []
-
-    // Normalize source string for dynamic comparison
-    let normalized = source?.toLowerCase()
-      .replace('search', '')
-      .replace('rec', '')
-      .replace('isrc', '')
-      .replace('music', '')
-
-    if (normalized === 'am') normalized = 'applemusic'
-    if (normalized === 'yt') normalized = 'youtube'
-    if (normalized === 'sc') normalized = 'soundcloud'
-    if (normalized === 'sp') normalized = 'spotify'
-    if (normalized === 'dz') normalized = 'deezer'
-    if (normalized === 'ym') normalized = 'yandexmusic'
-    if (normalized === 'vk') normalized = 'vkmusic'
-    if (normalized === 'qb') normalized = 'qobuz'
-    if (normalized === 'pd') normalized = 'pandora'
-    if (normalized === 'ftts') normalized = 'flowery-tts'
-
-    const isSupported = sourceManagers.includes(normalized) || 
-                       sourceManagers.some(s => s.replace('-', '').includes(normalized)) ||
-                       plugins.some(p => p.name.toLowerCase().includes(normalized))
-
-    if (!isSupported && !this.RyanlinkManager.options.playerOptions.allowCustomSources) {
-       throw new Error(`Audio Node has not '${normalized}' enabled, which is required to have '${source}' work`)
-    }
-    return
+    // Source validation is delegated to Lavalink — no hardcoded prefix normalization
   }
 }
 

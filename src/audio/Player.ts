@@ -24,7 +24,7 @@ interface BandCampAutocompleteTrackObject {
 export interface AutoplayConfig {
   enabled?: boolean
 
-  defaultSource?: 'ytsearch' | 'ytmsearch' | 'scsearch' | 'spsearch' | 'amsearch'
+  defaultSource?: string
 
   limit?: number
 
@@ -1144,42 +1144,40 @@ export class Autoplay {
   }
 
   private static async fetchCandidates(player: Player, lastTrack: Track, config: AutoplayConfig): Promise<Track[]> {
-    const source = lastTrack.info.sourceName?.toLowerCase() ?? ''
+    const sourceName = lastTrack.info.sourceName?.toLowerCase() ?? ''
     const candidates: Track[] = []
     const limit = (config.limit ?? 1) * 5
 
-    if (source.includes('youtube') || source.includes('yt')) {
-      if (lastTrack.info.identifier && !lastTrack.info.isStream) {
-        try {
-          const res = await player.search({ query: `ytrec:${lastTrack.info.identifier}` }, 'Autoplay') as any
-          if (res.tracks?.length) candidates.push(...res.tracks)
-        } catch {
-          /* ignore */
-        }
-      }
+    // Use the search prefix that was stored when this track was originally found.
+    // This is the actual prefix Lavalink understands (e.g. "ytmsearch", "spsearch").
+    // Fall back to sourceName if not stored — Lavalink will reject if unsupported.
+    const searchPrefix: string = (lastTrack.pluginInfo?.clientData as any)?.searchPrefix ?? sourceName
+
+    // Try native "rec" endpoint — use the prefix with "rec" suffix (e.g. ytrec:, sprec:)
+    // Strip "search" from the prefix first: "ytmsearch" → "ytmrec", "ytsearch" → "ytrec"
+    if (lastTrack.info.identifier && !lastTrack.info.isStream) {
+      const recPrefix = searchPrefix.replace('search', 'rec')
+      try {
+        const res = await player.search({ query: `${recPrefix}:${lastTrack.info.identifier}` }, 'Autoplay') as any
+        if (res.tracks?.length) candidates.push(...res.tracks)
+      } catch { /* source doesn't support rec — ignore */ }
     }
 
+    // Spotify recommendations via seed if we have a Spotify ID
     const hasSpotifyId = !!Autoplay.extractSpotifyId(lastTrack) || !!Autoplay.extractSpotifyArtistId(lastTrack)
     if (hasSpotifyId && candidates.length < limit) {
       candidates.push(...await Autoplay.fetchSpotifyRec(player, lastTrack))
     }
 
+    // Generic search fallback using the same search prefix the track came from
     if (candidates.length < limit) {
-      const nativeSource = Autoplay.sourceToSearchPrefix(source)
-      candidates.push(...await Autoplay.searchRelated(player, lastTrack, nativeSource, true))
+      candidates.push(...await Autoplay.searchRelated(player, lastTrack, searchPrefix, true))
     }
 
     return candidates
   }
 
-  private static sourceToSearchPrefix(sourceName: string): string {
-    if (sourceName.includes('spotify')) return 'spsearch'
-    if (sourceName.includes('soundcloud') || sourceName.includes('sc')) return 'scsearch'
-    if (sourceName.includes('deezer') || sourceName.includes('dz')) return 'dzsearch'
-    if (sourceName.includes('apple')) return 'amsearch'
-    if (sourceName.includes('youtubemusic') || sourceName.includes('ytm')) return 'ytmsearch'
-    return 'ytsearch'
-  }
+
 
   private static extractSpotifyId(track: Track): string | null {
     const spotifyIdRegex = /^[A-Za-z0-9]{22}$/

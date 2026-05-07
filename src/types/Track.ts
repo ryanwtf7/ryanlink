@@ -3,7 +3,7 @@ import type { Player } from '../audio/Player'
 import type { anyObject } from './Player'
 import type { Base64 } from './Utils'
 
-export type CoreSourceNames = 'youtube' | 'youtubemusic' | 'soundcloud' | 'bandcamp' | 'twitch'
+export type CoreSourceNames = 'youtube' | 'youtube-music' | 'youtubemusic' | 'soundcloud' | 'bandcamp' | 'twitch'
 
 export type AudioSourceNames =
   | 'deezer'

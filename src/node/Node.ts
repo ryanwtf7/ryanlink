@@ -355,7 +355,16 @@ export class RyanlinkNode {
               : 0,
           }
           : null,
-      tracks: (resTracks.length ? resTracks.map((t) => this.NodeManager.RyanlinkManager.utils.buildTrack(t, requestUser)) : []) as Track[],
+      tracks: (resTracks.length ? resTracks.map((t) => {
+        const track = this.NodeManager.RyanlinkManager.utils.buildTrack(t, requestUser)
+        // Store the search prefix used so autoplay can reuse the same source
+        if (Query.source && !track.pluginInfo?.clientData?.searchPrefix) {
+          if (!track.pluginInfo) (track as any).pluginInfo = {}
+          if (!track.pluginInfo.clientData) (track.pluginInfo as any).clientData = {}
+          ;(track.pluginInfo.clientData as any).searchPrefix = Query.source
+        }
+        return track
+      }) : []) as Track[],
     }
   }
 
