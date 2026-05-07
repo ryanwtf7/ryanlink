@@ -4,7 +4,7 @@ import { FilterManager } from './Filters'
 import type { RyanlinkManager } from '../core/Manager'
 import type { RyanlinkNode } from '../node/Node'
 import type { NodeLinkNode } from '../node/NodeLink'
-import { Queue, QueueSaver } from './Queue'
+import { Queue } from './Queue'
 import type { SponsorBlockSegment } from '../types/Node'
 import type { anyObject, PlayConfiguration, PlayerJson, PlayerOptions, PlayOptions, RepeatMode } from '../types/Player'
 import type { Track, UnresolvedTrack } from '../types/Track'
@@ -161,11 +161,8 @@ export class Player {
     }
 
     this.guildId = this.options.guildId
-    this.voiceChannelId = this.options.voiceChannelId || this.options.data?.voiceChannel || null
-    this.textChannelId = this.options.textChannelId || this.options.data?.textChannel || null
-
-    if (this.options.data?.paused !== undefined) this.paused = this.options.data.paused
-    if (this.options.data?.volume !== undefined) this.volume = this.options.data.volume
+    this.voiceChannelId = this.options.voiceChannelId || null
+    this.textChannelId = this.options.textChannelId || null
 
     this.node = typeof this.options.node === 'string' ? manager.nodeManager.nodes.get(this.options.node) : this.options.node
 
@@ -181,7 +178,13 @@ export class Player {
       const least = manager.nodeManager.leastUsedNodes()
       this.node = least.filter((v) => (options.vcRegion ? v.options?.regions?.includes(options.vcRegion) : true))[0] || least[0] || null
     }
-    if (!this.node) throw new Error('No available Node was found, please add a RyanlinkNode to the Manager via Manager.NodeManager#createNode')
+    if (!this.node) {
+      this.dispatchDebug(DebugEvents.PlayerCreateNodeNotFound, {
+        state: 'warn',
+        message: 'No available Node was found. Player created without a node.',
+        functionLayer: 'Player > constructor()',
+      })
+    }
 
     if (typeof options.volume === 'number' && !isNaN(options.volume)) this.volume = Number(options.volume)
 
@@ -203,27 +206,14 @@ export class Player {
 
     this.queue = new Queue(
       this.guildId,
-      this.options.data || {},
-      new QueueSaver(manager.options.queueOptions),
       manager.options.queueOptions,
       this
     )
 
     this.oldJSON = this.toJSON()
-
-    if (manager.options.resuming.enabled) {
-      this.autoResume().catch(() => { })
-    }
   }
 
   public async autoResume() {
-    await this.queue.utils.sync(true, false)
-    if (this.queue.current) {
-      await this.play({
-        clientTrack: this.queue.current,
-        position: this.queue.position,
-      })
-    }
     return this
   }
 
@@ -271,7 +261,7 @@ export class Player {
         message: `Player was called to play something, while there was a queueEmpty Timeout set, clearing the timeout.`,
         functionLayer: 'Player > play()',
       })
-      this.RyanlinkManager.emit('playerQueueEmptyCancel', this)
+      // No longer emitting playerQueueEmptyCancel to keep it lean
       clearTimeout(this.getData('internal_queueempty'))
       this.setData('internal_queueempty', undefined)
     }
@@ -300,7 +290,7 @@ export class Player {
           if (this.resolveRetryCount >= limit) {
             this.resolveRetryCount = 0
             this.queue.tracks.shift()
-            this.RyanlinkManager.emit('queueErrorReport', this, options.clientTrack as UnresolvedTrack, error)
+            this.RyanlinkManager.emit('trackError', this, options.clientTrack as UnresolvedTrack, error)
 
             if (this.RyanlinkManager.options?.autoSkipOnResolveError === true && this.queue.tracks[0]) {
               return this.play(options)
@@ -343,7 +333,7 @@ export class Player {
 
     if (options?.track?.encoded || options?.track?.identifier) {
       this.queue.current = (options.clientTrack as Track) || null
-      this.queue.utils.save()
+      /* save() removed */
 
       if (typeof options?.volume === 'number' && !isNaN(options?.volume)) {
         this.volume = Math.max(Math.min(options?.volume, 1000), 0)
@@ -522,7 +512,7 @@ export class Player {
   public oldJSON: PlayerJson
 
   public syncState() {
-    this.RyanlinkManager.emit('playerClientUpdate', this.oldJSON, this)
+    this.RyanlinkManager.emit('playerUpdate', this, this.oldJSON, this.toJSON())
     this.oldJSON = this.toJSON()
 
     if (this.filterManager.filterUpdatedState) {
@@ -676,28 +666,29 @@ export class Player {
     } as UnresolvedSearchResult
   }
 
-  async pause() {
-    this.paused = true
-    this.lastPositionChange = null
-    const now = performance.now()
-    this.syncState()
-    await this.node.updatePlayer({ guildId: this.guildId, playerOptions: { paused: true } })
-    this.ping.node = Math.round((performance.now() - now) / 10) / 100
+  async pause(paused: boolean = true) {
+    this.paused = paused
+    if (!paused) {
+      // resuming
+      const now = performance.now()
+      this.syncState()
+      if (this.node) await this.node.updatePlayer({ guildId: this.guildId, playerOptions: { paused: false } })
+      this.ping.node = Math.round((performance.now() - now) / 10) / 100
+    } else {
+      this.lastPositionChange = null
+      const now = performance.now()
+      this.syncState()
+      if (this.node) await this.node.updatePlayer({ guildId: this.guildId, playerOptions: { paused: true } })
+      this.ping.node = Math.round((performance.now() - now) / 10) / 100
+    }
 
-    this.RyanlinkManager.emit('playerPaused', this, this.queue.current)
+    // playerPaused/playerResumed emission removed
     return this
   }
 
   async resume() {
     if (!this.paused) throw new Error("Player isn't paused - not able to resume.")
-    this.paused = false
-    const now = performance.now()
-    this.syncState()
-    await this.node.updatePlayer({ guildId: this.guildId, playerOptions: { paused: false } })
-    this.ping.node = Math.round((performance.now() - now) / 10) / 100
-
-    this.RyanlinkManager.emit('playerResumed', this, this.queue.current)
-    return this
+    return this.pause(false)
   }
 
   async seek(position: number) {
@@ -735,7 +726,7 @@ export class Player {
 
     if (typeof skipTo === 'number' && skipTo > 1) {
       if (skipTo > this.queue.tracks.length) throw new RangeError("Can't skip more than the queue size")
-      await this.queue.splice(0, skipTo - 1)
+      this.queue.tracks.splice(0, skipTo - 1)
     }
 
     if (!this.playing && !this.queue.current) return (this.play(), this)
@@ -756,7 +747,7 @@ export class Player {
   async stopPlaying(clearQueue: boolean = true, executeAutoplay: boolean = false) {
     this.setData('internal_stopPlaying', true)
 
-    if (this.queue.tracks.length && clearQueue === true) await this.queue.splice(0, this.queue.tracks.length)
+    if (this.queue.tracks.length && clearQueue === true) this.queue.tracks.splice(0, this.queue.tracks.length)
 
     if (executeAutoplay === false) this.setData('internal_autoplayStopPlaying', true)
     else this.setData('internal_autoplayStopPlaying', undefined)
@@ -869,11 +860,10 @@ export class Player {
     if (disconnect) await this.disconnect(true)
     else this.setData('internal_destroywithoutdisconnect', true)
 
-    await this.queue.utils.destroy()
 
     this.RyanlinkManager.deletePlayer(this.guildId)
 
-    await this.node.destroyPlayer(this.guildId)
+    if (this.node) await this.node.destroyPlayer(this.guildId)
 
     if (this.RyanlinkManager.options.advancedOptions?.debugOptions.playerDestroy.debugLog) {
       void 0;
@@ -1059,7 +1049,7 @@ export class Player {
       nodeId: this.node?.id,
       nodeSessionId: this.node?.sessionId,
       ping: this.ping,
-      queue: this.queue?.utils?.toJSON?.(),
+      // Queue field removed from PlayerJson to keep state clean
       autoplay: this.autoplay,
       recentHistory: this.recentHistory,
     } as PlayerJson
@@ -1163,7 +1153,9 @@ export class Autoplay {
         try {
           const res = await player.search({ query: `ytrec:${lastTrack.info.identifier}` }, 'Autoplay') as any
           if (res.tracks?.length) candidates.push(...res.tracks)
-        } catch { }
+        } catch {
+          /* ignore */
+        }
       }
     }
 
@@ -1211,8 +1203,8 @@ export class Autoplay {
     if (Array.isArray(track.pluginInfo?.authors)) {
       for (const author of track.pluginInfo.authors) {
         if (author.url) {
-          const match = author.url.match(/artist\/([A-Za-z0-9]{22})/)
-          if (match) return match[1]
+          const authorMatch = author.url.match(/artist\/([A-Za-z0-9]{22})/)
+          if (authorMatch) return authorMatch[1]
         }
       }
     }
@@ -1244,9 +1236,9 @@ export class Autoplay {
     try {
       let query = ''
       if (artistOnly) {
-         query = track.info.author
+        query = track.info.author
       } else {
-         query = source.includes('yt')
+        query = source.includes('yt')
           ? `${track.info.title} ${track.info.author} radio`
           : `${track.info.title} ${track.info.author}`.trim()
       }
@@ -1274,13 +1266,13 @@ export class Autoplay {
     const filtered = candidates.filter((t) => {
       if (history.has(t.info.identifier)) return false
       if (t.info.isrc && history.has(t.info.isrc)) return false
-      
+
       const normalizedTitle = Autoplay.normalizeTitle(t.info.title)
       if (history.has('title:' + normalizedTitle)) return false
-      
+
       const titleLower = t.info.title.toLowerCase()
       if (excludeKeywords.some(k => titleLower.includes(k))) return false
-      
+
       if (normalizedTitle === Autoplay.normalizeTitle(lastTrack.info.title)) return false
 
       return t.info.duration >= minDur && t.info.duration <= maxDur
@@ -1295,7 +1287,7 @@ export class Autoplay {
 
       const tAuthor = t.info.author.toLowerCase()
       const lAuthor = lastTrack.info.author.toLowerCase()
-      
+
       if (tAuthor === lAuthor) {
         score += 50
       } else if (tAuthor.includes(lAuthor) || lAuthor.includes(tAuthor)) {
@@ -1307,7 +1299,7 @@ export class Autoplay {
 
       return { track: t, score }
     })
-    .sort((a, b) => b.score - a.score)
+      .sort((a, b) => b.score - a.score)
 
     return scored.slice(0, limit).map(s => s.track)
   }

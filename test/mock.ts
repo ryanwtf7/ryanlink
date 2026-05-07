@@ -1,5 +1,3 @@
-// Unified mock function that works in both vitest and jest
-// vitest provides `vi` globally when globals:true; jest provides `jest` globally
 declare const vi: any
 declare const jest: any
 

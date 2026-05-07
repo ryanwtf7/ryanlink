@@ -1,11 +1,9 @@
 declare const $clientName: string
 declare const $clientVersion: string
 
-import { isAbsolute } from 'node:path'
-
 import WebSocket from 'ws'
 
-import { DebugEvents, DestroyReasons, validSponsorBlocks, RecommendationsStrings, NodeLinkExclusiveEvents } from '../config/Constants'
+import { DebugEvents, DestroyReasons, validSponsorBlocks, RecommendationsStrings } from '../config/Constants'
 import type { NodeLinkNode } from './NodeLink'
 import type { NodeManager } from './NodeManager'
 import type { Player } from '../audio/Player'
@@ -23,8 +21,6 @@ import type {
   SponsorBlockSegment,
 } from '../types/Node'
 import type {
-  NodeLinkEventPayload,
-  NodeLinkEventTypes,
   HealthStatusThreshold,
   HealthStatusKeys,
   HealthPerformanceKeys,
@@ -41,9 +37,6 @@ import type {
   AudioSearchQuery,
   AudioSearchResponse,
   LoadTypes,
-  LyricsFoundEvent,
-  LyricsLineEvent,
-  LyricsNotFoundEvent,
   PlayerEvents,
   PlayerEventType,
   PlayerUpdateInfo,
@@ -51,10 +44,6 @@ import type {
   SearchQuery,
   SearchResult,
   Session,
-  SponsorBlockChaptersLoaded,
-  SponsorBlockChapterStarted,
-  SponsorBlockSegmentSkipped,
-  SponsorBlockSegmentsLoaded,
   TrackEndEvent,
   TrackExceptionEvent,
   TrackStartEvent,
@@ -62,6 +51,7 @@ import type {
   WebSocketClosedEvent,
 } from '../types/Utils'
 import { AudioNodeSymbol, queueTrackEnd, safeStringify, NodeManagerSymbol, ManagerSymbol } from '../utils/Utils'
+import { SourceRegistry } from './Sources'
 
 export class RyanlinkNode {
   private heartBeatPingTimestamp: number = 0
@@ -123,9 +113,10 @@ export class RyanlinkNode {
 
   public sessionId?: string | null = null
 
-  public resuming: { enabled: boolean; timeout: number | null } = { enabled: true, timeout: null }
-
+  public resuming: { enabled: boolean; timeout: number | null } = { enabled: false, timeout: null }
   public info: NodeInfo | null = null
+
+  public sourceRegistry: SourceRegistry = new SourceRegistry()
 
   public reconnectionState: ReconnectionState = ReconnectionState.IDLE
 
@@ -270,7 +261,7 @@ export class RyanlinkNode {
   }
 
   public async search(query: SearchQuery, requestUser: unknown, throwOnEmpty: boolean = false): Promise<SearchResult> {
-    const Query = this.NodeManager.RyanlinkManager.utils.transformQuery(query)
+    const Query = this.NodeManager.RyanlinkManager.utils.transformQuery(query, this)
 
     this.NodeManager.RyanlinkManager.utils.validateQueryString(this, Query.query, Query.source)
     if (Query.source) this.NodeManager.RyanlinkManager.utils.validateSourceString(this, Query.source)
@@ -369,7 +360,7 @@ export class RyanlinkNode {
   }
 
   async audioSearch(query: AudioSearchQuery, requestUser: unknown, throwOnEmpty: boolean = false): Promise<AudioSearchResponse | SearchResult> {
-    const Query = this.NodeManager.RyanlinkManager.utils.transformAudioSearchQuery(query)
+    const Query = this.NodeManager.RyanlinkManager.utils.transformAudioSearchQuery(query, this)
 
     if (Query.source) this.NodeManager.RyanlinkManager.utils.validateSourceString(this, Query.source)
     if (/^https?:\/\//.test(Query.query)) return this.search({ query: Query.query, source: Query.source }, requestUser)
@@ -557,12 +548,12 @@ export class RyanlinkNode {
       this.resetReconnectionAttempts()
 
       if (!deleteNode)
-        return void this.NodeManager.emit('disconnect', this, {
+        return void this.NodeManager.emit('nodeDisconnect', this, {
           code: 1000,
           reason: destroyReason,
         })
 
-      this.NodeManager.emit('destroy', this, destroyReason)
+      this.NodeManager.emit('nodeDisconnect', this, { reason: destroyReason, code: 1000 })
       this.NodeManager.nodes.delete(this.id)
       this.resetAckTimeouts(true, true)
 
@@ -630,11 +621,11 @@ export class RyanlinkNode {
       this.resetReconnectionAttempts()
 
       if (!deleteNode)
-        return void this.NodeManager.emit('disconnect', this, {
+        return void this.NodeManager.emit('nodeDisconnect', this, {
           code: 1000,
           reason: destroyReason,
         })
-      this.NodeManager.emit('destroy', this, destroyReason)
+      this.NodeManager.emit('nodeDisconnect', this, { reason: destroyReason, code: 1000 })
       this.NodeManager.nodes.delete(this.id)
       this.resetAckTimeouts(true, true)
       return
@@ -651,7 +642,7 @@ export class RyanlinkNode {
 
     this.resetReconnectionAttempts()
 
-    this.NodeManager.emit('disconnect', this, { code: 1000, reason: disconnectReason })
+    this.NodeManager.emit('nodeDisconnect', this, { code: 1000, reason: disconnectReason })
   }
 
   public async fetchAllPlayers(): Promise<AudioPlayerState[] | InvalidRestRequest | null> {
@@ -667,11 +658,9 @@ export class RyanlinkNode {
     return this.request(`/sessions/${this.sessionId}/players/${guildId}`) as Promise<AudioPlayerState | InvalidRestRequest | null>
   }
 
-  public async updateSession(resuming?: boolean, timeout?: number): Promise<Session | InvalidRestRequest | null> {
+  public async updateSession(): Promise<Session | InvalidRestRequest | null> {
     if (!this.sessionId) throw new Error('the Ryanlink-Node is either not ready, or not up to date!')
     const data = {} as any
-    if (typeof resuming === 'boolean') data.resuming = resuming
-    if (typeof timeout === 'number' && timeout > 0) data.timeout = timeout
 
     const EXCLUDED_KEYS = [
       'authorization', 'host', 'port', 'secure', 'closeOnError',
@@ -686,10 +675,6 @@ export class RyanlinkNode {
       }
     }
 
-    this.resuming = {
-      enabled: typeof resuming === 'boolean' ? resuming : this.resuming.enabled,
-      timeout: typeof resuming === 'boolean' && resuming === true ? timeout : this.resuming.timeout,
-    }
     return this.request(`/sessions/${this.sessionId}`, (r) => {
       r.method = 'PATCH'
       r.headers = { Authorization: this.options.authorization, 'Content-Type': 'application/json' }
@@ -1209,7 +1194,6 @@ export class RyanlinkNode {
     }
 
     this.reconnectionState = ReconnectionState.PENDING
-    this.NodeManager.emit('reconnectinprogress', this)
 
     if (force) {
       this.executeReconnect()
@@ -1241,7 +1225,7 @@ export class RyanlinkNode {
 
       this.reconnectionState = ReconnectionState.DESTROYING
 
-      this.NodeManager.emit('error', error, this)
+      this.NodeManager.emit('nodeError', this, error)
       this.destroy(DestroyReasons.NodeReconnectFail)
 
       return
@@ -1254,8 +1238,6 @@ export class RyanlinkNode {
       this.reconnectAttempts = this.reconnectAttempts.slice(-MAX_RECONNECT_ATTEMPTS)
     }
     this.reconnectionState = ReconnectionState.RECONNECTING
-
-    this.NodeManager.emit('reconnecting', this)
     this.connect()
   }
 
@@ -1282,6 +1264,7 @@ export class RyanlinkNode {
 
   private async open(): Promise<void> {
     this.isAlive = true
+    this.NodeManager.emit('nodeConnect', this)
     const syncStart = Date.now()
 
     this.resetReconnectionAttempts()
@@ -1331,6 +1314,18 @@ export class RyanlinkNode {
     }
 
     this.info = await this.fetchInfo().catch((e) => (console.error(e, 'ON-OPEN-FETCH'), null))
+    if (this.info) {
+      if (this.info.sourceManagers) {
+        for (const source of this.info.sourceManagers) {
+          this.sourceRegistry.registerMapping(source, source)
+        }
+      }
+      if (this.info.plugins) {
+        for (const plugin of this.info.plugins) {
+          this.sourceRegistry.registerPlugin(plugin.name, plugin.name)
+        }
+      }
+    }
     this.applyPluginDefaults()
 
     if (!this.info && ['v3', 'v4'].includes(this.version)) {
@@ -1350,7 +1345,7 @@ export class RyanlinkNode {
       })
     }
 
-    this.NodeManager.emit('connect', this)
+    this.NodeManager.emit('nodeConnect', this)
   }
 
   private close(code: number, reason: string): void {
@@ -1376,7 +1371,7 @@ export class RyanlinkNode {
     if (code === 1006 && !reason) reason = 'Socket got terminated due to no ping connection'
     if (code === 1000 && reason === 'Node-Disconnect') return
 
-    this.NodeManager.emit('disconnect', this, { code, reason })
+    this.NodeManager.emit('nodeDisconnect', this, { code, reason })
 
     if (code !== 1000 || reason !== 'Node-Destroy') {
       if (this.NodeManager.nodes.has(this.id)) {
@@ -1406,7 +1401,7 @@ export class RyanlinkNode {
 
   private error(error: Error): void {
     if (!error) return
-    this.NodeManager.emit('error', error, this)
+    this.NodeManager.emit('nodeError', this, error)
     this.reconnectionState = ReconnectionState.IDLE
     if (this.options.closeOnError) {
       if (this.heartBeatInterval) clearInterval(this.heartBeatInterval)
@@ -1425,58 +1420,28 @@ export class RyanlinkNode {
     try {
       payload = JSON.parse(d.toString())
     } catch (e) {
-      this.NodeManager.emit('error', e, this)
+      this.NodeManager.emit('nodeError', this, e)
       return
     }
 
     if (!payload.op) return
 
-    this.NodeManager.emit('raw', this, payload)
+    this.NodeManager.emit('nodeRaw', this, payload)
 
     switch (payload.op) {
       case 'stats':
         if (this.options.enablePingOnStatsCheck) this.heartBeat()
-        delete payload.op
         this.stats = { ...payload } as unknown as NodeStats
         break
       case 'playerUpdate':
-        {
-          const player = this._LManager.getPlayer(payload.guildId)
-          if (!player)
-            return this.dispatchDebug(DebugEvents.PlayerUpdateNoPlayer, {
-              state: 'error',
-              message: `PlayerUpdate Event Triggered, but no player found of payload.guildId: ${payload.guildId}`,
-              functionLayer: 'RyanlinkNode > nodeEvent > playerUpdate',
-            })
-
-          const oldPlayer = player?.toJSON()
-
-          player.lastPositionChange = Date.now()
-          player.lastPosition = payload.state.position || 0
+        const player = this._LManager.getPlayer(payload.guildId)
+        if (player) {
+          const oldState = player.toJSON()
+          player.position = payload.state.position
           player.connected = payload.state.connected
-          player.ping.ws = payload.state.ping >= 0 ? payload.state.ping : player.ping.ws <= 0 && player.connected ? null : player.ping.ws || 0
-
-          player.queue.position = player.lastPosition
-          player.queue.utils.save().catch(() => { })
-
-          if (!player.createdTimeStamp && payload.state.time) player.createdTimeStamp = payload.state.time
-
-          if (
-            player.filterManager.filterUpdatedState === true &&
-            ((player.queue.current?.info?.duration || 0) <= (player.RyanlinkManager.options.advancedOptions.maxFilterFixDuration || 600_000) ||
-              (player.queue.current?.info?.uri && isAbsolute(player.queue.current?.info?.uri)))
-          ) {
-            player.filterManager.filterUpdatedState = false
-
-            this.dispatchDebug(DebugEvents.PlayerUpdateFilterFixApply, {
-              state: 'log',
-              message: `Fixing FilterState on "${player.guildId}" because player.options.instaUpdateFiltersFix === true`,
-              functionLayer: 'RyanlinkNode > nodeEvent > playerUpdate',
-            })
-
-            await player.seek(player.position)
-          }
-          this._LManager.emit('playerUpdate', oldPlayer, player)
+          player.ping.ws = payload.state.ping
+          player.queue.position = player.position
+          this._LManager.emit('playerUpdate', player, oldState, player.toJSON())
         }
         break
       case 'event':
@@ -1484,25 +1449,11 @@ export class RyanlinkNode {
         break
       case 'ready':
         this.resetReconnectionAttempts()
-
         this.sessionId = payload.sessionId
-        this.resuming.enabled = payload.resumed
-        if (payload.resumed === true) {
-          try {
-            this.NodeManager.emit('resumed', this, payload, await this.fetchAllPlayers())
-          } catch (e) {
-            this.dispatchDebug(DebugEvents.ResumingFetchingError, {
-              state: 'error',
-              message: `Failed to fetch players for resumed event, falling back without players array`,
-              error: e,
-              functionLayer: 'RyanlinkNode > nodeEvent > resumed',
-            })
-            this.NodeManager.emit('resumed', this, payload, [])
-          }
-        }
+        this.NodeManager.emit('nodeReady', this, { resumed: !!payload.resumed, sessionId: payload.sessionId })
         break
       default:
-        this.NodeManager.emit('error', new Error(`Unexpected op "${payload.op}" with data`), this, payload)
+        this.NodeManager.emit('nodeError', this, new Error(`Unexpected op "${payload.op}" with data`), payload)
         return
     }
   }
@@ -1513,75 +1464,27 @@ export class RyanlinkNode {
     const player = this._LManager.getPlayer(payload.guildId)
     if (!player) return
 
-    const NodeLinkEventType = payload.type as NodeLinkEventTypes
-    if (NodeLinkExclusiveEvents.includes(NodeLinkEventType) && (!this.info || this.info.isNodelink)) {
-      return this.nodeLinkEventHandler(
-        NodeLinkEventType,
-        player,
-        player.queue.current,
-        payload as unknown as NodeLinkEventPayload<typeof NodeLinkEventType>
-      )
-    }
+    const track = player.queue.current
+    const eventName = payload.type.charAt(0).toLowerCase() + payload.type.slice(1).replace('Event', '')
+    const mappedName = {
+      'trackStart': 'trackStart',
+      'trackEnd': 'trackEnd',
+      'trackStuck': 'trackStuck',
+      'trackException': 'trackError',
+      'webSocketClosed': 'playerSocketClosed',
+      'segmentsLoaded': 'sponsorBlockSegmentsLoaded',
+      'segmentSkipped': 'sponsorBlockSegmentSkipped',
+      'chaptersLoaded': 'sponsorBlockChaptersLoaded',
+      'chapterStarted': 'sponsorBlockChapterStarted',
+      'lyricsLine': 'lyricsLine',
+      'lyricsFound': 'lyricsFound',
+      'lyricsNotFound': 'lyricsNotFound'
+    }[eventName] || eventName
 
-    switch (payload.type) {
-      case 'ReadyEvent':
-        if (this.info?.isNodelink === true) await this.trackStart(player, player.queue.current as Track, payload as any)
-        break
-      case 'TrackStartEvent':
-        await this.trackStart(player, player.queue.current as Track, payload as TrackStartEvent)
-        break
-      case 'TrackEndEvent':
-        await this.trackEnd(player, player.queue.current as Track, payload as TrackEndEvent)
-        break
-      case 'TrackStuckEvent':
-        await this.trackStuck(player, player.queue.current as Track, payload as TrackStuckEvent)
-        break
-      case 'TrackExceptionEvent':
-        await this.trackError(player, player.queue.current as Track, payload as TrackExceptionEvent)
-        break
-      case 'WebSocketClosedEvent':
-        this.socketClosed(player, payload as WebSocketClosedEvent)
-        break
-      case 'SegmentsLoaded':
-        await this.SponsorBlockSegmentLoaded(player, player.queue.current as Track, payload)
-        break
-      case 'SegmentSkipped':
-        await this.SponsorBlockSegmentSkipped(player, player.queue.current as Track, payload)
-        break
-      case 'ChaptersLoaded':
-        await this.SponsorBlockChaptersLoaded(player, player.queue.current as Track, payload)
-        break
-      case 'ChapterStarted':
-        await this.SponsorBlockChapterStarted(player, player.queue.current as Track, payload)
-        break
-      case 'LyricsLineEvent':
-        await this.LyricsLine(player, player.queue.current as Track, payload)
-        break
-      case 'LyricsFoundEvent':
-        await this.LyricsFound(player, player.queue.current as Track, payload)
-        break
-      case 'LyricsNotFoundEvent':
-        await this.LyricsNotFound(player, player.queue.current as Track, payload)
-        break
-      default:
-        this.NodeManager.emit(
-          'error',
-          new Error(`Node#event unknown event '${(payload as PlayerEventType & PlayerEvents).type}'.`),
-          this,
-          payload as PlayerEventType & PlayerEvents
-        )
-        break
-    }
+    if (mappedName === 'trackStart') await this.trackStart(player, track as Track, payload as TrackStartEvent)
+    else if (mappedName === 'trackEnd') await this.trackEnd(player, track as Track, payload as TrackEndEvent)
+    else this._LManager.emit(mappedName as any, player, track, payload)
     return
-  }
-
-  private async nodeLinkEventHandler<NodeLinkEventName extends NodeLinkEventTypes>(
-    eventName: NodeLinkEventName,
-    player: Player,
-    track: Track | null,
-    payload: NodeLinkEventPayload<NodeLinkEventName>
-  ) {
-    this.NodeManager.emit('nodeLinkEvent', this, eventName as any, player, track, payload as any)
   }
 
   private getTrackOfPayload(payload: PlayerEvents): Track | null {
@@ -1604,7 +1507,7 @@ export class RyanlinkNode {
     if (!player.queue.current) {
       player.queue.current = this.getTrackOfPayload(payload)
       if (player.queue.current) {
-        await player.queue.utils.save()
+        // queue utils save removed
       } else {
         this.dispatchDebug(DebugEvents.TrackStartNoTrack, {
           state: 'warn',
@@ -1634,7 +1537,7 @@ export class RyanlinkNode {
       v.name === 'lavasrc-plugin'
     )) {
       this.lyrics.subscribe(player.guildId, true)
-        .catch(() => {})
+        .catch(() => { })
     }
 
     return
@@ -1676,7 +1579,6 @@ export class RyanlinkNode {
       player.queue.previous.unshift(trackToUse as Track)
       if (player.queue.previous.length > player.queue.options.maxPreviousTracks)
         player.queue.previous.splice(player.queue.options.maxPreviousTracks, player.queue.previous.length)
-      await player.queue.utils.save()
     }
 
     if (!player.queue.current) return this.queueEnd(player, trackToUse, payload)
@@ -1761,26 +1663,6 @@ export class RyanlinkNode {
 
   private socketClosed(player: Player, payload: WebSocketClosedEvent): void {
     this._LManager.emit('playerSocketClosed', player, payload)
-    return
-  }
-
-  private SponsorBlockSegmentLoaded(player: Player, track: Track, payload: SponsorBlockSegmentsLoaded): void {
-    this._LManager.emit('SegmentsLoaded', player, track || this.getTrackOfPayload(payload), payload)
-    return
-  }
-
-  private SponsorBlockSegmentSkipped(player: Player, track: Track, payload: SponsorBlockSegmentSkipped): void {
-    this._LManager.emit('SegmentSkipped', player, track || this.getTrackOfPayload(payload), payload)
-    return
-  }
-
-  private SponsorBlockChaptersLoaded(player: Player, track: Track, payload: SponsorBlockChaptersLoaded): void {
-    this._LManager.emit('ChaptersLoaded', player, track || this.getTrackOfPayload(payload), payload)
-    return
-  }
-
-  private SponsorBlockChapterStarted(player: Player, track: Track, payload: SponsorBlockChapterStarted): void {
-    this._LManager.emit('ChapterStarted', player, track || this.getTrackOfPayload(payload), payload)
     return
   }
 
@@ -1904,13 +1786,7 @@ export class RyanlinkNode {
 
     if (track && !track?.pluginInfo?.clientData?.previousTrack) {
       player.queue.previous.unshift(track)
-      if (player.queue.previous.length > player.queue.options.maxPreviousTracks)
-        player.queue.previous.splice(player.queue.options.maxPreviousTracks, player.queue.previous.length)
-      await player.queue.utils.save()
-    }
-
-    if ((payload as TrackEndEvent)?.reason !== 'stopped') {
-      await player.queue.utils.save()
+      player.queue.previous.splice(player.queue.options.maxPreviousTracks, player.queue.previous.length)
     }
 
     if (
@@ -1928,7 +1804,7 @@ export class RyanlinkNode {
           functionLayer: 'RyanlinkNode > queueEnd() > destroyAfterMs',
         })
 
-        this._LManager.emit('playerQueueEmptyStart', player, this._LManager.options.playerOptions.onEmptyQueue?.destroyAfterMs)
+        // playerQueueEmptyStart removed
 
         if (player.getData('internal_queueempty')) clearTimeout(player.getData('internal_queueempty'))
         player.setData(
@@ -1936,9 +1812,9 @@ export class RyanlinkNode {
           setTimeout(() => {
             player.setData('internal_queueempty', undefined)
             if (player.queue.current) {
-              return this._LManager.emit('playerQueueEmptyCancel', player)
+              return // playerQueueEmptyCancel removed
             }
-            this._LManager.emit('playerQueueEmptyEnd', player)
+            // playerQueueEmptyEnd removed
             player.destroy(DestroyReasons.QueueEmpty)
           }, this._LManager.options.playerOptions.onEmptyQueue?.destroyAfterMs)
         )
@@ -1957,61 +1833,7 @@ export class RyanlinkNode {
       }
     }
 
-    this._LManager.emit('queueEnd', player, track, payload)
-    return
-  }
-
-  private async LyricsLine(player: Player, track: Track, payload: LyricsLineEvent): Promise<void> {
-    if (!player.queue.current) {
-      player.queue.current = this.getTrackOfPayload(payload)
-      if (player.queue.current) {
-        await player.queue.utils.save()
-      } else {
-        this.dispatchDebug(DebugEvents.TrackStartNoTrack, {
-          state: 'warn',
-          message: `Trackstart emitted but there is no track on player.queue.current, trying to get the track of the payload failed too.`,
-          functionLayer: 'RyanlinkNode > trackStart()',
-        })
-      }
-    }
-
-    this._LManager.emit('LyricsLine', player, track, payload)
-    return
-  }
-
-  private async LyricsFound(player: Player, track: Track, payload: LyricsFoundEvent): Promise<void> {
-    if (!player.queue.current) {
-      player.queue.current = this.getTrackOfPayload(payload)
-      if (player.queue.current) {
-        await player.queue.utils.save()
-      } else {
-        this.dispatchDebug(DebugEvents.TrackStartNoTrack, {
-          state: 'warn',
-          message: `Trackstart emitted but there is no track on player.queue.current, trying to get the track of the payload failed too.`,
-          functionLayer: 'RyanlinkNode > trackStart()',
-        })
-      }
-    }
-
-    this._LManager.emit('LyricsFound', player, track, payload)
-    return
-  }
-
-  private async LyricsNotFound(player: Player, track: Track, payload: LyricsNotFoundEvent): Promise<void> {
-    if (!player.queue.current) {
-      player.queue.current = this.getTrackOfPayload(payload)
-      if (player.queue.current) {
-        await player.queue.utils.save()
-      } else {
-        this.dispatchDebug(DebugEvents.TrackStartNoTrack, {
-          state: 'warn',
-          message: `Trackstart emitted but there is no track on player.queue.current, trying to get the track of the payload failed too.`,
-          functionLayer: 'RyanlinkNode > trackStart()',
-        })
-      }
-    }
-
-    this._LManager.emit('LyricsNotFound', player, track, payload)
+    this._LManager.emit('queueEnd', player)
     return
   }
 

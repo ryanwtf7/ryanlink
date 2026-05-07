@@ -3,7 +3,8 @@ import { isRegExp } from 'node:util/types'
 
 import { DebugEvents } from '../config/Constants'
 import type { RyanlinkManager } from '../core/Manager'
-import { SourceMappings, LinkMatchers } from '../node/Sources'
+import { SourceRegistry } from '../node/Sources'
+const defaultRegistry = new SourceRegistry()
 import type { RyanlinkNode } from '../node/Node'
 import type { Player } from '../audio/Player'
 import type { NodeConfiguration, NodeTypes } from '../types/Node'
@@ -244,7 +245,7 @@ export class RyanlinkUtils {
 
   async getClosestTrack(data: UnresolvedTrack, player: Player): Promise<Track | undefined> {
     try {
-      return getClosestTrack(data, player)
+      return await getClosestTrack(data, player)
     } catch (e) {
       if (this.RyanlinkManager?.options?.advancedOptions?.enableDebugEvents) {
         this.RyanlinkManager?.emit('debug', DebugEvents.GetClosestTrackFailed, {
@@ -308,7 +309,10 @@ export class RyanlinkUtils {
     const sourceManagers = node.info.sourceManagers || []
     const plugins = node.info.plugins || []
 
-    for (const [name, matcher] of Object.entries(LinkMatchers)) {
+    const registry = node?.sourceRegistry || defaultRegistry
+    const matchers = registry.getAllMatchers()
+
+    for (const [name, matcher] of Object.entries(matchers)) {
       if (!(matcher instanceof RegExp) || name === 'CombinedRegex') continue
 
       if (matcher.test(queryString)) {
@@ -333,26 +337,44 @@ export class RyanlinkUtils {
     }
   }
 
-  findSourceOfQuery(queryString: string) {
-    const foundSource = Object.keys(SourceMappings)
+  findSourceOfQuery(queryString: string, node?: RyanlinkNode) {
+    const registry = node?.sourceRegistry || defaultRegistry
+    const mappings = registry.getAllMappings()
+
+    const foundSource = Object.keys(mappings)
       .find((source) => queryString?.toLowerCase?.()?.startsWith(`${source}:`.toLowerCase()))
       ?.trim?.()
       ?.toLowerCase?.() as SearchPlatform | undefined
 
-    if (foundSource && !['https', 'http'].includes(foundSource) && SourceMappings[foundSource]) {
+    if (foundSource && !['https', 'http'].includes(foundSource)) {
       return foundSource
     }
+
+    // Dynamic prefix detection
+    const colonIndex = queryString.indexOf(':')
+    if (colonIndex > 0 && colonIndex < 20) {
+      const prefix = queryString.slice(0, colonIndex).toLowerCase()
+      if (node?.info?.sourceManagers?.includes(prefix)) {
+        return prefix
+      }
+    }
+
     return undefined
   }
 
-  extractSourceOfQuery<T extends { query: string; source?: string }>(searchQuery: T): T {
-    const foundSource = this.findSourceOfQuery(searchQuery.query)
+  extractSourceOfQuery<T extends { query: string; source?: string }>(searchQuery: T, node?: RyanlinkNode): T {
+    const foundSource = this.findSourceOfQuery(searchQuery.query, node)
 
     if (foundSource) {
-      searchQuery.source = SourceMappings[foundSource]
+      const registry = node?.sourceRegistry || defaultRegistry
+      searchQuery.source = registry.getMapping(foundSource) || foundSource
       searchQuery.query = searchQuery.query.slice(`${foundSource}:`.length, searchQuery.query.length)
     }
     return searchQuery
+  }
+
+  safeStringify(obj: any, padding = 0) {
+    return safeStringify(obj, padding)
   }
 
   typedLowerCase<T extends unknown>(input: T) {
@@ -361,7 +383,7 @@ export class RyanlinkUtils {
     return input
   }
 
-  transformQuery(query: SearchQuery) {
+  transformQuery(query: SearchQuery, node?: RyanlinkNode) {
     const typedDefault = this.typedLowerCase(this.RyanlinkManager?.options?.playerOptions?.defaultSearchPlatform)
     if (typeof query === 'string') {
       const Query = {
@@ -369,18 +391,19 @@ export class RyanlinkUtils {
         extraQueryUrlParams: undefined,
         source: typedDefault,
       }
-      return this.extractSourceOfQuery(Query)
+      return this.extractSourceOfQuery(Query, node)
     }
     const providedSource = query?.source?.trim?.()?.toLowerCase?.() as RyanlinkSearchPlatform | undefined
-    const validSourceExtracted = SourceMappings[providedSource ?? typedDefault]
+    const registry = node?.sourceRegistry || defaultRegistry
+    const validSourceExtracted = registry.getMapping(providedSource ?? typedDefault)
     return this.extractSourceOfQuery({
       query: query.query,
       extraQueryUrlParams: query.extraQueryUrlParams,
       source: validSourceExtracted ?? providedSource ?? typedDefault,
-    })
+    }, node)
   }
 
-  transformAudioSearchQuery(query: AudioSearchQuery) {
+  transformAudioSearchQuery(query: AudioSearchQuery, node?: RyanlinkNode) {
     const typedDefault = this.typedLowerCase(this.RyanlinkManager?.options?.playerOptions?.defaultSearchPlatform)
     if (typeof query === 'string') {
       const Query = {
@@ -389,10 +412,11 @@ export class RyanlinkUtils {
         extraQueryUrlParams: undefined,
         source: typedDefault,
       }
-      return this.extractSourceOfQuery(Query)
+      return this.extractSourceOfQuery(Query, node)
     }
     const providedSource = query?.source?.trim?.()?.toLowerCase?.() as RyanlinkSearchPlatform | undefined
-    const validSourceExtracted = SourceMappings[providedSource ?? typedDefault]
+    const registry = node?.sourceRegistry || defaultRegistry
+    const validSourceExtracted = registry.getMapping(providedSource ?? typedDefault)
 
     const Query = {
       query: query.query,
@@ -402,12 +426,13 @@ export class RyanlinkUtils {
       source: validSourceExtracted ?? providedSource ?? typedDefault,
     }
 
-    return this.extractSourceOfQuery(Query)
+    return this.extractSourceOfQuery(Query, node)
   }
 
   validateSourceString(node: RyanlinkNode, sourceString: SearchPlatform) {
     if (!sourceString) throw new Error(`No SourceString was provided`)
-    const source = SourceMappings[sourceString.toLowerCase().trim()] as RyanlinkSearchPlatform
+    const registry = node?.sourceRegistry || defaultRegistry
+    const source = (registry.getMapping(sourceString.toLowerCase().trim()) || sourceString) as RyanlinkSearchPlatform
     
     if (!node.info) throw new Error('Audio Node does not have any info cached yet, not ready yet!')
     if (!node._checkForSources) return
@@ -498,8 +523,6 @@ export async function queueTrackEnd(player: Player, dontShiftQueue: boolean = fa
         player.recentHistory.splice(player.recentHistoryLimit, player.recentHistory.length)
       }
     }
-
-    await player.queue.utils.save()
   }
 
   if (player.repeatMode === 'queue' && player.queue.current) player.queue.tracks.push(player.queue.current)
@@ -510,8 +533,6 @@ export async function queueTrackEnd(player: Player, dontShiftQueue: boolean = fa
     if (nextSong && player.RyanlinkManager.utils.isUnresolvedTrack(nextSong)) await (nextSong as UnresolvedTrack).resolve(player)
 
     player.queue.current = nextSong || null
-
-    await player.queue.utils.save()
   } catch (error) {
     if (player.RyanlinkManager.options?.advancedOptions?.enableDebugEvents) {
       player.RyanlinkManager.emit('debug', DebugEvents.PlayerPlayUnresolvedTrackFailed, {

@@ -12,40 +12,45 @@ Ryanlink includes a built-in `Autoplay` class that automatically finds and queue
 Autoplay is triggered via the `onEmptyQueue.autoPlayFunction` option. Set `player.autoplay = true` to activate it per-player:
 
 ```typescript
+import { RyanlinkManager, Autoplay } from 'ryanlink';
+
 const manager = new RyanlinkManager({
   playerOptions: {
     onEmptyQueue: {
       autoPlayFunction: async (player, lastTrack) => {
-        const { Autoplay } = await import('ryanlink');
-        if (!player.autoplay) return; // gate with your own DB check
+        if (!player.autoplay) return;
         await Autoplay.defaultAutoplay(player, lastTrack);
       },
       destroyAfterMs: 20000, // leave VC after 20s if queue empty and autoplay off
     },
-  }
+  },
 });
 
 // Enable per-player
 player.autoplay = true;
+
+// Disable
+player.autoplay = false;
 ```
 
 ---
 
 ## AutoplayConfig Options
 
-Fine-tune the selection algorithm via `autoplayConfig` in your manager options:
+Fine-tune the selection algorithm via `playerOptions.autoplayConfig`:
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `enabled` | `boolean` | `true` | Whether the built-in `Autoplay` class is active. |
-| `limit` | `number` | `1` | Tracks to add per autoplay trigger. |
-| `minDuration` | `number` | `20000` | Minimum track duration in ms. |
-| `maxDuration` | `number` | `900000` | Maximum track duration in ms. |
-| `durationTolerance` | `number` | `90000` | Max delta (ms) between last track and candidate. Candidates outside this window lose score points. |
-| `historyLimit` | `number` | `20` | Circular buffer size — tracks in this buffer are never re-queued. |
-| `prefetchThreshold` | `number` | `1` | Trigger autoplay early when queue drops to this many tracks remaining. |
-| `excludeKeywords` | `string[]` | See below | Keyword blacklist applied to track titles. |
-| `defaultSource` | `string` | `'ytsearch'` | Fallback search source. |
+| `enabled` | `boolean` | `true` | Whether the built-in `Autoplay` class is active |
+| `defaultSource` | `string` | `'ytsearch'` | Fallback search source |
+| `limit` | `number` | `1` | Tracks to add per autoplay trigger |
+| `minDuration` | `number` | `20000` | Minimum track duration (ms) |
+| `maxDuration` | `number` | `900000` | Maximum track duration (ms) |
+| `durationTolerance` | `number` | `90000` | Max delta (ms) between last track and candidate for full duration score |
+| `historyLimit` | `number` | `20` | Circular buffer size — tracks in this buffer are never re-queued |
+| `prefetchThreshold` | `number` | `1` | Trigger autoplay early when queue drops to this many tracks |
+| `excludeKeywords` | `string[]` | See below | Keyword blacklist applied to track titles |
+| `fetchRelatedTracks` | `function` | `undefined` | Custom async function to fetch candidates: `(player, lastTrack) => Promise<Track[]>` |
 
 Default excluded keywords: `nightcore`, `bass boosted`, `8d audio`, `slowed`, `reverb`, `bass boost`, `pitch shift`, `speed up`, `sped up`.
 
@@ -54,12 +59,14 @@ const manager = new RyanlinkManager({
   playerOptions: {
     autoplayConfig: {
       limit: 1,
+      minDuration: 20000,
+      maxDuration: 900000,
       durationTolerance: 90000,
       historyLimit: 20,
       prefetchThreshold: 1,
       excludeKeywords: ['nightcore', 'slowed', 'reverb', '8d'],
-    }
-  }
+    },
+  },
 });
 ```
 
@@ -71,10 +78,11 @@ const manager = new RyanlinkManager({
 
 The engine tries sources in order until enough candidates are found:
 
-1. **Source-native recommendations** — `sprec:` for Spotify, `scsearch:` for SoundCloud, YouTube mix URL for YouTube, `dzsearch:` for Deezer
-2. **Same-artist search** on the native source
-3. **Title+artist search** on the native source
-4. **Final fallback** — `ytsearch:` artist search
+1. **YouTube** — `ytrec:{identifier}` recommendation query (if source is YouTube and track is not a stream)
+2. **Spotify** — `sprec:seed_artists={artistId}&seed_tracks={trackId}` (if Spotify IDs are available)
+3. **Same-artist search** — `{source}search:{artist}` on the native source
+4. **Title+artist search** — `{source}search:{title} {artist}` on the native source
+5. **Final fallback** — `ytsearch:{artist}` search
 
 ### 2. Weighted Scoring
 
@@ -83,27 +91,62 @@ Each candidate is scored (higher = better):
 | Factor | Points |
 | :--- | :--- |
 | Duration within `durationTolerance` | 0–40 |
-| Same artist (exact match) | +30 |
-| Partial artist match | +15 |
+| Same artist (exact match) | +50 |
+| Partial artist match | +25 |
 | Random jitter | 0–10 |
 
-### 3. Circular History Buffer
+Candidates are sorted by score descending. The top `limit` tracks are selected.
 
-Track identifiers are stored in a per-player buffer (`autoplay_history_buf`). Any track in this buffer is hard-excluded from selection. The buffer is capped at `historyLimit` entries and synced with ryanlink's built-in `recentHistory`.
+### 3. Filtering
 
-### 4. Pre-fetch
+Before scoring, candidates are filtered out if:
+- Their identifier is in the history buffer
+- Their ISRC is in the history buffer
+- Their normalized title is in the history buffer
+- Their title contains an excluded keyword
+- Their normalized title matches the last track's normalized title
+- Their duration is outside `[minDuration, maxDuration]`
+
+### 4. Circular History Buffer
+
+Track identifiers are stored in a per-player buffer (`autoplay_history_buf`). Any track in this buffer is hard-excluded from selection. The buffer is capped at `historyLimit` entries and synced with `player.recentHistory`.
+
+### 5. Pre-fetch
 
 When `queue.tracks.length <= prefetchThreshold`, autoplay triggers early — the next track is resolved and queued before the current one ends, eliminating the silence gap.
 
 ---
 
+## Custom Fetch Function
+
+Override the entire candidate-fetching logic:
+
+```typescript
+const manager = new RyanlinkManager({
+  playerOptions: {
+    autoplayConfig: {
+      fetchRelatedTracks: async (player, lastTrack) => {
+        // Return an array of Track objects
+        const result = await player.search(
+          { query: `${lastTrack.info.author} radio`, source: 'ytsearch' },
+          'Autoplay'
+        );
+        return result.tracks;
+      },
+    },
+  },
+});
+```
+
+---
+
 ## Keyword Exclusion
 
-Keywords are matched case-insensitively using a compiled regex. If the **original** track's title contains a keyword (e.g. it's a slowed remix), that keyword is allowed through for candidates too.
+Keywords are matched case-insensitively against the candidate's title. The last track's own keywords are not used to filter candidates.
 
 ```typescript
 autoplayConfig: {
-  excludeKeywords: ['nightcore', 'bass boosted', '8d audio', 'slowed', 'reverb']
+  excludeKeywords: ['nightcore', 'bass boosted', '8d audio', 'slowed', 'reverb'],
 }
 ```
 
@@ -112,9 +155,16 @@ autoplayConfig: {
 ## Runtime Toggle
 
 ```typescript
-// Enable autoplay for a player
-player.autoplay = true;
+player.autoplay = true;   // enable
+player.autoplay = false;  // disable
+```
 
-// Disable
-player.autoplay = false;
+The `autoplay` flag is also settable via `createPlayer`:
+
+```typescript
+const player = manager.createPlayer({
+  guildId: '...',
+  voiceChannelId: '...',
+  autoplay: true,
+});
 ```

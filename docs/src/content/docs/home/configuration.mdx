@@ -17,28 +17,28 @@ const manager = new RyanlinkManager({
       port: 2333,
       authorization: 'youshallnotpass',
       secure: false,
-      // Optional node settings
-      retryAmount: 10,
-      retryDelay: 5000,
-      retryTimespan: 60000,
+      retryAmount: 5,
+      retryDelay: 10000,
+      retryTimespan: -1,
       heartBeatInterval: 30000,
       closeOnError: true,
       enablePingOnStatsCheck: true,
-      // Disable pre-flight plugin/source checks (recommended)
       autoChecks: {
-        pluginValidations: false,
-        sourcesValidations: false,
+        pluginValidations: true,
+        sourcesValidations: true,
       },
     }
   ],
+
   sendToShard: (guildId, payload) => {
-    // For sharded bots: calculate correct shard from guildId
-    const totalShards = (client.options.shardCount as number) || client.ws.shards.size || 1;
+    // Send gateway payload to the correct shard
+    const totalShards = client.ws.shards.size || 1;
     const shardId = Number((BigInt(guildId) >> 22n) % BigInt(totalShards));
     const shard = client.ws.shards.get(shardId);
     if (shard) shard.send(payload);
-    else client.guilds.cache.get(guildId)?.shard?.send(payload); // fallback
+    else client.guilds.cache.get(guildId)?.shard?.send(payload);
   },
+
   client: {
     id: 'your-bot-id',
     username: 'YourBot',
@@ -51,57 +51,59 @@ const manager = new RyanlinkManager({
   },
 
   // ── Player Defaults ───────────────────────────────────────────────────────
-  playerClass: CustomPlayer,   // optional custom player class
-  autoSkip: true,              // auto-skip on track end
-  autoSkipOnResolveError: true,
-  trackResolveRetryLimit: 3,
-  emitNewSongsOnly: false,
+  playerClass: CustomPlayer,        // optional custom player class
+  autoSkip: true,                   // auto-skip on track end
+  autoSkipOnResolveError: true,     // skip unresolvable tracks
+  trackResolveRetryLimit: 3,        // global resolve retry limit
+  emitNewSongsOnly: false,          // only emit trackStart for new songs
 
   playerOptions: {
-    defaultSearchPlatform: 'spsearch',
-    useUnresolvedData: true,
+    defaultSearchPlatform: 'ytsearch',
+    useUnresolvedData: false,
     clientBasedPositionUpdateInterval: 100,
     volumeDecrementer: 1,
-    requesterTransformer: (requester) => ({ name: requester.username, id: requester.id }),
+    applyVolumeAsFilter: false,
+    allowCustomSources: false,
+    requesterTransformer: (requester) => requester,
 
     onDisconnect: {
-      destroyPlayer: false,
-      autoReconnect: true,
-      autoReconnectOnlyWithTracks: true,
+      destroyPlayer: true,
+      autoReconnect: false,
+      autoReconnectOnlyWithTracks: false,
     },
 
     onEmptyQueue: {
-      destroyAfterMs: 20000,
+      destroyAfterMs: undefined,
       autoPlayFunction: async (player, lastTrack) => {
-        // your autoplay logic
+        // your autoplay logic, or use the built-in:
+        // await Autoplay.defaultAutoplay(player, lastTrack);
       },
     },
 
     autoplayConfig: {
-      enabled: false,          // ryanlink built-in autoplay class toggle
+      enabled: true,
+      defaultSource: 'ytsearch',
       limit: 1,
       minDuration: 20000,
       maxDuration: 900000,
       durationTolerance: 90000,
       historyLimit: 20,
       prefetchThreshold: 1,
-      excludeKeywords: ['nightcore', 'slowed', 'reverb'],
+      excludeKeywords: ['nightcore', 'bass boosted', '8d audio', 'slowed', 'reverb', 'bass boost', 'pitch shift', 'speed up', 'sped up'],
     },
 
-    minAutoPlayMs: 0,
-    enforceSponsorBlockRequestForEventEnablement: true, // auto-call setSponsorBlock on player connect/changeNode
+    minAutoPlayMs: 10000,
+    enforceSponsorBlockRequestForEventEnablement: true,
+    trackResolveRetryLimit: 3,
+    onTrackStart: null,
+    onQueueEnd: null,
+    onNodeFailover: null,
   },
 
   // ── Queue ─────────────────────────────────────────────────────────────────
   queueOptions: {
     maxPreviousTracks: 25,
-    // Built-in stores: MemoryQueueStore (default), LocalDiskQueueStore, RedisQueueStore
-    queueStore: new LocalDiskQueueStore('./.ryanlink/queues'),
     queueChangesWatcher: null,
-    resuming: {
-      enabled: true,   // auto-sync queue from store on player init
-      timeout: 60000,
-    },
   },
 
   // ── Links ─────────────────────────────────────────────────────────────────
@@ -112,7 +114,7 @@ const manager = new RyanlinkManager({
   // ── Advanced ──────────────────────────────────────────────────────────────
   advancedOptions: {
     enableDebugEvents: false,
-    maxFilterFixDuration: 600_000,
+    maxFilterFixDuration: 600000,
     debugOptions: {
       logCustomSearches: false,
       noAudio: false,
@@ -133,17 +135,19 @@ const manager = new RyanlinkManager({
 | :--- | :--- | :--- | :--- |
 | `id` | `string` | `host:port` | Unique node identifier |
 | `host` | `string` | — | Lavalink host |
-| `port` | `number` | — | Lavalink port |
+| `port` | `number` | — | Lavalink port (1–65535) |
 | `authorization` | `string` | — | Lavalink password |
 | `secure` | `boolean` | `false` | Use WSS/HTTPS (port must be 443) |
 | `sessionId` | `string` | — | Manual session ID for resuming |
-| `regions` | `string[]` | `[]` | Voice regions this node serves |
+| `regions` | `string[]` | `[]` | Voice regions this node serves (lowercased automatically) |
+| `nodeType` | `'Core' \| 'NodeLink'` | `'Core'` | Node type — use `'NodeLink'` for NodeLink servers |
 | `retryAmount` | `number` | `5` | Max reconnect attempts |
-| `retryDelay` | `number` | `10000` | Ms between reconnect attempts |
-| `retryTimespan` | `number` | `-1` | Window (ms) to count retries (-1 = unlimited) |
-| `heartBeatInterval` | `number` | `30000` | WS heartbeat interval |
-| `closeOnError` | `boolean` | `true` | Close socket on error |
-| `enablePingOnStatsCheck` | `boolean` | `true` | Ping node on stats check |
+| `retryDelay` | `number` | `10000` | Base delay (ms) between reconnect attempts (exponential backoff) |
+| `retryTimespan` | `number` | `-1` | Window (ms) to count retries; `-1` = unlimited |
+| `requestSignalTimeoutMS` | `number` | `10000` | Abort timeout for REST requests |
+| `heartBeatInterval` | `number` | `30000` | WebSocket heartbeat interval (ms) |
+| `closeOnError` | `boolean` | `true` | Close socket on error and force reconnect |
+| `enablePingOnStatsCheck` | `boolean` | `true` | Trigger heartbeat on every stats event |
 | `autoChecks.pluginValidations` | `boolean` | `true` | Validate plugin names before requests |
 | `autoChecks.sourcesValidations` | `boolean` | `true` | Validate source managers before requests |
 
@@ -153,17 +157,22 @@ const manager = new RyanlinkManager({
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `defaultSearchPlatform` | `string` | `'ytsearch'` | Default search prefix |
-| `useUnresolvedData` | `boolean` | `false` | Use unresolved track metadata |
-| `clientBasedPositionUpdateInterval` | `number` | `100` | Position update interval (ms) |
-| `volumeDecrementer` | `number` | `1` | Scale internal volume |
+| `defaultSearchPlatform` | `string` | `'ytsearch'` | Default search prefix for plain queries |
+| `useUnresolvedData` | `boolean` | `false` | Prefer unresolved track metadata over resolved |
+| `clientBasedPositionUpdateInterval` | `number` | `100` | Client-side position update interval (ms) |
+| `volumeDecrementer` | `number` | `1` | Multiplier applied to internal volume (e.g. `0.75` = 75% max) |
 | `applyVolumeAsFilter` | `boolean` | `false` | Apply volume as a filter instead of player volume |
-| `minAutoPlayMs` | `number` | `10000` | Min ms between autoplay triggers |
+| `allowCustomSources` | `boolean` | `false` | Skip source validation for unknown search prefixes |
+| `minAutoPlayMs` | `number` | `10000` | Minimum ms between autoplay triggers |
 | `trackResolveRetryLimit` | `number` | `3` | Per-player resolve retry limit |
+| `enforceSponsorBlockRequestForEventEnablement` | `boolean` | `true` | Auto-call `setSponsorBlock` on track start |
 | `onDisconnect.destroyPlayer` | `boolean` | `true` | Destroy player on voice disconnect |
 | `onDisconnect.autoReconnect` | `boolean` | `false` | Auto-reconnect on voice disconnect |
 | `onDisconnect.autoReconnectOnlyWithTracks` | `boolean` | `false` | Only reconnect if queue has tracks |
 | `onEmptyQueue.destroyAfterMs` | `number` | `undefined` | Destroy player N ms after queue empties |
+| `onTrackStart` | `function \| null` | `null` | Per-player hook called on every track start |
+| `onQueueEnd` | `function \| null` | `null` | Per-player hook called when queue empties |
+| `onNodeFailover` | `function \| null` | `null` | Per-player hook called when node changes |
 
 ---
 
@@ -171,24 +180,24 @@ const manager = new RyanlinkManager({
 
 ```typescript
 const player = manager.createPlayer({
-  guildId: '...',
-  voiceChannelId: '...',
-  textChannelId: '...',
+  guildId: '123456789',
+  voiceChannelId: '987654321',
+  textChannelId: '111222333',   // optional
   selfDeaf: true,
   selfMute: false,
-  volume: 100,
-  node: 'main',           // optional: pin to specific node
-  vcRegion: 'us-east',    // optional: prefer nodes in this region
+  volume: 100,                  // 0–1000
+  node: 'main',                 // optional: pin to specific node id
+  vcRegion: 'us-east',          // optional: prefer nodes in this region
   autoplay: false,
-  // Lifecycle hooks
+  recentHistory: [],            // optional: pre-populate history buffer
+  customData: {},               // optional: arbitrary key-value data
+  trackResolveRetryLimit: 3,
+  smartLeave: false,            // destroy player when voice channel empties
+  autoPause: false,             // pause when all users leave, resume when they return
+  autoPauseOnMute: false,       // pause when bot is muted
   onTrackStart: (p, track) => {},
   onQueueEnd: (p) => {},
   onNodeFailover: (p, from, to) => {},
-  trackResolveRetryLimit: 3,
-  // NodeLink options
-  smartLeave: false,
-  autoPause: false,
-  autoPauseOnMute: false,
 });
 
 await player.connect();
@@ -199,50 +208,51 @@ await player.connect();
 ## Search
 
 ```typescript
-// Basic search
-const result = await manager.search({ query: 'never gonna give you up', source: 'spsearch' }, requester);
+// Basic search via manager
+const result = await manager.search({ query: 'never gonna give you up', source: 'ytsearch' }, requester);
 
-// Via player (supports bandcamp local engine)
-const result2 = await player.search('ytsearch:daft punk', requester);
+// Via player (also supports bandcamp local engine)
+const result2 = await player.search('spsearch:daft punk', requester);
 
 // LavaSearch (requires lavasearch-plugin)
-const rich = await player.audioSearch({ query: 'daft punk', source: 'spsearch', types: ['track', 'album', 'artist'] }, requester);
+const rich = await player.audioSearch({
+  query: 'daft punk',
+  source: 'spsearch',
+  types: ['track', 'album', 'artist'],
+}, requester);
 ```
 
 ---
 
-## Queue Stores
+## Queue Options
 
-Ryanlink ships three built-in `QueueStore` implementations:
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `maxPreviousTracks` | `number` | `25` | Size of the previous tracks buffer |
+| `queueChangesWatcher` | `QueueChangesWatcher \| null` | `null` | Callback interface for queue mutations |
+
+### QueueChangesWatcher
+
+Implement this interface to react to queue changes:
 
 ```typescript
-import { MemoryQueueStore, LocalDiskQueueStore, RedisQueueStore } from 'ryanlink';
-
-// In-memory (default) — no persistence
-new MemoryQueueStore()
-
-// Local disk — persists across restarts
-new LocalDiskQueueStore('./sessions')
-
-// Redis — for sharded/clustered bots
-new RedisQueueStore(redisClient, 'mybot:queue:')
+const manager = new RyanlinkManager({
+  queueOptions: {
+    queueChangesWatcher: {
+      tracksAdd(guildId, tracks, position, oldQueue, newQueue) {
+        console.log(`[${guildId}] Added ${tracks.length} track(s) at position ${position}`);
+      },
+      tracksRemoved(guildId, tracks, position, oldQueue, newQueue) {
+        console.log(`[${guildId}] Removed ${tracks.length} track(s) from position ${position}`);
+      },
+      shuffled(guildId, oldQueue, newQueue) {
+        console.log(`[${guildId}] Queue shuffled`);
+      },
+    },
+  },
+});
 ```
-
-Or implement your own by satisfying the `QueueStoreManager` interface (`get`, `set`, `delete`, `stringify`, `parse`).
 
 ---
 
 > Always implement `sendToShard` correctly for your Discord library. Without it, Ryanlink cannot communicate with Discord's voice servers.
-
----
-
-## DAVE (E2EE Voice) Compatibility
-
-Discord's DAVE protocol (end-to-end encrypted voice) sends a `VOICE_STATE_UPDATE` with `channel_id: null` during the handshake, even when the bot is actively joining a channel. Ryanlink handles this automatically:
-
-- If `VOICE_STATE_UPDATE` arrives with `channel_id: null` but contains a valid `session_id` and the player is already in a channel, Ryanlink updates the session ID and ignores the disconnect signal.
-- When sending voice data to Lavalink, `player.voiceChannelId` is used as a fallback if `player.voice.channelId` is temporarily null.
-
-No configuration is required — this is handled internally in `provideVoiceUpdate`.
-
-> **Lavalink requirement:** DAVE support requires Lavalink **4.2.0+**. Older versions cannot connect to DAVE endpoints and audio will silently fail.

@@ -1,9 +1,7 @@
 import type { DestroyReasons, DisconnectReasons } from '../config/Constants'
 import type { RyanlinkNode } from '../node/Node'
 import type { FadingConfig } from './NodeLink'
-
 import type { EQBand, FilterData, AudioFilters } from './Filters'
-import type { StoredQueue } from './Queue'
 import type { Track, UnresolvedTrack } from './Track'
 import type { Base64, VoiceConnectionOptions } from './Utils'
 
@@ -52,8 +50,6 @@ export interface PlayerJson {
 
   nodeSessionId?: string
 
-  queue?: StoredQueue
-
   autoplay?: boolean
 
   recentHistory: string[]
@@ -100,7 +96,6 @@ export interface PlayerOptions {
   onNodeFailover?: (player: any, from: any, to: any) => void
 
   trackResolveRetryLimit?: number
-  data?: Partial<StoredQueue>
 }
 
 export type anyObject = { [key: string | number]: string | number | null | anyObject }

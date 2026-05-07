@@ -9,7 +9,7 @@ Ryanlink integrates with all major Lavalink plugins. Plugin checks use the exact
 
 ## Plugin Name Reference
 
-| Plugin | Registers as | Artifact |
+| Plugin | Registered Name | Artifact |
 | :--- | :--- | :--- |
 | LavaSrc | `lavasrc-plugin` | `com.github.topi314.lavasrc:lavasrc-plugin` |
 | LavaSearch | `lavasearch-plugin` | `com.github.topi314.lavasearch:lavasearch-plugin` |
@@ -28,54 +28,37 @@ Ryanlink integrates with all major Lavalink plugins. Plugin checks use the exact
 
 Automatically skip sponsor segments, intros, outros, and more in YouTube videos.
 
-SponsorBlock is **auto-configured** by Ryanlink on every player's first track start and on node reconnect. You do not need to call `setSponsorBlock` manually unless you want custom segments.
-
-### Auto-Configuration
-
-Ryanlink calls `player.setSponsorBlock(['sponsor', 'selfpromo'])` automatically when:
-- A track starts playing for the first time on a player
-- A node reconnects and existing players are restored
-- A player migrates to a new node (`changeNode`)
-
-Enable this behaviour by setting `enforceSponsorBlockRequestForEventEnablement: true` in your manager options (this is the default):
+### Methods
 
 ```typescript
-const manager = new RyanlinkManager({
-  playerOptions: {
-    enforceSponsorBlockRequestForEventEnablement: true,
-  }
-});
-```
-
-### Manual Control
-
-```typescript
-// Override with custom segments
+// Set active segments (call before or during playback)
 await player.setSponsorBlock(['sponsor', 'selfpromo', 'interaction', 'intro', 'outro', 'preview', 'music_offtopic', 'filler']);
 
-// Get current active segments
+// Get currently active segments
 const categories = await player.getSponsorBlock();
 
 // Disable all segment skipping
 await player.deleteSponsorBlock();
 ```
 
+Valid segment categories: `sponsor`, `selfpromo`, `interaction`, `intro`, `outro`, `preview`, `music_offtopic`, `filler`.
+
 ### Events
 
 ```typescript
-manager.on('SegmentsLoaded', (player, track, payload) => {
+manager.on('sponsorBlockSegmentsLoaded', (player, track, payload) => {
   console.log(`Segments loaded: ${payload.segments.map(s => s.category).join(', ')}`);
 });
 
-manager.on('SegmentSkipped', (player, track, payload) => {
+manager.on('sponsorBlockSegmentSkipped', (player, track, payload) => {
   console.log(`Skipped: ${payload.segment.category} (${payload.segment.start}–${payload.segment.end}ms)`);
 });
 
-manager.on('ChaptersLoaded', (player, track, payload) => {
+manager.on('sponsorBlockChaptersLoaded', (player, track, payload) => {
   console.log(`${payload.chapters.length} chapters loaded`);
 });
 
-manager.on('ChapterStarted', (player, track, payload) => {
+manager.on('sponsorBlockChapterStarted', (player, track, payload) => {
   console.log(`Chapter: ${payload.chapter.name}`);
 });
 ```
@@ -89,20 +72,21 @@ Lyrics API hub — aggregates from LavaSrc, java-timed-lyrics, and other sources
 ### Methods
 
 ```typescript
-// Search for lyrics globally across all providers
-const searchResults = await player.node.lyrics.search('never gonna give you up');
-// [{ videoId: '...', title: '...' }]
+// Get lyrics for a specific track
+const lyrics = await player.node.lyrics.get(track);
+const lyrics2 = await player.node.lyrics.get(track, true); // skipTrackSource
 
-// Get lyrics by videoId
-const lyricsResult = await player.node.lyrics.getLyrics(searchResults[0].videoId);
+// Get lyrics for the currently playing track
+const current = await player.node.lyrics.getCurrent(player.guildId);
 
 // Subscribe to real-time lyrics lines during playback
 await player.node.lyrics.subscribe(player.guildId);
+await player.node.lyrics.subscribe(player.guildId, true); // skipTrackSource
 await player.node.lyrics.unsubscribe(player.guildId);
 
-// Convenience methods on the player
-const lyricsData = await player.getCurrentLyrics(); // Wrapper for node.lyrics.getCurrent
-const lyricsByTrack = await player.getLyrics(track); // Wrapper for node.lyrics.get
+// Convenience wrappers on the player
+const lyrics3 = await player.getLyrics(track);
+const current2 = await player.getCurrentLyrics();
 player.subscribeLyrics();
 player.unsubscribeLyrics();
 ```
@@ -110,15 +94,15 @@ player.unsubscribeLyrics();
 ### Events
 
 ```typescript
-manager.on('LyricsFound', (player, track, payload) => {
-  console.log(`Lyrics found via ${payload.lyrics.sourceName}`);
+manager.on('lyricsFound', (player, track, payload) => {
+  console.log(`Lyrics found via ${payload.lyrics?.sourceName}`);
 });
 
-manager.on('LyricsLine', (player, track, payload) => {
+manager.on('lyricsLine', (player, track, payload) => {
   console.log(`[${payload.lineIndex}] ${payload.line.line}`);
 });
 
-manager.on('LyricsNotFound', (player, track, payload) => {
+manager.on('lyricsNotFound', (player, track, payload) => {
   console.log('No lyrics available');
 });
 ```
@@ -143,42 +127,22 @@ const genius = await player.node.timedLyrics.search('never gonna give you up', '
 
 ---
 
-## LavaDSPX Filters <Badge text="LavaDSPX-Plugin" variant="caution" />
-
-Additional audio filters: high-pass, low-pass, normalization, echo.
-
-```typescript
-// Low-pass filter (cuts high frequencies)
-await player.filterManager.dspxPlugin.toggleLowPass(1.0, 80);
-
-// High-pass filter (cuts low frequencies)
-await player.filterManager.dspxPlugin.toggleHighPass(1.0, 80);
-
-// Normalization (prevents clipping)
-await player.filterManager.dspxPlugin.toggleNormalization(0.75, true);
-
-// Echo effect
-await player.filterManager.dspxPlugin.toggleEcho(0.5, 0.5);
-```
-
----
-
 ## LavaSearch <Badge text="lavasearch-plugin" variant="caution" />
 
 Advanced search returning albums, artists, playlists, and text results.
 
 ```typescript
-// Use audioSearch for rich results
 const results = await player.audioSearch({
   query: 'daft punk',
   source: 'spsearch',
-  types: ['track', 'album', 'artist', 'playlist']
-});
+  types: ['track', 'album', 'artist', 'playlist'],
+}, requestUser);
 
-console.log(results.tracks);   // Track[]
-console.log(results.albums);   // Album[]
-console.log(results.artists);  // Artist[]
+console.log(results.tracks);    // Track[]
+console.log(results.albums);    // Album[]
+console.log(results.artists);   // Artist[]
 console.log(results.playlists); // Playlist[]
+console.log(results.texts);     // TextResult[]
 ```
 
 ---
@@ -188,14 +152,16 @@ console.log(results.playlists); // Playlist[]
 Pre-load the next track for zero-silence transitions.
 
 ```typescript
-// Pre-load next track while current is playing
-await player.node.setNextTrackGapLess(player);
+const node = player.node as NodeLinkNode;
+
+// Pre-load next track from queue
+await node.setNextTrackGapLess(player);
 
 // Or specify a track explicitly
-await player.node.setNextTrackGapLess(player, nextTrack);
+await node.setNextTrackGapLess(player, nextTrack);
 
 // Remove the preloaded track
-await player.node.removeNextTrackGapLess(player);
+await node.removeNextTrackGapLess(player);
 ```
 
 ---
@@ -205,28 +171,30 @@ await player.node.removeNextTrackGapLess(player);
 Overlay TTS, SFX, or background music on top of the main track.
 
 ```typescript
-// Add a mix layer (volume is 0.0–1.0)
-const layer = await player.node.addMixerLayer(player, ttsTrack, 0.9);
+const node = player.node as NodeLinkNode;
+
+// Add a mix layer (volume 0–100)
+const layer = await node.addMixerLayer(player, ttsTrack, 90);
 console.log(layer.id); // mixId
 
 // List active layers
-const layers = await player.node.listMixerLayers(player);
+const layers = await node.listMixerLayers(player);
 
 // Update volume of a layer
-await player.node.updateMixerLayerVolume(player, layer.id, 0.5);
+await node.updateMixerLayerVolume(player, layer.id, 50);
 
 // Remove a layer
-await player.node.removeMixerLayer(player, layer.id);
+await node.removeMixerLayer(player, layer.id);
 ```
 
 ### Mixer Events
 
 ```typescript
-manager.nodeManager.on('nodeLinkEvent', (node, eventType, player, track, payload) => {
-  if (eventType === 'MixStartedEvent') {
-    console.log(`Mix started: ${payload.mixId} — ${payload.track.info.title}`);
+manager.nodeManager.on('nodeRaw', (node, payload) => {
+  if (payload.op === 'event' && payload.type === 'MixStartedEvent') {
+    console.log(`Mix started: ${payload.mixId}`);
   }
-  if (eventType === 'MixEndedEvent') {
+  if (payload.op === 'event' && payload.type === 'MixEndedEvent') {
     console.log(`Mix ended: ${payload.mixId} — reason: ${payload.reason}`);
   }
 });
@@ -234,4 +202,36 @@ manager.nodeManager.on('nodeLinkEvent', (node, eventType, player, track, payload
 
 ---
 
-> Ensure your Lavalink node has the corresponding plugins installed in its `plugins` directory and configured in `application.yml`.
+## NodeLink Filters <Badge text="NodeLink only" variant="tip" />
+
+NodeLink-exclusive audio filters via `node.specificFilters`:
+
+```typescript
+const node = player.node as NodeLinkNode;
+
+// Echo
+await node.specificFilters.echo(player, { delay: 0.5, feedback: 0.3, mix: 0.5 });
+await node.specificFilters.echo(player, {}, true); // disable
+
+// Chorus
+await node.specificFilters.chorus(player, { rate: 1.0, depth: 0.5, delay: 0.02, mix: 0.5, feedback: 0.3 });
+
+// Compressor
+await node.specificFilters.compressor(player, { threshold: -20, ratio: 4, attack: 5, release: 50, gain: 0 });
+
+// High-pass
+await node.specificFilters.highPass(player, { smoothing: 20 });
+
+// Phaser
+await node.specificFilters.phaser(player, { stages: 4, rate: 0.5, depth: 0.5, feedback: 0.3, mix: 0.5, minFrequency: 300, maxFrequency: 3000 });
+
+// Spatial
+await node.specificFilters.spatial(player, { depth: 0.5, rate: 0.5 });
+
+// Reset all NodeLink filters
+await node.specificFilters.resetNodeLinkFilters(player);
+```
+
+---
+
+> Ensure your Lavalink node has the corresponding plugins installed and configured in `application.yml`.

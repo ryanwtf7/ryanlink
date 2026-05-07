@@ -11,73 +11,115 @@ The `NodeManager` emits events for node connectivity and lifecycle. Listen on `m
 
 | Event | Signature | Description |
 | :--- | :--- | :--- |
-| `create` | `(node)` | A new node was added to the manager. |
-| `connect` | `(node)` | Node WebSocket connected successfully. |
-| `disconnect` | `(node, reason)` | Node WebSocket disconnected. `reason.code` and `reason.reason`. |
-| `reconnecting` | `(node)` | Manager is about to attempt reconnection. |
-| `reconnectinprogress` | `(node)` | Reconnection attempt is in progress. |
-| `error` | `(node, error, payload?)` | Node encountered a REST or WebSocket error. |
-| `destroy` | `(node, destroyReason?)` | Node was destroyed and removed from the manager. |
-| `raw` | `(node, payload)` | Every raw WebSocket payload received from the node. Known ops: `ready`, `stats`, `playerUpdate`, `event`. |
-| `resumed` | `(node, payload, players)` | Node session resumed. `players` is the array of restored player states. |
-
-## NodeLink Exclusive Events <Badge text="NodeLink only" variant="tip" />
-
-NodeLink emits additional specialized events. These are dispatched via the `nodeLinkEvent` listener on the `NodeManager`:
-
-```typescript
-manager.nodeManager.on('nodeLinkEvent', (node, eventType, player, track, payload) => {
-  // eventType is one of the NodeLinkEventTypes
-});
-```
-
-| Event Type | Description |
-| :--- | :--- |
-| `PlayerCreatedEvent` | Player created on NodeLink. `payload.player` contains the initial state. |
-| `PlayerDestroyedEvent` | Player destroyed on NodeLink. |
-| `PlayerConnectedEvent` | Player connected to voice. `payload.voice` contains session details. |
-| `PlayerReconnectingEvent` | Player reconnecting to voice. |
-| `VolumeChangedEvent` | Volume changed. `payload.volume` (0–1000). |
-| `FiltersChangedEvent` | Filters updated. `payload.filters` contains the new filter state. |
-| `SeekEvent` | Seek performed. `payload.position` in ms. |
-| `PauseEvent` | Pause/resume toggled. `payload.paused`. |
-| `ConnectionStatusEvent` | Voice connection status changed. `payload.status`: `connected`, `unstable`, `disconnected`. |
-| `MixStartedEvent` | Audio mixer layer started. `payload.mixId`, `payload.track`, `payload.volume`. |
-| `MixEndedEvent` | Audio mixer layer ended. `payload.mixId`, `payload.reason`: `FINISHED`, `REMOVED`, `ERROR`, `MAIN_ENDED`. |
-| `WorkerFailedEvent` | Cluster worker failed. `payload.affectedGuilds[]`, `payload.message`. |
-| `StreamMetadataEvent` | ICY radio metadata received. `payload.stream.metadata`. |
-| `EternalBoxInfoEvent` | Eternal Box beat analysis ready. |
-| `EternalBoxJumpEvent` | Eternal Box seamless jump. `payload.fromBeat`, `payload.toBeat`, `payload.jumpType`. |
+| `nodeCreate` | `(node)` | A new node was added to the manager. |
+| `nodeConnect` | `(node)` | Node WebSocket connected. Forwarded to `manager`. |
+| `nodeDisconnect` | `(node, reason)` | Node WebSocket disconnected. `reason.code`, `reason.reason`. Forwarded to `manager`. |
+| `nodeError` | `(node, error, payload?)` | Node encountered a REST or WebSocket error. Forwarded to `manager`. |
+| `nodeReady` | `(node, payload)` | Node session ready. `payload.resumed`, `payload.sessionId`. Forwarded to `manager`. |
+| `nodeRaw` | `(node, payload)` | Every raw WebSocket payload received from the node. Forwarded to `manager`. |
 
 ## Usage Examples
 
 ```typescript
-// Standard node events
-manager.nodeManager.on('connect', (node) => {
-  console.log(`[Node] ${node.id} connected | Session: ${node.sessionId}`);
+manager.nodeManager.on('nodeCreate', (node) => {
+  console.log(`[NodeManager] Node created: ${node.id}`);
 });
 
-manager.nodeManager.on('disconnect', (node, reason) => {
-  console.warn(`[Node] ${node.id} disconnected: ${reason.reason} (${reason.code})`);
+manager.nodeManager.on('nodeConnect', (node) => {
+  console.log(`[NodeManager] ${node.id} connected | Session: ${node.sessionId}`);
 });
 
-manager.nodeManager.on('resumed', (node, payload, players) => {
-  console.log(`[Node] ${node.id} resumed — restored ${players.length} players`);
+manager.nodeManager.on('nodeDisconnect', (node, reason) => {
+  console.warn(`[NodeManager] ${node.id} disconnected: ${reason.reason} (${reason.code})`);
 });
 
-manager.nodeManager.on('error', (node, error) => {
-  console.error(`[Node] ${node.id} error: ${error.message}`);
+manager.nodeManager.on('nodeReady', (node, payload) => {
+  console.log(`[NodeManager] ${node.id} ready — resumed: ${payload.resumed}, session: ${payload.sessionId}`);
 });
 
-// NodeLink exclusive
-manager.nodeManager.on('nodeLinkEvent', (node, eventType, player, track, payload) => {
-  if (eventType === 'ConnectionStatusEvent') {
-    console.log(`[NodeLink] ${player?.guildId} connection: ${payload.status}`);
-  }
-  if (eventType === 'WorkerFailedEvent') {
-    console.error(`[NodeLink] Worker failed — affected guilds: ${payload.affectedGuilds.join(', ')}`);
+manager.nodeManager.on('nodeError', (node, error) => {
+  console.error(`[NodeManager] ${node.id} error: ${error.message}`);
+});
+
+manager.nodeManager.on('nodeRaw', (node, payload) => {
+  // Fires for every WebSocket message — use with caution in high-concurrency environments
+  if (payload.op === 'stats') {
+    console.log(`[NodeManager] ${node.id} stats: ${payload.players} players`);
   }
 });
 ```
 
-> Use the `raw` event with caution — it fires for every WebSocket message and can be extremely verbose in high-concurrency environments.
+## NodeManager Methods
+
+```typescript
+// Create a node
+const node = manager.nodeManager.createNode({
+  id: 'extra',
+  host: 'node2.example.com',
+  port: 2333,
+  authorization: 'pw',
+});
+
+// Get a node by id or instance
+const node = manager.nodeManager.getNode('extra');
+
+// Delete a node (movePlayers=true migrates players to another node)
+manager.nodeManager.deleteNode('extra', false);
+manager.nodeManager.deleteNode('extra', true); // migrate players
+
+// Least-used nodes (only returns connected nodes)
+const nodes = manager.nodeManager.leastUsedNodes('weighted');
+const nodes2 = manager.nodeManager.leastUsedNodes('players'); // default
+
+// Bulk operations
+await manager.nodeManager.disconnectAll(deleteAllNodes, destroyPlayers);
+await manager.nodeManager.connectAll();
+await manager.nodeManager.reconnectAll();
+
+// Serialize
+const json = manager.nodeManager.toJSON();
+// { nodeCount: 2, nodes: ['main', 'extra'] }
+```
+
+## Node Health API
+
+```typescript
+const node = manager.nodeManager.getNode('main');
+
+// Metric summary
+const metrics = node.nodeMetricSummary();
+// { cpuLoad, systemLoad, memoryUsage, players, playingPlayers, uptime, ping, frameDeficit }
+
+// Health status
+const health = node.getHealthStatus();
+// { status: 'healthy' | 'degraded' | 'critical' | 'offline', performance, isOverloaded, needsRestart, penaltyScore, estimatedRemainingCapacity, recommendations, metrics }
+
+// Custom thresholds
+const health2 = node.getHealthStatus({
+  cpu: { excellent: 0.3, good: 0.5, fair: 0.7, poor: 0.85 },
+  memory: { excellent: 60, good: 75, fair: 85, poor: 95 },
+  ping: { excellent: 50, good: 100, fair: 200, poor: 300 },
+});
+
+// Weighted score (lower = healthier, Infinity if disconnected)
+console.log(node.weightedScore);
+
+// Connection state
+console.log(node.connected);           // boolean
+console.log(node.connectionStatus);    // 'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED'
+console.log(node.isNodeReconnecting);  // boolean
+console.log(node.reconnectionAttemptCount); // number
+console.log(node.heartBeatPing);       // ms
+console.log(node.handshakePing);       // ms (set on open)
+console.log(node.isAlive);             // boolean
+```
+
+## Route Planner API
+
+```typescript
+const status = await node.routePlannerApi.getStatus();
+await node.routePlannerApi.unmarkFailedAddress('1.2.3.4');
+await node.routePlannerApi.unmarkAllFailedAddresses();
+```
+
+> Use the `nodeRaw` event with caution — it fires for every WebSocket message and can be extremely verbose in high-concurrency environments.

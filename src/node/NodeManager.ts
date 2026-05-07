@@ -55,6 +55,7 @@ export class NodeManager extends EventEmitter {
       } else {
         await node.disconnect(DisconnectReasons.DisconnectAllNodes)
       }
+      this.emit('nodeDisconnect', node, { code: 1000, reason: DisconnectReasons.DisconnectAllNodes })
       counter++
     }
     return counter
@@ -88,6 +89,7 @@ export class NodeManager extends EventEmitter {
     if (this.nodes.has(options.id || `${options.host}:${options.port}`)) return this.nodes.get(options.id || `${options.host}:${options.port}`) as T
     const newNode = options.nodeType === 'NodeLink' ? new NodeLinkNode(options, this) : new RyanlinkNode(options, this)
     this.nodes.set(newNode.id, newNode)
+    this.emit('nodeCreate', newNode)
     return newNode as T
   }
 

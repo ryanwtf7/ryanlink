@@ -8,82 +8,106 @@ import { Badge } from '@astrojs/starlight/components';
 ## Core
 
 - **RyanlinkManager** — central hub for nodes, players, voice state, and search
-- **Multi-node support** — weighted load balancing (`memory`, `cpuLavalink`, `cpuSystem`, `calls`, `playingPlayers`, `players`, `weighted`)
-- **Atomic node migration** — seamless player failover when a node disconnects
+- **Multi-node support** — weighted load balancing across 7 sort strategies: `memory`, `cpuLavalink`, `cpuSystem`, `calls`, `playingPlayers`, `players`, `weighted`
+- **Atomic node migration** — seamless player failover when a node disconnects (`autoMove` or manual `player.moveNode()`)
 - **Session resuming** — Lavalink session persistence across reconnects
-- **Queue persistence** — pluggable `QueueStore` (in-memory by default, custom Redis/disk supported)
-- **Track resolve retries** — configurable retry limit with `autoSkipOnResolveError`
-- **Voice state sync** — automatic `VOICE_STATE_UPDATE` / `VOICE_SERVER_UPDATE` handling
+- **Track resolve retries** — configurable `trackResolveRetryLimit` with `autoSkipOnResolveError`
+- **Voice state sync** — automatic `VOICE_STATE_UPDATE` / `VOICE_SERVER_UPDATE` / `CHANNEL_DELETE` handling
+- **DAVE (E2EE) compatible** — handles Discord's end-to-end encrypted voice handshake automatically
+- **Custom player class** — extend `Player` and pass via `playerClass` option
+- **Source registry** — dynamic `SourceRegistry` per node for custom search prefix mappings and matchers
 
 ## Player
 
-- **Full playback control** — `play`, `pause`, `resume`, `seek`, `skip`, `stop`, `setVolume`, `setRepeatMode`
+- **Full playback control** — `play`, `pause(boolean)`, `resume`, `seek`, `skip`, `stopPlaying`, `setVolume`, `setRepeatMode`
 - **Repeat modes** — `off`, `track`, `queue`
-- **Gapless preloading** (NodeLink) — `nextTrack` field for zero-silence transitions
-- **High-Performance Audio** — Native fetch, efficient memory management, and parallel track loading.
-- **Dynamic Filter Stacking** — Non-destructive filter layering with built-in presets (Pop, Electronic, etc.).
-- **Proactive Automation** — Smart auto-pause/resume, empty channel handling, and resolution self-healing.
-- **Deep Lyrics Integration** — Native support for timed and text lyrics via `lavalyrics` plugin.
-- **Memory-Optimized Registry** — Industry-leading `TrackRegistry` for zero-overhead large queue management.
-- **Strictly Type-Safe** — 100% TypeScript with advanced module augmentation support.
+- **Volume fade** — `setVolume` applies changes in 10 steps over 500ms for smooth transitions
 - **Volume decrementer** — scale internal volume independently of reported volume
+- **Position tracking** — client-side position computed from `lastPosition + elapsed`
+- **Smart leave** — `smartLeave: true` destroys player when voice channel empties
+- **Auto-pause** — `autoPause: true` pauses when all users leave, resumes when they return
+- **Auto-pause on mute** — `autoPauseOnMute: true` pauses when bot is muted
+- **Auto-reconnect** — `onDisconnect.autoReconnect` reconnects and resumes playback
 - **Lifecycle hooks** — `onTrackStart`, `onQueueEnd`, `onNodeFailover` per-player
+- **Data store** — `set/get/setData/getData/deleteData/clearData/getAllData` per-player key-value store
+- **Node migration** — `player.changeNode(node)` / `player.moveNode()` for live node switching
+- **Gapless preloading** (NodeLink) — `nextTrack` field for zero-silence transitions
 
 ## Queue
 
-- **TrackRegistry** — memory-efficient track reference mapping for large queues
+- **TrackRegistry** — memory-efficient track reference mapping; `TrackEntry` stores data once, referenced by ID
 - **Previous tracks buffer** — configurable `maxPreviousTracks` (default 25)
-- **Queue operations** — `add`, `remove`, `splice`, `move`, `shuffle`, `clear`
+- **Queue operations** — `add`, `remove`, `move`, `shuffle`, `clear`, `skipTo`, `addPrevious`
+- **Index insertion** — `queue.add(track, index)` inserts at a specific position
 - **Fisher-Yates shuffle** — statistically unbiased randomization
-- **Queue changes watcher** — `QueueChangesWatcher` interface for custom side effects
+- **Queue changes watcher** — `QueueChangesWatcher` interface: `tracksAdd`, `tracksRemoved`, `shuffled`
 - **Unresolved tracks** — lazy resolution with `useUnresolvedData` support
+- **Functional methods** — `find`, `filter`, `map`, `some`, `every`
+- **`toJSON()`** — serializes queue state including voice channel, volume, node ID
 
 ## Filters <Badge text="All non-destructive" variant="tip" />
 
 **Standard Lavalink filters:**
-`equalizer` (15-band), `karaoke`, `timescale`, `tremolo`, `vibrato`, `rotation`, `distortion`, `channelMix`, `lowPass`
+`equalizer` (15-band), `karaoke`, `timescale`, `tremolo`, `vibrato`, `rotation`, `distortion`, `channelMix`, `lowPass`, `volume`
 
-**Built-in presets:**
-`Nightcore`, `Vaporwave`, `8D`, `Slowmo`, `DoubleTime`, `Radio`, `Lofi`, `Tremolo`, `Vibrato`, `BassBoost`, `Pop`, `Rock`, `Classic`, `Electronic`, `Gaming`, `Soft`, `TV`, `TrebleBass`
+**High-level API:**
+`setSpeed`, `setPitch`, `setVolume`, `toggleNightcore`, `toggleVaporwave`, `setEQ`, `setPreset`, `set`, `remove`, `override`, `resetFilters`, `clear`
 
-**NodeLink exclusive filters:**
-`echo`, `chorus`, `compressor`, `highpass`, `phaser`, `spatial`
+**Built-in EQ presets** (via `FilterManager.EQList`):
+`BassboostEarrape`, `BassboostHigh`, `BassboostMedium`, `BassboostLow`, `BassboostSoft`, `Pop`, `Rock`, `Classic`, `Electronic`, `Gaming`, `Soft`, `TV`, `TrebleBass`, `Nightcore`, `Vaporwave`, and more
+
+**NodeLink exclusive filters** (via `node.specificFilters`):
+`echo`, `chorus`, `compressor`, `highPass`, `phaser`, `spatial`, `resetNodeLinkFilters`
 
 **LavaDSPX plugin filters:**
 `low-pass`, `high-pass`, `normalization`, `echo`
 
 **filter-engine / lava-xm-plugin filters:**
-`echo` (with delay/decay), `reverb`
+`echo` (delay/decay), `reverb`
 
 ## Search
 
-- **50+ search prefixes** — YouTube, Spotify, Apple Music, Deezer, Tidal, SoundCloud, JioSaavn, Yandex Music, VK Music, Qobuz, Pandora, Audiomack, Shazam, Last.fm, Amazon Music, Gaana, Instagram, Bilibili, Bandcamp, and more
-- **NodeLink exclusive** — Mixcloud, NicoVideo, Songlink, Audius, Anghami, Bluesky, Letras, Eternal Box, Piper TTS, Google TTS
-- **LavaSearch** — `audioSearch()` for albums, artists, playlists, text results
-- **Source validation** — configurable `autoChecks.sourcesValidations` and `autoChecks.pluginValidations`
-- **Link matchers** — automatic source detection for direct URLs
+- **Multi-platform** — YouTube, Spotify, Apple Music, Deezer, Tidal, SoundCloud, JioSaavn, Yandex Music, VK Music, Qobuz, Pandora, Audiomack, Bandcamp, and more
+- **LavaSearch** — `audioSearch()` for albums, artists, playlists, text results (requires `lavasearch-plugin`)
+- **Source validation** — `autoChecks.sourcesValidations` validates source managers before requests
+- **Plugin validation** — `autoChecks.pluginValidations` validates plugin availability before requests
+- **Link matchers** — per-node `SourceRegistry` with `registerMatcher` for automatic URL source detection
+- **Source mappings** — per-node `SourceRegistry` with `registerMapping` for custom prefix aliases
+- **Blacklist/whitelist** — `linksBlacklist`, `linksWhitelist`, `linksAllowed` for URL filtering
+- **Bandcamp local engine** — `player.search` falls back to Bandcamp's autocomplete API when node lacks bandcamp source
+- **`allowCustomSources`** — skip source validation for custom/unknown prefixes
 
 ## Autoplay
 
-- **Multi-source fetch chain** — Spotify rec → SoundCloud → YouTube mix → Deezer → artist search → title search → ytsearch fallback
-- **Weighted scoring** — duration similarity (40pts) + same artist (30pts) + partial match (15pts) + jitter (10pts)
-- **Circular history buffer** — configurable `historyLimit` (default 20), prevents re-queuing recent tracks
+- **Multi-source fetch chain** — Spotify rec → SoundCloud → YouTube mix → artist search → title search → ytsearch fallback
+- **Weighted scoring** — duration similarity (0–40pts) + same artist (50pts) + partial match (25pts) + jitter (0–10pts)
+- **Circular history buffer** — `historyLimit` (default 20), prevents re-queuing recent tracks
 - **Pre-fetch** — triggers early when queue drops to `prefetchThreshold` tracks
-- **Keyword exclusion** — regex-based blacklist with modifier-aware logic
-- **Duration tolerance** — soft window, not hard exclusion
+- **Keyword exclusion** — title-based blacklist with configurable `excludeKeywords`
+- **Duration tolerance** — soft window scoring, not hard exclusion
+- **Custom fetch function** — `autoplayConfig.fetchRelatedTracks` for fully custom candidate fetching
+- **Runtime toggle** — `player.autoplay = true/false`
+
+## Node Health
+
+- **Weighted score** — `(cpu.systemLoad × 0.7) + (memory.used/allocated × 0.2) + (players/100 × 0.1)`
+- **Health status** — `node.getHealthStatus()` returns `healthy`, `degraded`, `critical`, or `offline` with recommendations
+- **Node metrics** — `node.nodeMetricSummary()` returns CPU, memory, players, ping, frame deficit
+- **Heartbeat** — WebSocket ping/pong with configurable `heartBeatInterval`
+- **Exponential backoff** — reconnect delay doubles each attempt up to 30s
+- **Reconnection state** — `IDLE`, `PENDING`, `RECONNECTING`, `DESTROYING`
 
 ## Plugin Support
 
 | Plugin | Registered Name | Features |
 | :--- | :--- | :--- |
 | LavaSrc | `lavasrc-plugin` | Spotify, Apple Music, Deezer, Tidal, Yandex, VK, JioSaavn, Qobuz, Pandora, lyrics |
-| LavaSearch | `lavasearch-plugin` | Advanced search (albums, artists, playlists) |
+| LavaSearch | `lavasearch-plugin` | Advanced search (albums, artists, playlists, text) |
 | LavaLyrics | `lavalyrics-plugin` | Lyrics API hub, real-time line events |
 | SponsorBlock | `sponsorblock-plugin` | Segment skipping, chapter events |
-| LavaDSPX | `LavaDSPX-Plugin` | DSP filters |
-| DuncteBot Skybot | `skybot-lavalink-plugin` | speak:, phsearch:, mixcloud, etc. |
-| DuncteBot TTS | `tts-plugin` | Google Cloud TTS |
-| java-timed-lyrics | `java-lyrics-plugin` | YouTube + Genius lyrics |
+| LavaDSPX | `LavaDSPX-Plugin` | DSP filters (high-pass, low-pass, normalization, echo) |
+| DuncteBot Skybot | `skybot-lavalink-plugin` | speak:, phsearch:, mixcloud, getyarn, etc. |
+| java-timed-lyrics | `java-lyrics-plugin` | YouTube + Genius timed lyrics |
 | lyrics.kt | `lyrics` | YouTube lyrics |
 | lava-xm-plugin | `lava-xm-plugin` | Tracker module formats (MOD, XM, IT, S3M) |
 
@@ -93,8 +117,11 @@ import { Badge } from '@astrojs/starlight/components';
 - **Fading** — smooth volume transitions (`trackStart`, `trackEnd`, `stop`, `seek`, `ducking`) with `linear`, `exponential`, `logarithmic`, `s-curve`
 - **Gapless preloading** — `setNextTrackGapLess`, `removeNextTrackGapLess`
 - **Direct streaming** — `getDirectStream`, `loadDirectStream`, `loadDirectStreamPost`
-- **Lyrics** — `loadLyrics`, `loadChapters`, `getMeaning`, `timedLyrics.*`
+- **Lyrics** — `loadLyrics`, `loadChapters`, `getMeaning`, `nodeLinkLyrics`, `subscribeLyricsNodeLink`, `unsubscribeLyricsNodeLink`, `getChapters`, `timedLyrics.*`
 - **YouTube config** — `updateYoutubeConfig`, `getYoutubeConfig`, `getYoutubeOAUTH`, `updateYoutubeOAUTH`
 - **Workers** — `getWorkers`, `patchWorker`
 - **Track encoding** — `encodeTrack`, `encodeTracks`
 - **Extended stats** — `getDetailedStats` with per-source and per-endpoint tracking
+- **NodeLink info** — `getNodeLinkInfo`, `getConnectionMetrics`
+- **Multi-audio track** — `changeAudioTrackLanguage` for dubbed content
+- **NodeLink-exclusive filters** — `echo`, `chorus`, `compressor`, `highPass`, `phaser`, `spatial` via `node.specificFilters`

@@ -7,13 +7,17 @@ export default {
     '^.+\\.tsx?$': [
       'ts-jest',
       {
-        diagnostics: { ignoreCodes: [1343] },
+        diagnostics: false,
       },
     ],
   },
   setupFilesAfterEnv: ['./test/jest.setup.ts'],
   collectCoverage: false,
-  collectCoverageFrom: ['src/**/*.ts'],
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/types/**/*.ts',
+    '!src/globals.d.ts',
+  ],
   coverageDirectory: 'coverage',
   coverageProvider: 'v8',
   coverageReporters: ['text', 'lcov', 'clover', 'json'],

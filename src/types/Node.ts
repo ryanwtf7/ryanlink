@@ -1,10 +1,6 @@
 import type { RyanlinkNode } from '../node/Node'
-import type { Player } from '../audio/Player'
-
-import type { NodeLinkEventPayload, NodeLinkEventTypes } from './NodeLink'
+import type { PluginInfo } from './Track'
 import type { DestroyReasonsType } from './Player'
-import type { PluginInfo, Track } from './Track'
-import type { InvalidRestRequest, AudioPlayerState } from './Utils'
 
 export type ModifyRequest = (options: RequestInit & { path: string; extraQueryUrlParams?: URLSearchParams }) => void
 
@@ -134,6 +130,11 @@ export interface NodeConfiguration {
   dunctebot?: DuncteBotOptions
 
   lavadspx?: LavaDSPXOptions
+
+  resuming?: {
+    enabled: boolean
+    timeout: number
+  }
 }
 
 export interface MemoryStats {
@@ -280,33 +281,21 @@ export interface LyricsLine {
 export type RyanlinkNodeIdentifier = string
 
 export interface NodeManagerEvents {
-  create: (node: RyanlinkNode) => void
+  nodeCreate: (node: RyanlinkNode) => void
 
-  destroy: (node: RyanlinkNode, destroyReason?: DestroyReasonsType) => void
+  nodeDestroy: (node: RyanlinkNode, destroyReason?: DestroyReasonsType) => void
 
-  connect: (node: RyanlinkNode) => void
+  nodeConnect: (node: RyanlinkNode) => void
 
-  reconnecting: (node: RyanlinkNode) => void
+  nodeReconnect: (node: RyanlinkNode) => void
 
-  reconnectinprogress: (node: RyanlinkNode) => void
+  nodeDisconnect: (node: RyanlinkNode, reason: { code?: number; reason?: string }) => void
 
-  disconnect: (node: RyanlinkNode, reason: { code?: number; reason?: string }) => void
+  nodeError: (node: RyanlinkNode, error: Error, payload?: unknown) => void
 
-  error: (error: Error, node: RyanlinkNode, payload?: unknown) => void
+  nodeReady: (node: RyanlinkNode, payload: { resumed: boolean; sessionId: string }) => void
 
-  raw: (node: RyanlinkNode, payload: unknown) => void
-
-  resumed: (
-    node: RyanlinkNode,
-    payload: { resumed: true; sessionId: string; op: 'ready' },
-    players: AudioPlayerState[] | InvalidRestRequest
-  ) => void
-
-  nodeLinkEvent: (
-    ...args: {
-      [K in NodeLinkEventTypes]: [node: RyanlinkNode, event: K, player: Player, track: Track | null, payload: NodeLinkEventPayload<K>]
-    }[NodeLinkEventTypes]
-  ) => void
+  nodeRaw: (node: RyanlinkNode, payload: unknown) => void
 }
 
 export enum ReconnectionState {
@@ -316,4 +305,4 @@ export enum ReconnectionState {
   DESTROYING = 'DESTROYING',
 }
 
-export type NodeTypes = 'Core' | 'NodeLink'
+export type NodeTypes = 'LavaLink' | 'NodeLink' | 'Core'

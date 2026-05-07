@@ -1,5 +1,4 @@
 import type { Track, UnresolvedTrack } from './Track'
-import type { Awaitable } from './Utils'
 
 export interface StoredQueue {
   current: Track | null
@@ -13,31 +12,10 @@ export interface StoredQueue {
   nodeId?: string
 }
 
-export interface QueueStoreManager {
-  get: (guildId: string) => Awaitable<StoredQueue | string | undefined>
-
-  set: (guildId: string, value: StoredQueue | string) => Awaitable<void | boolean>
-
-  delete: (guildId: string) => Awaitable<void | boolean>
-
-  keys: () => Awaitable<string[]>
-
-  stringify: (value: StoredQueue | string) => Awaitable<StoredQueue | string>
-
-  parse: (value: StoredQueue | string | undefined) => Awaitable<Partial<StoredQueue>>
-}
-
 export interface ManagerQueueOptions {
   maxPreviousTracks?: number
 
-  queueStore?: QueueStoreManager
-
   queueChangesWatcher?: QueueChangesWatcher
-
-  resuming?: {
-    enabled: boolean
-    timeout: number
-  }
 }
 
 export interface QueueChangesWatcher {
@@ -45,17 +23,17 @@ export interface QueueChangesWatcher {
     guildId: string,
     tracks: (Track | UnresolvedTrack)[],
     position: number,
-    oldStoredQueue: StoredQueue,
-    newStoredQueue: StoredQueue
+    oldQueue: StoredQueue,
+    newQueue: StoredQueue
   ) => void
 
   tracksRemoved: (
     guildId: string,
     tracks: (Track | UnresolvedTrack)[],
     position: number | number[],
-    oldStoredQueue: StoredQueue,
-    newStoredQueue: StoredQueue
+    oldQueue: StoredQueue,
+    newQueue: StoredQueue
   ) => void
 
-  shuffled: (guildId: string, oldStoredQueue: StoredQueue, newStoredQueue: StoredQueue) => void
+  shuffled: (guildId: string, oldQueue: StoredQueue, newQueue: StoredQueue) => void
 }

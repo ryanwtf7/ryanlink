@@ -2,7 +2,6 @@ import { EventEmitter } from 'node:events'
 import { DebugEvents, DestroyReasons } from '../config/Constants'
 import { NodeManager } from '../node/NodeManager'
 import { Player, Autoplay } from '../audio/Player'
-import { MemoryQueueStore } from '../audio/QueueStore'
 import type { BotClientOptions, DeepRequired, ManagerEvents, RyanConfiguration, RequiredManagerOptions } from '../types/Manager'
 import type { NodeConfiguration } from '../types/Node'
 import type { PlayerOptions } from '../types/Player'
@@ -127,11 +126,6 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
       queueOptions: {
         maxPreviousTracks: options?.queueOptions?.maxPreviousTracks ?? 25,
         queueChangesWatcher: options?.queueOptions?.queueChangesWatcher ?? null,
-        queueStore: options?.queueOptions?.queueStore ?? new MemoryQueueStore(),
-        resuming: {
-          enabled: options?.resuming?.enabled ?? false,
-          timeout: options?.resuming?.timeout ?? 60000,
-        },
       },
       advancedOptions: {
         enableDebugEvents: options?.advancedOptions?.enableDebugEvents ?? false,
@@ -167,27 +161,10 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     if (!options?.nodes || !Array.isArray(options?.nodes) || !options?.nodes.every((node) => this.utils.isNodeOptions(node)))
       throw new SyntaxError('ManagerOption.nodes must be an Array of NodeOptions and is required of at least 1 Node')
 
-    if (options?.queueOptions?.queueStore) {
-      const keys = Object.getOwnPropertyNames(Object.getPrototypeOf(options?.queueOptions?.queueStore))
-      const requiredKeys = ['get', 'set', 'stringify', 'parse', 'delete']
-      if (!requiredKeys.every((v) => keys.includes(v)) || !requiredKeys.every((v) => typeof options?.queueOptions?.queueStore[v] === 'function'))
-        throw new SyntaxError(`The provided ManagerOption.QueueStore, does not have all required functions: ${requiredKeys.join(', ')}`)
-    }
-
-    if (options?.queueOptions?.queueChangesWatcher) {
-      const keys = Object.getOwnPropertyNames(Object.getPrototypeOf(options?.queueOptions?.queueChangesWatcher))
-      const requiredKeys = ['tracksAdd', 'tracksRemoved', 'shuffled']
-      if (
-        !requiredKeys.every((v) => keys.includes(v)) ||
-        !requiredKeys.every((v) => typeof options?.queueOptions?.queueChangesWatcher[v] === 'function')
-      )
-        throw new SyntaxError(
-          `The provided ManagerOption.DefaultQueueChangesWatcher, does not have all required functions: ${requiredKeys.join(', ')}`
-        )
-    }
-
-    if (typeof options?.queueOptions?.maxPreviousTracks !== 'number' || options?.queueOptions?.maxPreviousTracks < 0)
+    if (typeof options?.queueOptions?.maxPreviousTracks !== 'number' || options?.queueOptions?.maxPreviousTracks < 0) {
+      if (!options.queueOptions) options.queueOptions = {} as any
       options.queueOptions.maxPreviousTracks = 25
+    }
   }
 
   private dispatchDebug(name: DebugEvents, eventData: any) {
@@ -224,16 +201,11 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     this.validateOptions(this.options)
 
     this.nodeManager = new NodeManager(this as RyanlinkManager)
-    this.nodeManager.on('error', (error, node) => {
-      if (this.options?.advancedOptions?.enableDebugEvents) {
-        this.emit('debug', DebugEvents.NodeError, {
-          state: 'error',
-          error: error,
-          message: `Node "${node.id}" encountered an error: ${error.message}`,
-          functionLayer: 'RyanlinkManager > nodeManager > error',
-        })
-      }
-    })
+    this.nodeManager.on('nodeConnect', (node) => this.emit('nodeConnect', node))
+    this.nodeManager.on('nodeDisconnect', (node, reason) => this.emit('nodeDisconnect', node, reason))
+    this.nodeManager.on('nodeError', (node, error) => this.emit('nodeError', node, error))
+    this.nodeManager.on('nodeReady', (node, payload) => this.emit('nodeReady', node, payload))
+    this.nodeManager.on('nodeRaw', (node, payload) => this.emit('nodeRaw', node, payload))
   }
 
   public toJSON() {
@@ -258,57 +230,7 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
     return newPlayer
   }
 
-  public async resumePlayers(): Promise<void> {
-    if (!this.options.resuming?.enabled) return
-
-    const store = this.options.queueOptions.queueStore
-    if (typeof store.keys !== 'function') {
-        this.dispatchDebug(DebugEvents.NoAudioDebug, {
-            state: 'warn',
-            message: 'QueueStore does not support keys() method. Skipping resumePlayers().',
-            functionLayer: 'RyanlinkManager > resumePlayers()',
-        })
-        return
-    }
-
-    const keys = await store.keys()
-    
-    for (const guildId of keys) {
-        try {
-            const data = await store.get(guildId)
-            const parsed = await store.parse(data)
-            
-            if (parsed && (parsed.current || parsed.tracks?.length)) {
-                const player = this.createPlayer({
-                    guildId,
-                    voiceChannelId: parsed.voiceChannel,
-                    textChannelId: parsed.textChannel,
-                    node: parsed.nodeId || undefined,
-                    data: parsed,
-                })
-                
-                if (parsed.voiceChannel) {
-                    await player.connect().catch(() => {})
-                }
-                
-                if (parsed.current) {
-                    await player.play({
-                        paused: parsed.paused,
-                        volume: parsed.volume,
-                        startTime: parsed.position,
-                        clientTrack: parsed.current,
-                    }).catch(() => {})
-                }
-            }
-        } catch (e) {
-            this.dispatchDebug(DebugEvents.NoAudioDebug, {
-                state: 'error',
-                message: `Failed to resume player for guild ${guildId}: ${e.message}`,
-                functionLayer: 'RyanlinkManager > resumePlayers()',
-            })
-        }
-    }
-  }
+  // resumePlayers removed
 
   public async search(
     query: SearchQuery,
@@ -329,6 +251,8 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
   public destroyPlayer(guildId: string, destroyReason?: string): Promise<void | CustomPlayerT> {
     const oldPlayer = this.getPlayer(guildId)
     if (!oldPlayer) return
+    // Remove from players map synchronously so callers don't need to await
+    this.players.delete(guildId)
     return oldPlayer.destroy(destroyReason) as Promise<void | CustomPlayerT>
   }
 
@@ -368,12 +292,11 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
         success++
       } catch (err) {
         console.error(err)
-        this.nodeManager.emit('error', err, node)
+        this.nodeManager.emit('nodeError', node, err)
       }
     }
     if (success > 0) {
       this.initiated = true
-      await this.resumePlayers().catch(() => {})
     } else
       this.dispatchDebug(DebugEvents.FailedToConnectToNodes, {
         state: 'error',
@@ -487,7 +410,7 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
         const serverUpdate = update as any as VoiceServer
         player.voice.token = serverUpdate.token
         player.voice.endpoint = serverUpdate.endpoint
-        
+
         const voiceData = {
           token: player.voice.token,
           endpoint: player.voice.endpoint,
@@ -534,8 +457,6 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
 
       if (update.user_id !== this.options?.client.id) {
         if (update.user_id && player.voiceChannelId) {
-          this.emit(update.channel_id === player.voiceChannelId ? 'playerVoiceJoin' : 'playerVoiceLeave', player, update.user_id)
-
           if (update.channel_id !== player.voiceChannelId) {
             const users = this.getVoiceStateUsers(player.guildId, player.voiceChannelId)
             if (users.length <= 1) {
@@ -623,7 +544,7 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
           playerOptions: {
             voice: voiceData as any,
           },
-        }).catch(() => {})
+        }).catch(() => { })
       }
 
       if (update.channel_id) {
@@ -640,14 +561,14 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
         player.voiceState.suppress = update.suppress ?? player.voiceState?.suppress
 
         if (selfMuteChanged || serverMuteChanged) {
-          this.emit('playerMuteChange', player, player.voiceState.selfMute, player.voiceState.serverMute)
+          // playerMuteChange emission removed
           if (player.options.autoPauseOnMute === true) {
             if (player.voiceState.selfMute || player.voiceState.serverMute) await player.pause()
             else await player.resume()
           }
         }
-        if (selfDeafChanged || serverDeafChanged) this.emit('playerDeafChange', player, player.voiceState.selfDeaf, player.voiceState.serverDeaf)
-        if (suppressChange) this.emit('playerSuppressChange', player, player.voiceState.suppress)
+        if (selfDeafChanged || serverDeafChanged) { /* playerDeafChange emission removed */ }
+        if (suppressChange) { /* playerSuppressChange emission removed */ }
       } else if (!('token' in update)) {
         const { autoReconnectOnlyWithTracks, destroyPlayer, autoReconnect } = this.options?.playerOptions?.onDisconnect ?? {}
 
@@ -659,11 +580,11 @@ export class RyanlinkManager<CustomPlayerT extends Player = Player> extends Even
           try {
             const previousPosition = player.position
             const previousPaused = player.paused
-            
+
             if (!autoReconnectOnlyWithTracks || (autoReconnectOnlyWithTracks && (player.queue.current || player.queue.tracks.length))) {
               await player.connect()
 
-              this.emit('playerReconnect', player, player.voiceChannelId)
+              // playerReconnect emission removed
             }
 
             if (player.queue.current) {

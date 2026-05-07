@@ -472,6 +472,7 @@ export interface Session {
   timeout: number
 }
 
+
 export interface GuildShardPayload {
   op: number
 

@@ -3,172 +3,9 @@ title: Quick Setup
 description: Wire up RyanlinkManager with your Discord.js bot in minutes.
 ---
 
-import { Steps } from '@astrojs/starlight/components';
-import { Badge } from '@astrojs/starlight/components';
+import { Steps, Badge } from '@astrojs/starlight/components';
 
-The `RyanlinkManager` is the central class in Ryanlink, responsible for initializing and managing Lavalink nodes, creating and destroying audio players, and handling Discord voice state updates. It extends Node's `EventEmitter`, allowing you to listen for various events throughout the lifecycle of your nodes and players.
-
-## Instantiation
-
-To create a new `RyanlinkManager` instance:
-
-```typescript
-import { RyanlinkManager } from 'ryanlink';
-
-const manager = new RyanlinkManager({
-  client: { id: 'YOUR_BOT_ID' },
-  nodes: [
-    {
-      id: 'my-node-1',
-      host: 'localhost',
-      port: 2333,
-      authorization: 'youshallnotpass',
-    },
-  ],
-  sendToShard: (guildId, payload) => {
-    // Your Discord bot library's method to send gateway payloads
-    // Example for discord.js:
-    // client.guilds.cache.get(guildId)?.shard?.send(payload);
-  },
-  // ... other options
-});
-
-// Initialize the manager (connects to Lavalink nodes)
-manager.init({ id: 'YOUR_BOT_ID' });
-```
-
-### `RyanConfiguration<CustomPlayerT>` Options
-
-The constructor accepts a `RyanConfiguration` object. Key properties include:
-
--   `client: { id: string; username?: string; }` <Badge text="Required" variant="danger" />: Your bot's client ID and optional username.
--   `nodes: NodeConfiguration[]` <Badge text="Required" variant="danger" />: An array of Lavalink node configurations.
--   `sendToShard: (guildId: string, payload: object) => void` <Badge text="Required" variant="danger" />: A function your bot uses to send Discord gateway voice updates.
--   `playerClass?: Player` <Badge text="Optional" />: Custom Player class to use. Defaults to `Player`.
--   `playerOptions?: PlayerOptions` <Badge text="Optional" />: Default options for new players.
--   `autoMove?: boolean` <Badge text="Optional" />: Automatically move players to other nodes if a node fails. Defaults to `false`.
--   `autoSkip?: boolean` <Badge text="Optional" />: Automatically skip to the next track on playback errors. Defaults to `true`.
--   `autoSkipOnResolveError?: boolean` <Badge text="Optional" />: Automatically skip tracks that fail to resolve. Defaults to `true`.
--   `emitNewSongsOnly?: boolean` <Badge text="Optional" />: Only emit `trackStart` for truly new songs, not resumed ones. Defaults to `false`.
--   `resuming?: { enabled: boolean; timeout: number; }` <Badge text="Optional" />: Resume configuration for players. `enabled` defaults to `false`, `timeout` defaults to `60000`ms.
--   `linksWhitelist?: string[]` <Badge text="Optional" />: Array of allowed domains/links for playback.
--   `linksBlacklist?: string[]` <Badge text="Optional" />: Array of disallowed domains/links for playback.
--   `linksAllowed?: boolean` <Badge text="Optional" />: Whether links are allowed at all. Defaults to `true`.
--   `queueOptions?: QueueOptions` <Badge text="Optional" />: Options for the player queue.
--   `advancedOptions?: AdvancedOptions` <Badge text="Optional" />: Advanced debug and behavior options.
-
-## Properties
-
-### `manager.options`
-
--   **Type:** `RyanConfiguration<CustomPlayerT>`
--   The configuration options passed during instantiation, with defaults applied.
-
-### `manager.nodeManager`
-
--   **Type:** [`NodeManager`](#)
--   Manages all connected Lavalink nodes. Refer to [Node Events](pathname:///extra/node-events) for its event structure.
-
-### `manager.utils`
-
--   **Type:** `RyanlinkUtils`
--   Utility functions for internal operations like query transformation.
-
-### `manager.voiceStates`
-
--   **Type:** `Map<string, { guildId: string; channelId: string; userId: string; deaf: boolean; mute: boolean }>`
--   A map storing cached Discord voice states for users in active voice channels.
-
-### `manager.initiated`
-
--   **Type:** `boolean`
--   Indicates whether the manager has been successfully initialized via `manager.init()`.
-
-### `manager.players`
-
--   **Type:** `MiniMap<string, CustomPlayerT>`
--   A map of active [`Player`](#) instances, keyed by `guildId`.
-
-### `manager.useable`
-
--   **Type:** `boolean`
--   A getter that returns `true` if at least one Lavalink node is connected and available, `false` otherwise.
-
-## Methods
-
-### `manager.init(clientData: BotClientOptions): Promise<this>`
-
-Initializes the manager and attempts to connect to all configured Lavalink nodes. Must be called once after instantiation.
-
--   `clientData`: An object containing `id: string` (your bot's user ID) and optionally `username: string`.
-
-### `manager.getPlayer(guildId: string): CustomPlayerT | undefined`
-
-Retrieves an existing player for the given guild ID.
-
--   `guildId`: The ID of the Discord guild.
--   **Returns:** The `Player` instance if found, otherwise `undefined`.
-
-### `manager.createPlayer(options: PlayerOptions): CustomPlayerT`
-
-Creates a new audio player for the specified guild. If a player already exists for the guild, it returns the existing one.
-
--   `options`: [`PlayerOptions`](#) for the new player.
--   **Returns:** The new or existing `Player` instance.
-
-### `manager.destroyPlayer(guildId: string, destroyReason?: string): Promise<void | CustomPlayerT>`
-
-Destroys an active player and disconnects it from the voice channel. This is the recommended method to stop playback and clean up resources.
-
--   `guildId`: The ID of the Discord guild.
--   `destroyReason?`: An optional reason for destroying the player (e.g., `DestroyReasons.ChannelDeleted`).
-
-### `manager.deletePlayer(guildId: string): boolean | void`
-
-Deletes a player internally without proper destruction. **Avoid using this method directly unless you know what you're doing.** It's preferable to use `manager.destroyPlayer()`.
-
--   `guildId`: The ID of the Discord guild.
--   **Returns:** `true` if the player was deleted, `false` if not found, or `void`.
-
-### `manager.search(query: SearchQuery, requestUser?: unknown, node?: RyanlinkNode | NodeLinkNode, throwOnEmpty: boolean = false): Promise<SearchResult>`
-
-Searches for tracks on a Lavalink node.
-
--   `query`: The search query (string or object with `query`, `source`, etc.).
--   `requestUser?`: The user who requested the search (can be any type, used for requester data).
--   `node?`: The specific `RyanlinkNode` or `NodeLinkNode` to use for the search. Defaults to the least used node.
--   `throwOnEmpty`: If `true`, throws an error if no results are found. Defaults to `false`.
--   **Returns:** A `SearchResult` object.
-
-### `manager.provideVoiceUpdate(data: VoicePacket | VoiceServer | VoiceState | ChannelDeletePacket): Promise<void>`
-
-Handles raw Discord voice state and voice server update payloads. Your Discord bot library should forward these events to this method.
-
--   `data`: The raw Discord gateway payload.
-
-### `manager.getVoiceStateUsers(guildId: string, channelId: string): { guildId: string; channelId: string; userId: string; deaf: boolean; mute: boolean }[]`
-
-Retrieves a list of users (excluding the bot itself) currently in the specified voice channel, based on cached voice states.
-
--   `guildId`: The ID of the Discord guild.
--   `channelId`: The ID of the voice channel.
--   **Returns:** An array of user voice state objects.
-
-### `manager.toJSON()`
-
-Returns a simple JSON object representing the manager's current state, including `initiated`, `playerCount`, and `nodeCount`.
-
-### Event Emitter Methods
-
-The `RyanlinkManager` extends `EventEmitter` and supports standard event methods:
-
--   `manager.on(event, listener)`
--   `manager.once(event, listener)`
--   `manager.off(event, listener)`
--   `manager.emit(event, ...args)`
--   `manager.removeListener(event, listener)`
-
-For a full list of events and their signatures, refer to [Manager Events](pathname:///extra/manager-events).
+The `RyanlinkManager` is the central class in Ryanlink. It manages Lavalink nodes, creates and destroys audio players, and handles Discord voice state updates. It extends Node's `EventEmitter`.
 
 ## Minimal Setup (Discord.js)
 
@@ -179,7 +16,9 @@ For a full list of events and their signatures, refer to [Manager Events](pathna
    import { Client, GatewayIntentBits } from 'discord.js';
    import { RyanlinkManager } from 'ryanlink';
 
-   const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+   const client = new Client({
+     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+   });
 
    const manager = new RyanlinkManager({
      nodes: [{
@@ -190,8 +29,7 @@ For a full list of events and their signatures, refer to [Manager Events](pathna
        autoChecks: { pluginValidations: false, sourcesValidations: false },
      }],
      sendToShard: (guildId, payload) => {
-       // For sharded bots: calculate correct shard from guildId
-       const totalShards = (client.options.shardCount as number) || client.ws.shards.size || 1;
+       const totalShards = client.ws.shards.size || 1;
        const shardId = Number((BigInt(guildId) >> 22n) % BigInt(totalShards));
        const shard = client.ws.shards.get(shardId);
        if (shard) shard.send(payload);
@@ -206,13 +44,11 @@ For a full list of events and their signatures, refer to [Manager Events](pathna
 
    ```typescript
    client.on('raw', (packet) => {
-     if (client.manager?.initiated) {
-       client.manager.provideVoiceUpdate(packet).catch(() => {});
+     if (manager.initiated) {
+       manager.provideVoiceUpdate(packet).catch(() => {});
      }
    });
    ```
-
-   > **DAVE (E2EE) note:** Discord's DAVE protocol sends `VOICE_STATE_UPDATE` with `channel_id: null` during the handshake even when the bot is actively joining. Ryanlink handles this automatically — it preserves `player.voiceChannelId` as a fallback so Lavalink always receives the correct channel ID.
 
 3. **Initialize on ready**
 
@@ -234,23 +70,18 @@ For a full list of events and their signatures, refer to [Manager Events](pathna
      selfDeaf: true,
    });
 
-   if (!player.connected) {
-     await player.connect();
-     // Wait until Lavalink has received the voice server update
-     // (player.voice.token + sessionId are set once VOICE_SERVER_UPDATE is processed)
-     for (let i = 0; i < 50; i++) {
-       if (player.voice?.token && player.voice?.sessionId) break;
-       await new Promise(r => setTimeout(r, 100));
-     }
+   if (!player.connected) await player.connect();
+
+   const result = await manager.search(
+     { query: 'never gonna give you up', source: 'ytsearch' },
+     interaction.user
+   );
+
+   if (!result.tracks.length) {
+     return interaction.reply('No results found.');
    }
 
-   const result = await manager.search({ query: 'never gonna give you up', source: 'ytsearch' }, interaction.user);
-
-   if (!result.tracks.length) return interaction.reply('No results found.');
-
-   const track = result.tracks[0];
-   track.requester = interaction.user;
-   await player.queue.add(track);
+   player.queue.add(result.tracks[0]);
 
    if (!player.playing) await player.play();
    ```
@@ -258,265 +89,313 @@ For a full list of events and their signatures, refer to [Manager Events](pathna
 
 ---
 
-## Lavalink application.yml
+## Manager API
 
-```yaml
-server:
-  port: 2333
-  address: 0.0.0.0
+### Constructor
 
-lavalink:
-  server:
-    sources:
-      youtube: false # Using Youtube natively on lavalink is deprecated, disable it and use https://github.com/lavalink-devs/youtube-source instead.
-    password: 'youshallnotpass'
-    bufferDurationMs: 225
-    frameBufferDurationMs: 5000
-    youtubePlaylistLoadLimit: 3
-    opusEncodingQuality: 5
-    resamplingQuality: MEDIUM
-    trackStuckThresholdMs: 5000
-    playerUpdateInterval: 3
-    useSeekGhosting: true
-    youtubeSearchEnabled: true
-    soundcloudSearchEnabled: true
-    gc-warnings: true
-  plugins:
-    - dependency: 'dev.lavalink.youtube:youtube-plugin:1.18.0' # https://github.com/lavalink-devs/youtube-source
-    - dependency: 'com.github.topi314.lavasrc:lavasrc-plugin:4.8.1' # https://github.com/topi314/LavaSrc
-    - dependency: 'com.github.topi314.lavasearch:lavasearch-plugin:1.0.0' # https://github.com/topi314/LavaSearch
-    - dependency: 'com.dunctebot:skybot-lavalink-plugin:1.7.0' # https://github.com/DuncteBot/skybot-lavalink-plugin
-    - dependency: 'com.github.devoxin:lavadspx-plugin:0.0.5' # https://github.com/devoxin/LavaDSPX-Plugin
-      repository: 'https://jitpack.io'
-    - dependency: 'com.github.topi314.lavalyrics:lavalyrics-plugin:1.1.0' # https://github.com/topi314/LavaLyrics
-    - dependency: 'me.duncte123:java-lyrics-plugin:1.6.6' # https://github.com/DuncteBot/java-timed-lyrics
+```typescript
+new RyanlinkManager(options: RyanConfiguration)
+```
 
-plugins:
-  lyrics:
-    countryCode: de
-    geniusApiKey: '<insert>'
-  lavalyrics:
-    sources:
-      - genius
-      - spotify
-      - youtube
-      - deezer
-      - yandexMusic
-  youtube:
-    enabled: true
-    # YouTube's cipher changes are becoming more frequent and complex, making it harder to keep up.
-    # To simplify signature deciphering, you can use a remote cipher server like yt-cipher.
-    # remoteCipher:
-    #   userAgent: 'your_service_name'
-    #   url: 'http://localhost:8001'
-    oauth:
-      enabled: false
-      # refreshToken: "Insert your refresh token here"
-    allowSearch: true
-    allowDirectVideoIds: true
-    allowDirectPlaylistIds: true
-    clients:
-      - 'ANDROID_MUSIC'
-      - 'MUSIC'
-      - 'WEB'
-      - 'WEBEMBEDDED'
-      - 'TVHTML5_SIMPLY'
-    ANDROID_MUSIC:
-      videoLoading: true
-      searching: true
-      playback: true
-    MUSIC:
-      searching: true
-      playback: false
-    WEB:
-      videoLoading: true
-      searching: true
-      playback: true
-    WEBEMBEDDED:
-      playback: true
-    TVHTML5_SIMPLY:
-      playback: true
-  lavasrc:
-    providers:
-      - 'ytsearch:"%ISRC%"'
-      - 'dzisrc:%ISRC%'
-      - 'ytsearch:%QUERY%'
-      - 'dzsearch:%QUERY%'
-      - 'jssearch:%QUERY%'
-      - 'pdsearch:%QUERY%'
-      - 'scsearch:%QUERY%'
-      - 'tdsearch:%QUERY%'
-    sources:
-      spotify: true
-      applemusic: true
-      deezer: true
-      jiosaavn: true
-      pandora: true
-      yandexmusic: true
-      flowerytts: true
-      youtube: true
-      tidal: true
-      vkmusic: true
-      qobuz: true
-      ytdlp: true
-    lyrics-sources:
-      spotify: true
-      deezer: true
-      youtube: true
-      yandexmusic: true
-      vkmusic: true
-      lrcLib: true
-    spotify:
-      # clientId: "<insert>"
-      # clientSecret: "<insert>"
-      # spDc: "<insert>"
-      preferAnonymousToken: true
-      customTokenEndpoint: 'http://localhost:8080/api/token'
-      resolveArtistsInSearch: true
-      albumLoadLimit: 2
-      countryCode: 'US'
-      playlistLoadLimit: 3
-      localFiles: true
-    applemusic:
-      countryCode: 'US'
-      mediaAPIToken: '<insert>'
-      playlistLoadLimit: 3
-      albumLoadLimit: 3
-    deezer:
-      masterDecryptionKey: 'your master decryption key'
-      arl: 'your deezer arl'
-      formats: ['FLAC', 'MP3_320', 'MP3_256', 'MP3_128', 'MP3_64', 'AAC_64']
-    youtube:
-      countryCode: 'US'
-      playlistLoadLimit: 1
-      albumLoadLimit: 1
-      artistLoadLimit: 1
-    yandexmusic:
-      accessToken: '<insert>'
-    tidal:
-      countryCode: 'US'
-      searchLimit: 6
-      token: 'your tidal token'
-    qobuz:
-      userOauthToken: 'your user oauth token'
-    ytdlp:
-      path: 'yt-dlp'
-      searchLimit: 10
-    jiosaavn:
-      decryption:
-        secretKey: 'your_key'
-        algorithm: 'DES'
-        transformation: 'DES/ECB/PKCS5Padding'
-    pandora:
-      csrfToken: 'your csrf token'
-      searchLimit: 6
-    vkmusic:
-      userToken: 'your user token'
-      playlistLoadLimit: 1
-      artistLoadLimit: 1
-      recommendationsLoadLimit: 10
-    flowerytts:
-      voice: 'Olivia'
-      translate: false
-      silence: 0
-      speed: 1.0
-      audioFormat: 'mp3'
-  dunctebot:
-    ttsLanguage: 'en-US'
-    sources:
-      getyarn: true
-      clypit: true
-      tts: true
-      pornhub: true
-      reddit: true
-      ocremix: true
-      tiktok: true
-      mixcloud: true
-      soundgasm: true
+**Required options:**
+- `nodes` — array of node configurations (can be empty `[]`)
+- `sendToShard` — function to send gateway payloads to Discord
+- `client.id` — your bot's user ID
 
-metrics:
-  prometheus:
-    enabled: false
-    endpoint: /metrics
+### Properties
 
-sentry:
-  dsn: ''
-  environment: ''
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `options` | `RyanConfiguration` | Applied configuration with defaults |
+| `nodeManager` | `NodeManager` | Manages all Lavalink nodes |
+| `utils` | `RyanlinkUtils` | Internal utility functions |
+| `players` | `MiniMap<string, Player>` | Active players keyed by `guildId` |
+| `voiceStates` | `Map<string, VoiceStateEntry>` | Cached Discord voice states |
+| `initiated` | `boolean` | Whether `init()` has been called |
+| `useable` | `boolean` | `true` if at least one node is connected |
 
-logging:
-  file:
-    max-history: 5
-    max-size: 10MB
-    path: ./logs/
-  level:
-    root: DEBUG
-    lavalink: DEBUG
-  request:
-    enabled: true
-    includeClientInfo: true
-    includeHeaders: true
-    includeQueryString: true
-    includePayload: true
-    maxPayloadLength: 10000
-  logback:
-    rollingpolicy:
-      max-file-size: 10MB
-      max-history: 5
+### Methods
+
+#### `manager.init(clientData)`
+
+Connects to all configured Lavalink nodes. Call once after the bot is ready.
+
+```typescript
+await manager.init({ id: client.user.id, username: client.user.username });
+```
+
+#### `manager.createPlayer(options)`
+
+Creates a new player for a guild, or returns the existing one.
+
+```typescript
+const player = manager.createPlayer({ guildId: '...', voiceChannelId: '...' });
+```
+
+#### `manager.getPlayer(guildId)`
+
+Returns the player for a guild, or `undefined`.
+
+```typescript
+const player = manager.getPlayer('123456789');
+```
+
+#### `manager.destroyPlayer(guildId, reason?)`
+
+Destroys a player — disconnects from voice, cleans up resources, emits `playerDestroy`. This is the correct way to stop a player.
+
+```typescript
+await manager.destroyPlayer('123456789', 'User left');
+```
+
+#### `manager.deletePlayer(guildId)`
+
+Removes a player from the internal map without full cleanup. **Use `destroyPlayer` instead** unless you know what you're doing. Throws if the player is still connected and `dontThrowError` is not set.
+
+#### `manager.search(query, requestUser?, node?, throwOnEmpty?)`
+
+Searches for tracks on the least-used connected node (or a specific node).
+
+```typescript
+const result = await manager.search({ query: 'daft punk', source: 'spsearch' }, user);
+// result.loadType — 'search' | 'track' | 'playlist' | 'empty' | 'error'
+// result.tracks   — Track[]
+// result.playlist — PlaylistInfo | null
+```
+
+#### `manager.provideVoiceUpdate(data)`
+
+Handles raw Discord gateway payloads. Forward all `VOICE_STATE_UPDATE`, `VOICE_SERVER_UPDATE`, and `CHANNEL_DELETE` events here.
+
+```typescript
+client.on('raw', (packet) => manager.provideVoiceUpdate(packet));
+```
+
+#### `manager.getVoiceStateUsers(guildId, channelId)`
+
+Returns cached voice state entries for users in a specific channel.
+
+```typescript
+const users = manager.getVoiceStateUsers('guildId', 'channelId');
+```
+
+#### `manager.toJSON()`
+
+Returns `{ initiated, playerCount, nodeCount }`.
+
+---
+
+## Player API
+
+### Playback
+
+```typescript
+// Play (uses queue.current or shifts from queue.tracks)
+await player.play();
+
+// Pause / resume
+await player.pause(true);   // pause
+await player.pause(false);  // resume
+await player.resume();      // same as pause(false), throws if not paused
+
+// Seek (ms)
+await player.seek(30000);
+
+// Skip
+await player.skip();        // skip current track
+await player.skip(2);       // skip 2 tracks ahead
+
+// Stop
+await player.stopPlaying(clearQueue: true, executeAutoplay: false);
+
+// Volume (0–1000)
+await player.setVolume(80);
+
+// Repeat
+await player.setRepeatMode('off' | 'track' | 'queue');
+```
+
+### Voice
+
+```typescript
+await player.connect();
+await player.disconnect();
+await player.setVoiceChannel({ voiceChannelId: 'newChannelId' });
+```
+
+### Data Store
+
+```typescript
+player.set('myKey', value);
+player.get<T>('myKey');
+player.setData('myKey', value);
+player.getData<T>('myKey');
+player.deleteData('myKey');
+player.clearData();
+player.getAllData();
+```
+
+### Properties
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `guildId` | `string` | Guild ID |
+| `voiceChannelId` | `string \| null` | Current voice channel |
+| `textChannelId` | `string \| null` | Text channel for messages |
+| `playing` | `boolean` | Whether audio is playing |
+| `paused` | `boolean` | Whether audio is paused |
+| `volume` | `number` | Current volume (0–1000) |
+| `internalVolume` | `number` | Volume after `volumeDecrementer` |
+| `position` | `number` | Current playback position (ms, computed) |
+| `repeatMode` | `'off' \| 'track' \| 'queue'` | Repeat mode |
+| `autoplay` | `boolean` | Whether autoplay is enabled |
+| `queue` | `Queue` | The player's queue |
+| `filterManager` | `FilterManager` | Filter controls |
+| `node` | `RyanlinkNode \| NodeLinkNode` | The assigned audio node |
+| `ping` | `{ node: number, ws: number }` | Latency metrics |
+| `recentHistory` | `string[]` | Recent track identifiers (for autoplay) |
+
+---
+
+## Queue API
+
+```typescript
+const q = player.queue;
+
+// Add tracks (returns new queue length)
+q.add(track);
+q.add(track, 0);          // insert at position 0 (play next)
+q.add([track1, track2]);  // add multiple
+
+// Remove
+q.remove(index);          // remove 1 track at index
+q.remove(index, 3);       // remove 3 tracks starting at index
+
+// Reorder
+q.move(fromIndex, toIndex);
+q.shuffle();
+
+// Clear
+q.clear();                // clear tracks only
+q.clear(true);            // clear tracks + previous
+
+// Skip to
+q.skipTo(index);          // shift to track at index, set as current
+
+// Inspect
+q.size;                   // number of queued tracks
+q.first;                  // first track or null
+q.last;                   // last track or null
+q.totalDuration;          // total duration including current (ms)
+q.current;                // currently playing track
+q.previous;               // previously played tracks (up to maxPreviousTracks)
+
+// Functional
+q.find(predicate);
+q.filter(predicate);
+q.map(callback);
+q.some(predicate);
+q.every(predicate);
+```
+
+---
+
+## Filters
+
+```typescript
+const fm = player.filterManager;
+
+// High-level presets
+await fm.toggleNightcore();
+await fm.toggleVaporwave();
+await fm.setSpeed(1.2);
+await fm.setPitch(1.1);
+await fm.setVolume(0.8);   // filter volume (0.0–5.0)
+
+// EQ
+await fm.setEQ([{ band: 0, gain: 0.5 }, { band: 1, gain: 0.3 }]);
+await fm.setPreset('BassboostHigh');
+await fm.setPreset('Nightcore');
+await fm.setPreset('Vaporwave');
+await fm.setPreset('Clear');
+
+// Low-level
+await fm.set('rotation', { rotationHz: 0.2 });
+await fm.remove('rotation');
+await fm.override({ timescale: { speed: 1.1, pitch: 1.2, rate: 1 } });
+
+// Reset everything
+await fm.resetFilters();
+await fm.clear(); // alias for resetFilters
+
+// Check state
+fm.filters.nightcore;   // boolean
+fm.filters.vaporwave;   // boolean
+fm.filters.rotation;    // boolean
+fm.checkFiltersState(); // recompute filter flags
 ```
 
 ---
 
 ## Key Patterns
 
-### Searching
+### Searching and Playing
 
 ```typescript
 // Direct URL
 const result = await manager.search({ query: 'https://open.spotify.com/track/...' }, user);
 
 // Search with prefix
-const result2 = await manager.search({ query: 'spsearch:daft punk', source: 'spsearch' }, user);
+const result2 = await manager.search({ query: 'spsearch:daft punk' }, user);
 
-// Via player (supports bandcamp local engine)
-const result3 = await player.search('ytmsearch:lofi beats', user);
+// Add all results from a playlist
+if (result.loadType === 'playlist') {
+  player.queue.add(result.tracks);
+} else {
+  player.queue.add(result.tracks[0]);
+}
+
+if (!player.playing) await player.play();
 ```
 
-### Queue Management
+### Node Management
 
 ```typescript
-// Add tracks
-await player.queue.add(track);
-await player.queue.add(track, 0); // add at position 0 (play next)
+// Get least-used nodes
+const nodes = manager.nodeManager.leastUsedNodes('weighted');
 
-// Shuffle
-await player.queue.shuffle();
+// Create a node at runtime
+manager.nodeManager.createNode({ id: 'extra', host: 'node2.example.com', port: 2333, authorization: 'pw' });
 
-// Move
-await player.queue.move(fromIndex, toIndex);
+// Delete a node (moves players if movePlayers=true)
+manager.nodeManager.deleteNode('extra', true);
 
-// Remove
-await player.queue.remove(index);
-// or
-await player.queue.splice(index, 1);
+// Disconnect/reconnect all
+await manager.nodeManager.disconnectAll();
+await manager.nodeManager.connectAll();
+await manager.nodeManager.reconnectAll();
 ```
 
-### Filters
+### SponsorBlock
 
 ```typescript
-import { FilterManager } from 'ryanlink';
+await player.setSponsorBlock(['sponsor', 'selfpromo', 'intro', 'outro']);
+const segments = await player.getSponsorBlock();
+await player.deleteSponsorBlock();
+```
 
-// Nightcore
-await player.filterManager.toggleNightcore();
+### Lyrics
 
-// 8D audio
-await player.filterManager.toggleRotation(0.2);
+```typescript
+// Via node (lavalyrics-plugin)
+const lyrics = await player.node.lyrics.get(track);
+const current = await player.node.lyrics.getCurrent(player.guildId);
+await player.node.lyrics.subscribe(player.guildId);
+await player.node.lyrics.unsubscribe(player.guildId);
 
-// Bass boost
-await player.filterManager.setEQ(FilterManager.EQList.BassBoostHigh);
-
-// Volume
-await player.filterManager.setVolume(1.5); // 150%
-
-// Reset all
-await player.filterManager.resetFilters();
+// Convenience wrappers on player
+const lyrics2 = await player.getLyrics(track);
+const current2 = await player.getCurrentLyrics();
+player.subscribeLyrics();
+player.unsubscribeLyrics();
 ```

@@ -1,26 +1,26 @@
 ---
 title: Architecture Overview
-description: How Ryanlink's core systems work — node management, queue persistence, and player lifecycle.
+description: How Ryanlink's core systems work — node management, queue, player lifecycle, and filter management.
 ---
 
 import { Card, CardGrid, Steps } from '@astrojs/starlight/components';
 
-Ryanlink is a Lavalink v4 wrapper built around four core systems: **node management**, **player lifecycle**, **queue persistence**, and **filter management**.
+Ryanlink is a Lavalink v4 wrapper built around four core systems: **node management**, **player lifecycle**, **queue**, and **filter management**.
 
 ## Core Systems
 
 <CardGrid stagger>
   <Card title="NodeManager" icon="random">
-    Manages all Lavalink nodes. Handles WebSocket connections, reconnection, session resuming, and weighted load balancing. Nodes are scored by CPU, memory, and player count.
+    Manages all Lavalink nodes. Handles WebSocket connections, exponential-backoff reconnection, session resuming, and weighted load balancing. Nodes are scored by CPU, memory, and player count.
   </Card>
   <Card title="Player" icon="rocket">
-    Per-guild audio player. Tracks voice state, playback position, filters, and queue. Supports auto-reconnect, smart-leave, auto-pause, and lifecycle hooks.
+    Per-guild audio player. Tracks voice state, playback position, filters, and queue. Supports auto-reconnect, smart-leave, auto-pause, node migration, and lifecycle hooks.
   </Card>
-  <Card title="Queue + QueueStore" icon="save">
-    Each player has a `Queue` backed by a `QueueStore`. The default is in-memory. Implement the `QueueStore` interface to persist to Redis, disk, or any other backend.
+  <Card title="Queue + TrackRegistry" icon="save">
+    Each player has a `Queue` backed by a `TrackRegistry`. The registry stores track data once and references it by identifier, keeping memory usage low even for large queues.
   </Card>
   <Card title="FilterManager" icon="seti:db">
-    Non-destructive filter stacking. All standard Lavalink filters plus NodeLink-exclusive filters (echo, chorus, compressor, highpass, phaser, spatial) and plugin filters (LavaDSPX, filter-engine).
+    Non-destructive filter stacking. All standard Lavalink filters plus NodeLink-exclusive filters (echo, chorus, compressor, highPass, phaser, spatial) and plugin filters (LavaDSPX, filter-engine).
   </Card>
 </CardGrid>
 
@@ -29,12 +29,13 @@ Ryanlink is a Lavalink v4 wrapper built around four core systems: **node managem
 ## Node Lifecycle
 
 <Steps>
-1. **Create** — `nodeManager.createNode(options)` adds a node and connects its WebSocket.
-2. **Connect** — `connect` event fires. `updateSession(true, timeout)` is called to register session resuming.
-3. **Stats** — Lavalink sends stats every 30s. Node scores are updated for load balancing.
-4. **Disconnect** — `disconnect` event fires. Reconnection begins with exponential backoff.
-5. **Resume** — If session is still valid, `resumed` event fires and player states are restored.
-6. **Destroy** — `destroy` event fires. Players are either destroyed or migrated to another node.
+1. **Create** — `nodeManager.createNode(options)` adds a node and emits `nodeCreate`.
+2. **Connect** — `node.connect()` opens a WebSocket. On `open`, `fetchInfo()` is called to populate `node.info` and register source mappings.
+3. **Ready** — Lavalink sends `{ op: 'ready', sessionId, resumed }`. `nodeReady` is emitted.
+4. **Stats** — Lavalink sends stats every 30s. Node scores are updated for load balancing. Heartbeat is triggered.
+5. **Disconnect** — Socket closes. `nodeDisconnect` is emitted. Reconnection begins with exponential backoff (base delay doubles each attempt, capped at 30s).
+6. **Resume** — If session is still valid, `resumed: true` arrives in the ready payload and player states are restored.
+7. **Destroy** — `node.destroy(reason, deleteNode, movePlayers)` closes the socket, optionally migrates players to another node, and removes the node from the manager.
 </Steps>
 
 ---
@@ -42,39 +43,44 @@ Ryanlink is a Lavalink v4 wrapper built around four core systems: **node managem
 ## Player Lifecycle
 
 <Steps>
-1. **Create** — `manager.createPlayer(options)` creates a player and emits `playerCreate`.
-2. **Connect** — `player.connect()` sends a voice state update to Discord.
-3. **Voice sync** — `manager.provideVoiceUpdate(payload)` handles `VOICE_STATE_UPDATE` and `VOICE_SERVER_UPDATE`.
-4. **Play** — `player.play()` sends a PATCH to Lavalink's player endpoint.
-5. **Track events** — `trackStart`, `trackEnd`, `trackStuck`, `trackError` are emitted as Lavalink sends them.
-6. **Queue end** — When no more tracks, `queueEnd` fires. `destroyAfterMs` countdown starts if configured.
-7. **Destroy** — `player.destroy()` disconnects from voice, clears the queue store, and emits `playerDestroy`.
+1. **Create** — `manager.createPlayer(options)` creates a player and emits `playerCreate`. If a player already exists for the guild, it is returned.
+2. **Connect** — `player.connect()` sends a voice state update to Discord via `sendToShard`.
+3. **Voice sync** — `manager.provideVoiceUpdate(payload)` handles `VOICE_STATE_UPDATE` and `VOICE_SERVER_UPDATE`. Once both token and sessionId are received, Ryanlink sends a PATCH to Lavalink.
+4. **Play** — `player.play()` sends a PATCH to Lavalink's `/sessions/{id}/players/{guildId}` endpoint.
+5. **Track events** — `trackStart`, `trackEnd`, `trackStuck`, `trackError` are emitted as Lavalink sends them via WebSocket.
+6. **Queue end** — When no more tracks, `queueEnd` fires. `onEmptyQueue.autoPlayFunction` is called if set. `destroyAfterMs` countdown starts if configured.
+7. **Destroy** — `player.destroy()` disconnects from voice, removes the player from the manager, calls `node.destroyPlayer(guildId)`, and emits `playerDestroy`.
 </Steps>
 
 ---
 
 ## Node Failover
 
-When a node disconnects, Ryanlink can automatically migrate players:
+When a node disconnects, Ryanlink can automatically migrate players. Use `node.destroy(reason, deleteNode, movePlayers: true)` which migrates players to the least-used connected node:
 
 ```typescript
-// In node config
-autoChecks: { pluginValidations: false, sourcesValidations: false }
+// Automatic migration on node destroy
+node.destroy('Maintenance', true, true);
 
-// In manager config — autoMove is not a built-in option
-// Use the disconnect event to trigger migration manually:
-manager.nodeManager.on('disconnect', async (node) => {
-  const bestNode = manager.nodeManager.leastUsedNodes('weighted')[0];
-  if (!bestNode) return;
+// Manual migration via player
+await player.moveNode();           // auto-select least-used node
+await player.moveNode('node-id'); // migrate to specific node
+await player.changeNode(nodeInstance);
+```
+
+Or listen to the disconnect event:
+
+```typescript
+manager.nodeManager.on('nodeDisconnect', async (node, reason) => {
+  const best = manager.nodeManager.leastUsedNodes('weighted')[0];
+  if (!best) return;
   for (const player of manager.players.values()) {
-    if (player.node.id === node.id) {
-      await player.changeNode(bestNode.id).catch(() => {});
+    if (player.node?.id === node.id) {
+      await player.moveNode(best.id).catch(() => {});
     }
   }
 });
 ```
-
-Or use `node.destroy(reason, deleteNode, movePlayers: true)` which automatically migrates players to the least-used node.
 
 ---
 
@@ -86,14 +92,17 @@ Nodes are scored using:
 score = (cpu.systemLoad × 0.7) + (memory.used / memory.allocated × 0.2) + (players / 100 × 0.1)
 ```
 
-Lower score = healthier node. Use `nodeManager.leastUsedNodes(metric)` with:
-- `'weighted'` — composite score (recommended)
-- `'memory'` — least memory used
-- `'cpuLavalink'` — least audio CPU load
-- `'cpuSystem'` — least system CPU load
-- `'calls'` — fewest REST calls
-- `'playingPlayers'` — fewest playing players
-- `'players'` — fewest total players
+Lower score = healthier node. Disconnected nodes return `Infinity`. Use `nodeManager.leastUsedNodes(metric)`:
+
+| Metric | Sort by |
+| :--- | :--- |
+| `'weighted'` | Composite score (recommended) |
+| `'memory'` | Least memory used |
+| `'cpuLavalink'` | Least audio CPU load |
+| `'cpuSystem'` | Least system CPU load |
+| `'calls'` | Fewest REST calls |
+| `'playingPlayers'` | Fewest playing players |
+| `'players'` | Fewest total players (default) |
 
 ---
 
@@ -103,29 +112,70 @@ Lower score = healthier node. Use `nodeManager.leastUsedNodes(metric)` with:
 Discord VOICE_STATE_UPDATE  ──┐
                                ├──► manager.provideVoiceUpdate(payload)
 Discord VOICE_SERVER_UPDATE ──┘         │
-                                         ├── Updates player.voice (token, endpoint, sessionId)
+                                         ├── Updates player.voice (token, endpoint, sessionId, channelId)
+                                         ├── Tracks voiceStates map for all users
                                          └── Sends PATCH to Lavalink /sessions/{id}/players/{guildId}
 ```
 
-Always call `manager.provideVoiceUpdate` from your Discord library's raw event handler:
+Always forward raw Discord events:
 
 ```typescript
 client.on('raw', (packet) => {
-  manager.provideVoiceUpdate(packet);
+  if (manager.initiated) manager.provideVoiceUpdate(packet);
 });
 ```
+
+### DAVE (E2EE) Compatibility
+
+Discord's DAVE protocol sends `VOICE_STATE_UPDATE` with `channel_id: null` during the E2EE handshake even when the bot is actively joining. Ryanlink handles this automatically — `player.voiceChannelId` is preserved as a fallback so Lavalink always receives the correct channel ID. No configuration required.
 
 ---
 
 ## TrackRegistry
 
-Ryanlink uses a `TrackEntry` class (extending `Track`) that stores track data efficiently. The `AudioTrackSymbol` and `UnresolvedAudioTrackSymbol` symbols are used to distinguish resolved from unresolved tracks without `instanceof` checks.
+Ryanlink uses a `TrackEntry` class that stores track data in a static `TrackRegistry` map, referenced by `identifier` (or `encoded` as fallback). Multiple `TrackEntry` instances for the same track share one registry entry.
 
 ```typescript
-import { AudioTrackSymbol } from 'ryanlink';
+import { AudioTrackSymbol, UnresolvedAudioTrackSymbol } from 'ryanlink';
 
 // Check if a track is resolved
 if (track[AudioTrackSymbol] === true) {
   // fully resolved Track
 }
+
+// Check if a track is unresolved
+if (track[UnresolvedAudioTrackSymbol] === true) {
+  // UnresolvedTrack — call track.resolve(player) to resolve
+}
+```
+
+---
+
+## Source Registry
+
+Each node has its own `SourceRegistry` that maps search prefixes to source names and stores URL matchers. This is populated automatically from `node.info.sourceManagers` on connect, and can be extended:
+
+```typescript
+// Register a custom prefix alias
+node.sourceRegistry.registerMapping('yt', 'ytsearch');
+
+// Register a URL matcher for source detection
+node.sourceRegistry.registerMatcher('youtube', /youtube\.com|youtu\.be/);
+
+// Register a plugin
+node.sourceRegistry.registerPlugin('lavasrc', 'lavasrc-plugin');
+```
+
+---
+
+## MiniMap
+
+`MiniMap<K, V>` extends the native `Map` with `filter()`, `map()`, and `toJSON()` methods. Used internally for `manager.players` and `nodeManager.nodes`.
+
+```typescript
+// Filter connected nodes
+const connected = manager.nodeManager.nodes.filter(n => n.connected);
+
+// Map to IDs
+const ids = manager.nodeManager.nodes.map((node, id) => id);
 ```

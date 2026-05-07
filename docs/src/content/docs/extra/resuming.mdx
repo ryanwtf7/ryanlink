@@ -1,37 +1,38 @@
 ---
 title: Session Resuming
-description: How Ryanlink handles Lavalink session resuming and queue persistence.
+description: How Ryanlink handles Lavalink session resuming across reconnects.
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+Ryanlink supports Lavalink session resuming — when the WebSocket reconnects with the same session ID, Lavalink restores all player states server-side so audio continues without interruption.
 
-Ryanlink supports two layers of persistence: **Lavalink session resuming** (reconnects the WebSocket with the same session ID so audio continues) and **queue persistence** (stores queue state so it survives bot restarts).
-
-## Lavalink Session Resuming
-
-Enable session resuming in your manager config:
+## Enable Session Resuming
 
 ```typescript
 const manager = new RyanlinkManager({
   resuming: {
     enabled: true,
-    timeout: 60000, // 60 seconds — Lavalink holds the session this long
+    timeout: 60000, // Lavalink holds the session for 60 seconds after disconnect
   },
 });
 ```
 
-When the node reconnects, ryanlink automatically calls `node.updateSession(true, 60)`. On the `resumed` event, all player states are restored from Lavalink's server-side cache.
+When the node reconnects, Ryanlink automatically calls `node.updateSession()` to register the session. On the `nodeReady` event, `payload.resumed` will be `true` if the session was successfully resumed.
 
 ```typescript
-manager.nodeManager.on('resumed', (node, payload, players) => {
-  console.log(`Node ${node.id} resumed — ${players.length} players restored`);
-  console.log(`Session ID: ${payload.sessionId}`);
+manager.nodeManager.on('nodeReady', (node, payload) => {
+  if (payload.resumed) {
+    console.log(`Node ${node.id} resumed — session: ${payload.sessionId}`);
+  } else {
+    console.log(`Node ${node.id} connected fresh — session: ${payload.sessionId}`);
+  }
 });
 ```
 
-### Manual Session ID
+---
 
-If you need to resume a specific session manually, pass `sessionId` in the node config:
+## Manual Session ID
+
+To resume a specific session after a bot restart, pass `sessionId` in the node config:
 
 ```typescript
 nodes: [{
@@ -43,99 +44,7 @@ nodes: [{
 }]
 ```
 
----
-
-## Queue Persistence
-
-Ryanlink uses a `QueueStore` to persist queue state. The default is in-memory (no persistence across restarts).
-
-```typescript
-import { RyanlinkManager, MemoryQueueStore } from 'ryanlink';
-
-const manager = new RyanlinkManager({
-  queueOptions: {
-    queueStore: new MemoryQueueStore(), // default
-    maxPreviousTracks: 25,
-  }
-});
-```
-
-### Custom Store
-
-Implement the `QueueStore` interface — requires `get`, `set`, `delete`, `stringify`, `parse`:
-
-```typescript
-class RedisQueueStore {
-  async get(guildId: string) {
-    return redis.get(`queue:${guildId}`);
-  }
-  async set(guildId: string, data: any) {
-    await redis.set(`queue:${guildId}`, this.stringify(data));
-  }
-  async delete(guildId: string) {
-    await redis.del(`queue:${guildId}`);
-  }
-  stringify(data: any) { return JSON.stringify(data); }
-  parse(data: string) { return JSON.parse(data); }
-}
-
-const manager = new RyanlinkManager({
-  queueOptions: { queueStore: new RedisQueueStore() }
-});
-```
-
-Ryanlink ships three built-in `QueueStore` implementations:
-
-```typescript
-import { MemoryQueueStore, LocalDiskQueueStore, RedisQueueStore } from 'ryanlink';
-
-// In-memory (default) — no persistence across restarts
-new MemoryQueueStore()
-
-// Local disk — persists queue to JSON files, survives bot restarts
-new LocalDiskQueueStore('./sessions')
-
-// Redis — for sharded/clustered bots
-new RedisQueueStore(redisClient, 'mybot:queue:')
-```
-
-### Recommended: Disk Persistence
-
-For bots that need queue state to survive restarts, use `LocalDiskQueueStore` with `queueOptions.resuming` enabled:
-
-```typescript
-import { LocalDiskQueueStore } from 'ryanlink';
-
-const manager = new RyanlinkManager({
-  resuming: { enabled: true, timeout: 60000 },
-  queueOptions: {
-    maxPreviousTracks: 25,
-    queueStore: new LocalDiskQueueStore('./.ryanlink/queues'),
-    resuming: {
-      enabled: true,
-      timeout: 60000,
-    },
-  },
-});
-```
-
-When `queueOptions.resuming.enabled` is `true`, the `Queue` constructor automatically calls `utils.sync()` on init, restoring tracks from disk. Combined with `player.autoResume()` (called automatically when `resuming.enabled` is set), the player resumes from the last saved position.
-
----
-
-## Auto-Resume on Player Create
-
-When `resuming.enabled: true`, creating a player automatically syncs its queue from the store and calls `player.autoResume()` to resume playback from the saved position.
-
-```typescript
-const player = manager.createPlayer({
-  guildId: '...',
-  voiceChannelId: '...',
-  selfDeaf: true,
-});
-// Queue is restored automatically if a saved state exists
-// player.autoResume() is called internally
-```
+Ryanlink will include this session ID in the WebSocket handshake headers, allowing Lavalink to resume the session.
 
 ---
 
@@ -167,8 +76,31 @@ const manager = new RyanlinkManager({
 // Or per-player
 manager.createPlayer({
   guildId: '...',
+  voiceChannelId: '...',
   trackResolveRetryLimit: 5,
 });
 ```
 
-When all retries are exhausted, `queueErrorReport` is emitted and the track is purged from the queue.
+When all retries are exhausted, `trackError` is emitted and the track is skipped if `autoSkipOnResolveError` is `true`.
+
+---
+
+## Auto-Reconnect on Voice Disconnect
+
+Configure what happens when the bot is disconnected from voice:
+
+```typescript
+playerOptions: {
+  onDisconnect: {
+    destroyPlayer: false,          // don't destroy the player
+    autoReconnect: true,           // reconnect automatically
+    autoReconnectOnlyWithTracks: true, // only reconnect if queue has tracks
+  },
+}
+```
+
+When `autoReconnect: true`:
+1. `player.connect()` is called to rejoin the voice channel
+2. If `player.queue.current` exists, `player.play({ position, paused })` resumes from the last position
+3. If only `player.queue.tracks` has items, `player.play()` starts the next track
+4. If the reconnect fails, `player.destroy(DestroyReasons.PlayerReconnectFail)` is called

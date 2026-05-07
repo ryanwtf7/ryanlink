@@ -1,79 +1,29 @@
 <div align="center">
   <img alt="ryanlink" src="assets/ryanlink.png" width="120" />
-  
+
   # Ryanlink
-  
-  A modern, high-performance audio client for Node.js, Bun, and Deno.
-  
+
+  High-performance Lavalink v4 wrapper for Discord bots.
+
   <br/>
-  
+
   [![NPM Version](https://img.shields.io/npm/v/ryanlink?style=flat&logo=npm)](https://www.npmjs.com/package/ryanlink)
   [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
   [![Node Version](https://img.shields.io/node/v/ryanlink)](https://nodejs.org)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.4+-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
-  [![Codecov Coverage](https://img.shields.io/codecov/c/github/ryanwtf7/ryanlink?label=codecov&logo=codecov)](https://discord.gg/W2GheK3F9m)
-  
-  [Documentation](https://ryanwtf7.github.io/ryanlink/) • [NPM Package](https://www.npmjs.com/package/ryanlink) • [Coverage](http://app.codecov.io/gh/ryanwtf7/ryanlink) • [GitHub](https://github.com/ryanwtf7/ryanlink)
 
+  [Documentation](https://ryanwtf7.github.io/ryanlink/) • [NPM](https://www.npmjs.com/package/ryanlink) • [GitHub](https://github.com/ryanwtf7/ryanlink)
 </div>
-
----
-
-## Overview
-
-**Ryanlink** is a premium, feature-rich lavalink-v4 wrapper designed for speed, flexibility, and developer experience. It provides a robust architecture for Discord music bots with first-class TypeScript support and cross-runtime compatibility.
-
-### Key Features
-
-- **Lavalink v4 Protocol** - Full support for the latest lavalink features, filters, and SponsorBlock.
-- **Multiverse Source Support** - Industry-leading coverage for dozens of platforms including **Spotify**, **Apple Music**, **JioSaavn**, and more.
-- **Cross-Runtime Ready** - Optimized for **Node.js**, **Bun**, and **Deno**.
-- **Advanced Queue Persistence** - Built-in drivers for **Redis**, **Local Disk**, and **In-Memory** storage.
-- **High-Performance Audio** - Native fetch, efficient memory management, and parallel track loading.
-- **Dynamic Filter Stacking** - Non-destructive filter layering with built-in presets (**Pop**, **Electronic**, etc.).
-- **Proactive Automation** - Smart auto-pause/resume, empty channel handling, and resolution self-healing.
-- **Native Lyrics Integration** - Deep support for timed and text lyrics via `lavalyrics`.
-- **Memory-Optimized Registry** - Industry-leading `TrackRegistry` for zero-overhead large queue management.
-- **Strictly Type-Safe** - 100% TypeScript with advanced module augmentation support.
-
----
-
-## Technical Architecture
-
-Introduces a **Proactive Smart Layer** that reduces developer boilerplate by automating session and queue management.
-
-- **Zero-Config Persistence** — Automated queue saving and millisecond-precise session recovery across bot restarts.
-- **Atomic Migration** — Seamless node failover during disconnections with zero audio interruption for your users.
-- **TrackRegistry** — Memory-optimized reference mapping for handling massive queues (10k+ tracks) with minimal RAM overhead.
-- **Self-Healing Resolution** — Automated retry logic for unresolved tracks, ensuring playback stability even with flaky external sources.
-- **Smart Context Hooks** — Integrated `onTrackStart`, `onQueueEnd`, and `onNodeFailover` hooks for rapid, reliable development.
-
----
-
-Ryanlink provides industry-leading coverage with support for all major audio platforms and streaming services:
-
-### NodeLink Native
-`youtube`, `amazonmusic`, `anghami`, `applemusic`, `audiomack`, `audius`, `bandcamp`, `bilibili`, `bluesky`, `deezer`, `eternalbox`, `flowery`, `gaana`, `genius`, `google-tts`, `http`, `iheartradio`, `instagram`, `jiosaavn`, `kwai`, `lastfm`, `lazypytts`, `letrasmus`, `local`, `mixcloud`, `monochrome`, `netease`, `nicovideo`, `pandora`, `pinterest`, `pipertts`, `qobuz`, `reddit`, `rss`, `shazam`, `songlink`, `soundcloud`, `spotify`, `telegram`, `tidal`, `tumblr`, `twitch`, `twitter`, `vimeo`, `vkmusic`, `yandexmusic`
-
-### LavaSrc Plugin
-`youtube music`, `spotify`, `applemusic`, `deezer`, `yandexmusic`, `flowery-tts`, `tidal`, `qobuz`, `jiosaavn`, `amazonmusic`, `gaana`, `lastfm`, `pandora`, `audiomack`, `audius`, `anghami`, `shazam`, `instagram`, `google-tts`, `mixcloud`
 
 ---
 
 ## Installation
 
 ```bash
-# npm
 npm install ryanlink
-
-# bun
+# or
 bun add ryanlink
-
-# pnpm
-pnpm add ryanlink
 ```
-
----
 
 ## Quick Start
 
@@ -85,138 +35,64 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 })
 
-client.ryanlink = new RyanlinkManager({
-  nodes: [
-    {
-      name: 'main',
-      host: 'localhost',
-      port: 2333,
-      authorization: 'youshallnotpass',
-      secure: false,
-    },
-  ],
+const manager = new RyanlinkManager({
+  nodes: [{
+    id: 'main',
+    host: 'localhost',
+    port: 2333,
+    authorization: 'youshallnotpass',
+  }],
   sendToShard: (guildId, payload) => {
-    client.guilds.cache.get(guildId)?.shard.send(payload)
+    client.guilds.cache.get(guildId)?.shard?.send(payload)
   },
-  client: {
-    id: process.env.CLIENT_ID,
-    username: 'RyanlinkBot',
-  },
+  client: { id: process.env.CLIENT_ID },
 })
 
-client.on('ready', () => {
-  client.ryanlink.init({ ...client.user })
-  console.log(`${client.user.tag} is online and connected to ryanlink`)
-})
-
-client.on('raw', (packet) => {
-  client.ryanlink.provideVoiceUpdate(packet)
-})
-
+client.once('ready', () => manager.init({ id: client.user.id }))
+client.on('raw', (packet) => manager.provideVoiceUpdate(packet))
 client.login('YOUR_BOT_TOKEN')
 ```
 
----
-
-## Core Usage
-
-### Playing Audio
+## Usage
 
 ```typescript
-const player = client.ryanlink.createPlayer({
+// Create player and connect
+const player = manager.createPlayer({
   guildId: interaction.guildId,
   voiceChannelId: interaction.member.voice.channelId,
   textChannelId: interaction.channelId,
+  selfDeaf: true,
 })
+await player.connect()
 
-const res = await player.search('Never Gonna Give You Up', interaction.user)
-player.queue.add(res.tracks[0])
-
+// Search and play
+const result = await manager.search({ query: 'never gonna give you up', source: 'ytsearch' }, interaction.user)
+player.queue.add(result.tracks[0])
 if (!player.playing) await player.play()
 
-console.log(`Added: ${res.tracks[0].info.title}`)
-```
-
-### Queue Controls
-
-```typescript
-const player = client.ryanlink.players.get(guildId)
-
-await player.pause()
-await player.resume()
+// Controls
+await player.pause(true)
+await player.pause(false)
+await player.seek(30000)
 await player.skip()
-await player.setVolume(50) // 0 - 100
-player.setRepeatMode('queue') // "off" | "track" | "queue"
+await player.setVolume(80)
+await player.setRepeatMode('queue') // 'off' | 'track' | 'queue'
+
+// Filters
+await player.filterManager.toggleNightcore()
+await player.filterManager.setSpeed(1.2)
+await player.filterManager.setEQ(player.filterManager.constructor.EQList.BassboostHigh)
+await player.filterManager.resetFilters()
 ```
-
-### Lifecycle Hooks
-
-```typescript
-const player = client.ryanlink.createPlayer({
-  guildId: '...',
-  voiceChannelId: '...',
-  // Smart Engine Hooks
-  onTrackStart: (p, track) => console.log(`Now playing: ${track.info.title}`),
-  onQueueEnd: (p) => console.log('Queue has finished!'),
-  onNodeFailover: (p, oldNode, targetNode) => console.log(`Migrated to ${targetNode.id}`),
-})
-```
-
-### Audio Filters
-
-```typescript
-// Apply Professional EQ Presets
-await player.filterManager.setPreset('BassBoost') // or 'Pop', 'Electronic', etc.
-
-// Apply Immersive DSP Presets
-await player.filterManager.setPreset('8D') // 360° Rotation
-await player.filterManager.setPreset('Lofi') // Chill, Low-Fi vibes
-await player.filterManager.setPreset('Radio') // Broadcast simulation
-
-// Reset all filters atomically
-await player.filterManager.setPreset('Clear')
-```
-
-## Library Metadata
-
-The following technical specifications define the current stable branch of **Ryanlink**.
-
-| Metadata | Value |
-| :--- | :--- |
-| **License** | `Apache-2.0` |
-| **TypeScript** | `5.4+` |
-| **Runtime** | Node.js, Bun, Deno |
-
-```typescript
-import { version } from 'ryanlink'
-console.log(`ryanlink v${version}`)
-```
-
----
-
-## Architecture
-
-Ryanlink is organized into modular features for maximum maintainability:
-
-- `src/` - Core library source files including:
-  - `core/Manager.ts` - Main entry point
-  - `node/Node.ts` - Connection and REST interfaces
-  - `audio/Player.ts` - Audio playback and queue controller
-  - `audio/Queue.ts` - Advanced track management
-
----
 
 ## Requirements
 
-- **Lavalink**: 4.0.0+
-- **Node.js**: 18.0.0+ (Support for Bun/Deno)
-- **TypeScript**: 5.4+ (Standardized)
-
----
+- **Node.js** 18+ or **Bun** 1.1+
+- **Lavalink** 4.0+
 
 ## License
 
-Licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for more information.
+[Apache-2.0](LICENSE)
 
 <div align="center">
   Made with care by RY4N
