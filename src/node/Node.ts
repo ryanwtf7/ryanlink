@@ -1437,7 +1437,8 @@ export class RyanlinkNode {
         const player = this._LManager.getPlayer(payload.guildId)
         if (player) {
           const oldState = player.toJSON()
-          player.position = payload.state.position
+          player.lastPosition = payload.state.position ?? player.lastPosition
+          player.lastPositionChange = Date.now()
           player.connected = payload.state.connected
           player.ping.ws = payload.state.ping
           player.queue.position = player.position
